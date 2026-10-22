@@ -350,15 +350,9 @@ The server does not simulate tool use or function calling. Responses are text, p
 
 Each process holds one scenario, one call log, and one set of occurrence counters in memory. Nothing is written to disk. Another process does not share that state.
 
-## tools/judge-agreement
-
-`tools/judge-agreement/agreement.py` scores a judge's labels against a human label file. It prints a confusion matrix, raw accuracy, Cohen's kappa, and per-class precision and recall for the ids present in both files. Usage, the CSV and JSON shapes, and the exit codes are in [tools/judge-agreement/README.md](tools/judge-agreement/README.md).
-
 ## Development
 
 `./gradlew build` compiles the server, runs the Kotlin tests, and writes `build/libs/fake-llm-all.jar`.
-
-From `tools/judge-agreement`, `python -m unittest` runs the judge-agreement tests. They use the standard library. CI runs them on Python 3.12.
 
 ## Roadmap
 

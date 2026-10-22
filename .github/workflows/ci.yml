@@ -22,17 +22,6 @@ jobs:
           path: build/libs/fake-llm-all.jar
           if-no-files-found: error
 
-  python:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Judge-agreement unit tests
-        working-directory: tools/judge-agreement
-        run: python -m unittest
-
   docker:
     runs-on: ubuntu-latest
     steps:
