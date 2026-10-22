@@ -99,7 +99,7 @@ curl -s http://localhost:8080/anthropic/v1/messages \
 
 ## Use as a library
 
-Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `dev.fakellm:fake-llm:0.1.0`. The artifact is not on Maven Central yet, so for now either publish it to your local Maven repository:
+Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `com.davidjonesgriz:fake-llm:0.1.0`. Classes are in the `com.davidjonesgriz.fakellm` package. The artifact is not on Maven Central yet, so for now either publish it to your local Maven repository:
 
 ```bash
 ./gradlew publishToMavenLocal
@@ -107,7 +107,7 @@ Kotlin and Java tests can start the server in the same JVM instead of running a 
 
 ```kotlin
 repositories { mavenLocal() }
-dependencies { testImplementation("dev.fakellm:fake-llm:0.1.0") }
+dependencies { testImplementation("com.davidjonesgriz:fake-llm:0.1.0") }
 ```
 
 or include a checkout of this repository as a composite build. Gradle then substitutes the dependency with the checkout's source, with no publishing step:

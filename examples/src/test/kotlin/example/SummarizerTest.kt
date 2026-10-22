@@ -1,13 +1,13 @@
 package example
 
-import dev.fakellm.ErrorStep
-import dev.fakellm.FakeLlmServer
-import dev.fakellm.Match
-import dev.fakellm.Rule
-import dev.fakellm.Scenario
-import dev.fakellm.ScenarioEngine
-import dev.fakellm.Step
-import dev.fakellm.startFakeLlmServer
+import com.davidjonesgriz.fakellm.ErrorStep
+import com.davidjonesgriz.fakellm.FakeLlmServer
+import com.davidjonesgriz.fakellm.Match
+import com.davidjonesgriz.fakellm.Rule
+import com.davidjonesgriz.fakellm.Scenario
+import com.davidjonesgriz.fakellm.ScenarioEngine
+import com.davidjonesgriz.fakellm.Step
+import com.davidjonesgriz.fakellm.startFakeLlmServer
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test

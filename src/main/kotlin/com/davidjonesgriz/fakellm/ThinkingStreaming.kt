@@ -1,4 +1,4 @@
-package dev.fakellm
+package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put

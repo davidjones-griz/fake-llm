@@ -1,4 +1,4 @@
-package dev.fakellm
+package com.davidjonesgriz.fakellm
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

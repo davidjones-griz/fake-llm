@@ -1,7 +1,7 @@
 // HTTP plumbing for the fake LLM server: the listen socket, request dispatch, the control API,
 // and the JSON response writer shared by those handlers. Vendor request handlers live in
 // FakeLlmApp.kt.
-package dev.fakellm
+package com.davidjonesgriz.fakellm
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer

@@ -19,7 +19,7 @@ change the public API.
   optional bearer token.
 - Bundled scenarios for rate limits, overload, refusal, truncation, malformed JSON, stream errors,
   thinking, and fail-then-retry.
-- Library use: the `dev.fakellm:fake-llm` Maven publication with sources and javadoc jars, and
+- Library use: the `com.davidjonesgriz:fake-llm` Maven publication with sources and javadoc jars, and
   `startFakeLlmServer`, which returns a `FakeLlmServer` handle (`port`, `baseUrl`, `engine`,
   `close()`) for starting the server in-process from tests.
 - `examples/`, a separate build that tests a small client against the published artifact.

@@ -7,7 +7,7 @@ plugins {
 }
 
 // The version lives in gradle.properties so examples/ can read the same value.
-group = "dev.fakellm"
+group = "com.davidjonesgriz"
 
 repositories {
     mavenCentral()
@@ -23,7 +23,7 @@ java {
 }
 
 application {
-    mainClass.set("dev.fakellm.FakeLlmAppKt")
+    mainClass.set("com.davidjonesgriz.fakellm.FakeLlmAppKt")
 }
 
 dependencies {

@@ -14,7 +14,7 @@ repositories {
     // Filled by `./gradlew publishAllPublicationsToBuildLocalRepository` in the repository root.
     maven {
         url = uri("../build/local-repo")
-        content { includeGroup("dev.fakellm") }
+        content { includeGroup("com.davidjonesgriz") }
     }
     mavenCentral()
 }
@@ -25,7 +25,7 @@ kotlin {
 
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
-    testImplementation("dev.fakellm:fake-llm:$fakeLlmVersion")
+    testImplementation("com.davidjonesgriz:fake-llm:$fakeLlmVersion")
     testImplementation(kotlin("test"))
 }
 

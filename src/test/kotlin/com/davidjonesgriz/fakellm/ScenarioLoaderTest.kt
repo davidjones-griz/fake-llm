@@ -1,4 +1,4 @@
-package dev.fakellm
+package com.davidjonesgriz.fakellm
 
 import java.io.File
 import java.nio.file.Files
