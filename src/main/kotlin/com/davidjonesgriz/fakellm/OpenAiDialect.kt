@@ -83,5 +83,4 @@ internal fun openAiEnvelope(
         )
     }.toString()
 
-private fun openAiFinishReason(anthropicStopReason: String): String =
-    if (anthropicStopReason == "max_tokens") "length" else "stop"
+private fun openAiFinishReason(anthropicStopReason: String): String = if (anthropicStopReason == "max_tokens") "length" else "stop"

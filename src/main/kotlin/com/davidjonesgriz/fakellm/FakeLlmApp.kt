@@ -213,7 +213,9 @@ private const val HTTP_THREADS = 16
 private const val MAX_PORT = 65535
 private const val CALLER_HEADER = "X-Fake-LLM-Caller"
 
-internal class StartupUsageException(message: String) : RuntimeException(message)
+internal class StartupUsageException(
+    message: String,
+) : RuntimeException(message)
 
 internal data class StartupConfig(
     val port: Int,
@@ -243,19 +245,25 @@ internal fun parseStartupConfig(
                 portFlag = optionValue(args, i, arg)
                 i += 2
             }
+
             "--scenario" -> {
                 scenarioFlag = optionValue(args, i, arg)
                 i += 2
             }
+
             "--scenario-dir" -> {
                 scenarioDirFlag = optionValue(args, i, arg)
                 i += 2
             }
+
             "--lenient" -> {
                 lenientFlag = true
                 i += 1
             }
-            else -> usage(if (arg.startsWith("-")) "unknown flag '$arg'" else "unknown argument '$arg'")
+
+            else -> {
+                usage(if (arg.startsWith("-")) "unknown flag '$arg'" else "unknown argument '$arg'")
+            }
         }
     }
     // A present flag overrides the environment variable for the same setting.

@@ -38,8 +38,7 @@ class BundledScenariosTest {
         assertEquals(200, resp.statusCode(), resp.body())
     }
 
-    private fun TestClient.callLog() =
-        Json.parseToJsonElement(get("/control/calls").body()).jsonArray.map { it.jsonObject }
+    private fun TestClient.callLog() = Json.parseToJsonElement(get("/control/calls").body()).jsonArray.map { it.jsonObject }
 
     @Test
     fun `every bundled scenario name loads and matches its file`() {
@@ -63,7 +62,14 @@ class BundledScenariosTest {
                 anthropicText(resp.body()),
             )
             assertEquals("end_turn", anthropicStopReason(resp.body()))
-            assertEquals("assistant", client.callLog().single().getValue("role").jsonPrimitive.content)
+            assertEquals(
+                "assistant",
+                client
+                    .callLog()
+                    .single()
+                    .getValue("role")
+                    .jsonPrimitive.content,
+            )
         }
     }
 
@@ -88,7 +94,15 @@ class BundledScenariosTest {
 
             val log = client.callLog()
             assertEquals(listOf("error:429", "text", "text"), log.map { it.getValue("outcome").jsonPrimitive.content })
-            assertEquals(listOf(1, 2, 3), log.map { it.getValue("occurrence").jsonPrimitive.content.toInt() })
+            assertEquals(
+                listOf(1, 2, 3),
+                log.map {
+                    it
+                        .getValue("occurrence")
+                        .jsonPrimitive.content
+                        .toInt()
+                },
+            )
             assertTrue(log.all { it.getValue("role").jsonPrimitive.content == "weather" })
         }
     }
@@ -101,7 +115,13 @@ class BundledScenariosTest {
             val overloaded = client.post("/anthropic/v1/messages", anthropicBody("help"))
             assertEquals(529, overloaded.statusCode())
             assertContains(overloaded.body(), "overloaded_error")
-            assertTrue(overloaded.headers().firstValue("content-type").orElse("").startsWith("application/json"))
+            assertTrue(
+                overloaded
+                    .headers()
+                    .firstValue("content-type")
+                    .orElse("")
+                    .startsWith("application/json"),
+            )
 
             val recovered = client.post("/anthropic/v1/messages", anthropicBody("help"))
             assertEquals(200, recovered.statusCode())
@@ -121,7 +141,13 @@ class BundledScenariosTest {
             client.load("overloaded-529")
             val resp = client.post("/anthropic/v1/messages", anthropicBody("help", stream = true))
             assertEquals(529, resp.statusCode())
-            assertTrue(resp.headers().firstValue("content-type").orElse("").startsWith("application/json"))
+            assertTrue(
+                resp
+                    .headers()
+                    .firstValue("content-type")
+                    .orElse("")
+                    .startsWith("application/json"),
+            )
             assertContains(resp.body(), "overloaded_error")
             assertFalse(resp.body().contains("content_block_delta"))
         }
@@ -135,7 +161,14 @@ class BundledScenariosTest {
             assertEquals(200, resp.statusCode())
             assertEquals("I can't help with that request.", anthropicText(resp.body()))
             assertEquals("refusal", anthropicStopReason(resp.body()))
-            assertEquals("assistant", client.callLog().single().getValue("role").jsonPrimitive.content)
+            assertEquals(
+                "assistant",
+                client
+                    .callLog()
+                    .single()
+                    .getValue("role")
+                    .jsonPrimitive.content,
+            )
         }
     }
 
@@ -149,7 +182,14 @@ class BundledScenariosTest {
             assertEquals(truncated, anthropicText(resp.body()))
             assertEquals("max_tokens", anthropicStopReason(resp.body()))
             assertFailsWith<SerializationException> { Json.parseToJsonElement(anthropicText(resp.body())) }
-            assertEquals("recipe", client.callLog().single().getValue("role").jsonPrimitive.content)
+            assertEquals(
+                "recipe",
+                client
+                    .callLog()
+                    .single()
+                    .getValue("role")
+                    .jsonPrimitive.content,
+            )
         }
     }
 
@@ -170,12 +210,26 @@ class BundledScenariosTest {
             val parsed = Json.parseToJsonElement(secondText).jsonObject
             assertEquals("Lisbon", parsed.getValue("city").jsonPrimitive.content)
             assertEquals("mild and clear", parsed.getValue("conditions").jsonPrimitive.content)
-            assertEquals(21, parsed.getValue("tempC").jsonPrimitive.content.toInt())
+            assertEquals(
+                21,
+                parsed
+                    .getValue("tempC")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
 
             val log = client.callLog()
             assertEquals(listOf("json-reply", "json-reply"), log.map { it.getValue("role").jsonPrimitive.content })
             assertEquals(listOf("text", "text"), log.map { it.getValue("outcome").jsonPrimitive.content })
-            assertEquals(listOf(1, 2), log.map { it.getValue("occurrence").jsonPrimitive.content.toInt() })
+            assertEquals(
+                listOf(1, 2),
+                log.map {
+                    it
+                        .getValue("occurrence")
+                        .jsonPrimitive.content
+                        .toInt()
+                },
+            )
         }
     }
 
@@ -185,9 +239,22 @@ class BundledScenariosTest {
             client.load("stream-error-midway")
             val resp = client.post("/anthropic/v1/messages", anthropicBody("hello"))
             assertEquals(529, resp.statusCode())
-            assertTrue(resp.headers().firstValue("content-type").orElse("").startsWith("application/json"))
+            assertTrue(
+                resp
+                    .headers()
+                    .firstValue("content-type")
+                    .orElse("")
+                    .startsWith("application/json"),
+            )
             assertContains(resp.body(), "overloaded_error")
-            assertEquals("error:529", client.callLog().single().getValue("outcome").jsonPrimitive.content)
+            assertEquals(
+                "error:529",
+                client
+                    .callLog()
+                    .single()
+                    .getValue("outcome")
+                    .jsonPrimitive.content,
+            )
         }
     }
 
@@ -197,7 +264,13 @@ class BundledScenariosTest {
             client.load("stream-error-midway")
             val resp = client.post("/anthropic/v1/messages", anthropicBody("hello", stream = true))
             assertEquals(200, resp.statusCode(), resp.body())
-            assertTrue(resp.headers().firstValue("content-type").orElse("").startsWith("text/event-stream"))
+            assertTrue(
+                resp
+                    .headers()
+                    .firstValue("content-type")
+                    .orElse("")
+                    .startsWith("text/event-stream"),
+            )
 
             val events = parseSse(resp.body())
             assertEquals("message_start", events[0].first)
@@ -211,8 +284,22 @@ class BundledScenariosTest {
             assertTrue(events.none { it.first == "message_stop" })
             assertEquals(events.size, 2 + deltas.size + 1)
 
-            assertEquals("error:529", client.callLog().single().getValue("outcome").jsonPrimitive.content)
-            assertEquals("assistant", client.callLog().single().getValue("role").jsonPrimitive.content)
+            assertEquals(
+                "error:529",
+                client
+                    .callLog()
+                    .single()
+                    .getValue("outcome")
+                    .jsonPrimitive.content,
+            )
+            assertEquals(
+                "assistant",
+                client
+                    .callLog()
+                    .single()
+                    .getValue("role")
+                    .jsonPrimitive.content,
+            )
         }
     }
 
@@ -235,19 +322,42 @@ class BundledScenariosTest {
                     """.trimIndent(),
                 )
             assertEquals(200, resp.statusCode(), resp.body())
-            assertTrue(resp.headers().firstValue("content-type").orElse("").startsWith("text/event-stream"))
+            assertTrue(
+                resp
+                    .headers()
+                    .firstValue("content-type")
+                    .orElse("")
+                    .startsWith("text/event-stream"),
+            )
             val events = parseSse(resp.body())
 
-            val message = Json.parseToJsonElement(events[0].second).jsonObject.getValue("message").jsonObject
+            val message =
+                Json
+                    .parseToJsonElement(events[0].second)
+                    .jsonObject
+                    .getValue("message")
+                    .jsonObject
             val startUsage = message.getValue("usage").jsonObject
-            assertEquals(FIXED_INPUT_TOKENS, startUsage.getValue("input_tokens").jsonPrimitive.content.toInt())
+            assertEquals(
+                FIXED_INPUT_TOKENS,
+                startUsage
+                    .getValue("input_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
             assertEquals(
                 FIXED_CACHE_CREATION_TOKENS,
-                startUsage.getValue("cache_creation_input_tokens").jsonPrimitive.content.toInt(),
+                startUsage
+                    .getValue("cache_creation_input_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
             )
             assertEquals(
                 FIXED_CACHE_READ_TOKENS,
-                startUsage.getValue("cache_read_input_tokens").jsonPrimitive.content.toInt(),
+                startUsage
+                    .getValue("cache_read_input_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
             )
             assertFalse(startUsage.containsKey("output_tokens"))
 
@@ -293,8 +403,19 @@ class BundledScenariosTest {
             i++
             assertEquals("message_delta", events[i].first)
             assertEquals("end_turn", jsonAt(events[i].second, "delta", "stop_reason"))
-            val deltaUsage = Json.parseToJsonElement(events[i].second).jsonObject.getValue("usage").jsonObject
-            assertEquals(FIXED_OUTPUT_TOKENS, deltaUsage.getValue("output_tokens").jsonPrimitive.content.toInt())
+            val deltaUsage =
+                Json
+                    .parseToJsonElement(events[i].second)
+                    .jsonObject
+                    .getValue("usage")
+                    .jsonObject
+            assertEquals(
+                FIXED_OUTPUT_TOKENS,
+                deltaUsage
+                    .getValue("output_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
             assertFalse(deltaUsage.containsKey("input_tokens"))
             i++
             assertEquals("message_stop", events[i].first)
@@ -347,7 +468,15 @@ class BundledScenariosTest {
                 listOf("error:500", "text", "text", "text"),
                 log.map { it.getValue("outcome").jsonPrimitive.content },
             )
-            assertEquals(listOf(1, 1, 2, 2), log.map { it.getValue("occurrence").jsonPrimitive.content.toInt() })
+            assertEquals(
+                listOf(1, 1, 2, 2),
+                log.map {
+                    it
+                        .getValue("occurrence")
+                        .jsonPrimitive.content
+                        .toInt()
+                },
+            )
         }
     }
 

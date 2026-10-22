@@ -35,8 +35,7 @@ class FakeLlmServerTest {
         }
         """.trimIndent()
 
-    private fun calls(client: TestClient) =
-        Json.parseToJsonElement(client.get("/control/calls").body()).jsonArray.map { it.jsonObject }
+    private fun calls(client: TestClient) = Json.parseToJsonElement(client.get("/control/calls").body()).jsonArray.map { it.jsonObject }
 
     private fun assertUnmatched(
         response: HttpResponse<String>,
@@ -49,7 +48,13 @@ class FakeLlmServerTest {
         promptPreview: String,
     ) {
         assertEquals(400, response.statusCode(), response.body())
-        assertTrue(response.headers().firstValue("content-type").orElse("").startsWith("application/json"))
+        assertTrue(
+            response
+                .headers()
+                .firstValue("content-type")
+                .orElse("")
+                .startsWith("application/json"),
+        )
         val obj = Json.parseToJsonElement(response.body()).jsonObject
         assertEquals("unmatched request", obj.getValue("fake_llm_error").jsonPrimitive.content)
         assertEquals(why, obj.getValue("why").jsonPrimitive.content)
@@ -57,7 +62,13 @@ class FakeLlmServerTest {
         assertEquals(model, obj.getValue("model").jsonPrimitive.content)
         assertEquals(systemShape, obj.getValue("system_shape").jsonPrimitive.content)
         assertFalse(obj.getValue("message_count").jsonPrimitive.isString)
-        assertEquals(messageCount, obj.getValue("message_count").jsonPrimitive.content.toInt())
+        assertEquals(
+            messageCount,
+            obj
+                .getValue("message_count")
+                .jsonPrimitive.content
+                .toInt(),
+        )
         if (caller == null) {
             assertEquals(JsonNull, obj.getValue("caller"))
         } else {
@@ -74,7 +85,13 @@ class FakeLlmServerTest {
             assertEquals(200, loaded.statusCode(), loaded.body())
             val loadedJson = Json.parseToJsonElement(loaded.body()).jsonObject
             assertEquals("inline-match", loadedJson.getValue("loaded").jsonPrimitive.content)
-            assertEquals(2, loadedJson.getValue("rules").jsonPrimitive.content.toInt())
+            assertEquals(
+                2,
+                loadedJson
+                    .getValue("rules")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
             assertContains(client.get("/health").body(), "inline-match")
 
             val summary =
@@ -110,12 +127,34 @@ class FakeLlmServerTest {
             val log = calls(client)
             assertEquals(listOf("summarizer", "weather", "DEFAULT", "DEFAULT"), log.map { it.getValue("role").jsonPrimitive.content })
             assertEquals(listOf("text", "text", "default", "default"), log.map { it.getValue("outcome").jsonPrimitive.content })
-            assertEquals(listOf(1, 1, 1, 2), log.map { it.getValue("occurrence").jsonPrimitive.content.toInt() })
-            assertEquals(listOf(1L, 2L, 3L, 4L), log.map { it.getValue("seq").jsonPrimitive.content.toLong() })
+            assertEquals(
+                listOf(1, 1, 1, 2),
+                log.map {
+                    it
+                        .getValue("occurrence")
+                        .jsonPrimitive.content
+                        .toInt()
+                },
+            )
+            assertEquals(
+                listOf(1L, 2L, 3L, 4L),
+                log.map {
+                    it
+                        .getValue("seq")
+                        .jsonPrimitive.content
+                        .toLong()
+                },
+            )
             assertTrue(log.all { it.getValue("vendor").jsonPrimitive.content == "anthropic" })
             assertEquals("weather-model", log[0].getValue("model").jsonPrimitive.content)
             assertEquals("absent", log[0].getValue("systemShape").jsonPrimitive.content)
-            assertEquals(1, log[0].getValue("messageCount").jsonPrimitive.content.toInt())
+            assertEquals(
+                1,
+                log[0]
+                    .getValue("messageCount")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
             assertContains(log[0].getValue("promptSample").jsonPrimitive.content, "weekly forecast")
             assertContains(log[3].getValue("promptSample").jsonPrimitive.content, "hello there")
 
@@ -149,7 +188,15 @@ class FakeLlmServerTest {
             assertEquals("one", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("a")).body()))
             assertEquals("two", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("b")).body()))
             assertEquals("two", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("c")).body()))
-            assertEquals(listOf(1, 2, 3), calls(client).map { it.getValue("occurrence").jsonPrimitive.content.toInt() })
+            assertEquals(
+                listOf(1, 2, 3),
+                calls(client).map {
+                    it
+                        .getValue("occurrence")
+                        .jsonPrimitive.content
+                        .toInt()
+                },
+            )
 
             val reset = client.post("/control/reset", "")
             assertEquals(200, reset.statusCode())
@@ -163,7 +210,14 @@ class FakeLlmServerTest {
 
             val again = client.post("/anthropic/v1/messages", anthropicBody("d"))
             assertEquals("one", anthropicText(again.body()))
-            assertEquals(1, calls(client).single().getValue("occurrence").jsonPrimitive.content.toInt())
+            assertEquals(
+                1,
+                calls(client)
+                    .single()
+                    .getValue("occurrence")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
         }
     }
 
@@ -183,7 +237,13 @@ class FakeLlmServerTest {
             val call = calls(client).single()
             assertEquals("DEFAULT", call.getValue("role").jsonPrimitive.content)
             assertEquals("default", call.getValue("outcome").jsonPrimitive.content)
-            assertEquals(1, call.getValue("occurrence").jsonPrimitive.content.toInt())
+            assertEquals(
+                1,
+                call
+                    .getValue("occurrence")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
         }
     }
 
@@ -216,7 +276,9 @@ class FakeLlmServerTest {
             val buffered =
                 client.post(
                     "/anthropic/v1/messages",
-                    """{"model":"example-model","max_tokens":32,"system":"sys","messages":[{"role":"user","content":${JsonPrimitive(quoted)}}]}""",
+                    """{"model":"example-model","max_tokens":32,"system":"sys","messages":[{"role":"user","content":${JsonPrimitive(
+                        quoted,
+                    )}}]}""",
                     caller = "planner",
                 )
             assertUnmatched(
@@ -241,8 +303,20 @@ class FakeLlmServerTest {
                 caller = null,
                 promptPreview = "stream me\n",
             )
-            assertTrue(streamed.headers().firstValue("content-type").orElse("").startsWith("application/json"))
-            assertFalse(streamed.headers().firstValue("content-type").orElse("").contains("event-stream"))
+            assertTrue(
+                streamed
+                    .headers()
+                    .firstValue("content-type")
+                    .orElse("")
+                    .startsWith("application/json"),
+            )
+            assertFalse(
+                streamed
+                    .headers()
+                    .firstValue("content-type")
+                    .orElse("")
+                    .contains("event-stream"),
+            )
             assertTrue(streamed.body().trimStart().startsWith("{"))
             assertFalse(streamed.body().contains("message_start"))
             assertFalse(streamed.body().contains("event:"))
@@ -287,7 +361,15 @@ class FakeLlmServerTest {
             assertTrue(log.all { it.getValue("role").jsonPrimitive.content == "UNMATCHED" })
             assertTrue(log.all { it.getValue("outcome").jsonPrimitive.content == "unmatched" })
             assertTrue(log.all { it.getValue("occurrence").jsonPrimitive.content == "0" })
-            assertEquals(listOf(1L, 2L, 3L, 4L), log.map { it.getValue("seq").jsonPrimitive.content.toLong() })
+            assertEquals(
+                listOf(1L, 2L, 3L, 4L),
+                log.map {
+                    it
+                        .getValue("seq")
+                        .jsonPrimitive.content
+                        .toLong()
+                },
+            )
             assertEquals("sys\nHello \"there\"\n", log[0].getValue("promptSample").jsonPrimitive.content)
 
             val loaded =
@@ -312,14 +394,32 @@ class FakeLlmServerTest {
             val missedCall = calls(client).single()
             assertEquals("UNMATCHED", missedCall.getValue("role").jsonPrimitive.content)
             assertEquals("unmatched", missedCall.getValue("outcome").jsonPrimitive.content)
-            assertEquals(0, missedCall.getValue("occurrence").jsonPrimitive.content.toInt())
-            assertEquals(5L, missedCall.getValue("seq").jsonPrimitive.content.toLong())
+            assertEquals(
+                0,
+                missedCall
+                    .getValue("occurrence")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
+            assertEquals(
+                5L,
+                missedCall
+                    .getValue("seq")
+                    .jsonPrimitive.content
+                    .toLong(),
+            )
 
             val hit = client.post("/anthropic/v1/messages", anthropicBody("hi"), caller = "summarizer")
             assertEquals(200, hit.statusCode(), hit.body())
             assertEquals("ok", anthropicText(hit.body()))
             assertEquals("summarizer", calls(client)[1].getValue("role").jsonPrimitive.content)
-            assertEquals(1, calls(client)[1].getValue("occurrence").jsonPrimitive.content.toInt())
+            assertEquals(
+                1,
+                calls(client)[1]
+                    .getValue("occurrence")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
             assertEquals("text", calls(client)[1].getValue("outcome").jsonPrimitive.content)
         }
     }
@@ -329,20 +429,38 @@ class FakeLlmServerTest {
         withServer(engine = ScenarioEngine(lenient = true)) { client, _ ->
             val resp = client.post("/anthropic/v1/messages", anthropicBody("hello", stream = true))
             assertEquals(200, resp.statusCode(), resp.body())
-            assertTrue(resp.headers().firstValue("content-type").orElse("").startsWith("text/event-stream"))
+            assertTrue(
+                resp
+                    .headers()
+                    .firstValue("content-type")
+                    .orElse("")
+                    .startsWith("text/event-stream"),
+            )
             val text =
                 resp.body().split("\n\n").filter { it.isNotBlank() }.mapNotNull { frame ->
                     val lines = frame.lines()
                     val event = lines.first { it.startsWith("event: ") }.removePrefix("event: ")
                     if (event != "content_block_delta") return@mapNotNull null
                     val data = lines.first { it.startsWith("data: ") }.removePrefix("data: ")
-                    Json.parseToJsonElement(data).jsonObject.getValue("delta").jsonObject.getValue("text").jsonPrimitive.content
+                    Json
+                        .parseToJsonElement(data)
+                        .jsonObject
+                        .getValue("delta")
+                        .jsonObject
+                        .getValue("text")
+                        .jsonPrimitive.content
                 }
             assertEquals(CANNED_ASSISTANT_TEXT, text.joinToString(""))
             val call = calls(client).single()
             assertEquals("DEFAULT", call.getValue("role").jsonPrimitive.content)
             assertEquals("default", call.getValue("outcome").jsonPrimitive.content)
-            assertEquals(1, call.getValue("occurrence").jsonPrimitive.content.toInt())
+            assertEquals(
+                1,
+                call
+                    .getValue("occurrence")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
         }
     }
 
@@ -359,11 +477,40 @@ class FakeLlmServerTest {
                     """.trimIndent(),
                 )
             assertEquals(200, withBreakpoint.statusCode(), withBreakpoint.body())
-            val usage = Json.parseToJsonElement(withBreakpoint.body()).jsonObject.getValue("usage").jsonObject
-            assertEquals(FIXED_INPUT_TOKENS, usage.getValue("input_tokens").jsonPrimitive.content.toInt())
-            assertEquals(FIXED_OUTPUT_TOKENS, usage.getValue("output_tokens").jsonPrimitive.content.toInt())
-            assertEquals(FIXED_CACHE_CREATION_TOKENS, usage.getValue("cache_creation_input_tokens").jsonPrimitive.content.toInt())
-            assertEquals(FIXED_CACHE_READ_TOKENS, usage.getValue("cache_read_input_tokens").jsonPrimitive.content.toInt())
+            val usage =
+                Json
+                    .parseToJsonElement(withBreakpoint.body())
+                    .jsonObject
+                    .getValue("usage")
+                    .jsonObject
+            assertEquals(
+                FIXED_INPUT_TOKENS,
+                usage
+                    .getValue("input_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
+            assertEquals(
+                FIXED_OUTPUT_TOKENS,
+                usage
+                    .getValue("output_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
+            assertEquals(
+                FIXED_CACHE_CREATION_TOKENS,
+                usage
+                    .getValue("cache_creation_input_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
+            assertEquals(
+                FIXED_CACHE_READ_TOKENS,
+                usage
+                    .getValue("cache_read_input_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
             assertTrue(FIXED_CACHE_CREATION_TOKENS >= 1)
             assertTrue(FIXED_CACHE_READ_TOKENS >= 1)
 
@@ -372,10 +519,33 @@ class FakeLlmServerTest {
                     "/anthropic/v1/messages",
                     """{"model":"example-model","max_tokens":64,"messages":[{"role":"user","content":"hello"}]}""",
                 )
-            val plain = Json.parseToJsonElement(without.body()).jsonObject.getValue("usage").jsonObject
-            assertEquals(0, plain.getValue("cache_creation_input_tokens").jsonPrimitive.content.toInt())
-            assertEquals(0, plain.getValue("cache_read_input_tokens").jsonPrimitive.content.toInt())
-            assertEquals(FIXED_INPUT_TOKENS, plain.getValue("input_tokens").jsonPrimitive.content.toInt())
+            val plain =
+                Json
+                    .parseToJsonElement(without.body())
+                    .jsonObject
+                    .getValue("usage")
+                    .jsonObject
+            assertEquals(
+                0,
+                plain
+                    .getValue("cache_creation_input_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
+            assertEquals(
+                0,
+                plain
+                    .getValue("cache_read_input_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
+            assertEquals(
+                FIXED_INPUT_TOKENS,
+                plain
+                    .getValue("input_tokens")
+                    .jsonPrimitive.content
+                    .toInt(),
+            )
         }
     }
 
@@ -401,7 +571,14 @@ class FakeLlmServerTest {
         withServer { client, _ ->
             val malformed = client.post("/anthropic/v1/messages", "{")
             assertEquals(400, malformed.statusCode())
-            assertEquals("exception", Json.parseToJsonElement(malformed.body()).jsonObject.getValue("fake_llm_error").jsonPrimitive.content)
+            assertEquals(
+                "exception",
+                Json
+                    .parseToJsonElement(malformed.body())
+                    .jsonObject
+                    .getValue("fake_llm_error")
+                    .jsonPrimitive.content,
+            )
             assertTrue(errorDetail(malformed.body()).isNotBlank())
 
             val missingMessages = client.post("/anthropic/v1/messages", """{"model":"example-model"}""")
