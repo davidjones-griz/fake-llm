@@ -1,8 +1,8 @@
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 
 plugins {
-    kotlin("jvm") version "2.1.21"
-    kotlin("plugin.serialization") version "2.1.21"
+    kotlin("jvm") version "2.4.21"
+    kotlin("plugin.serialization") version "2.4.21"
     application
     `maven-publish`
     id("com.gradleup.shadow") version "8.3.11"
