@@ -18,3 +18,6 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+
+# Kotlin 2.x compiler state
+.kotlin/

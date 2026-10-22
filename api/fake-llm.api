@@ -25,7 +25,7 @@ public final class com/davidjonesgriz/fakellm/CallRecord {
 	public fun toString ()Ljava/lang/String;
 }
 
-public synthetic class com/davidjonesgriz/fakellm/CallRecord$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+public final synthetic class com/davidjonesgriz/fakellm/CallRecord$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
 	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/CallRecord$$serializer;
 	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
 	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/CallRecord;
@@ -33,6 +33,7 @@ public synthetic class com/davidjonesgriz/fakellm/CallRecord$$serializer : kotli
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/CallRecord;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class com/davidjonesgriz/fakellm/CallRecord$Companion {
@@ -56,7 +57,7 @@ public final class com/davidjonesgriz/fakellm/ErrorStep {
 	public fun toString ()Ljava/lang/String;
 }
 
-public synthetic class com/davidjonesgriz/fakellm/ErrorStep$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+public final synthetic class com/davidjonesgriz/fakellm/ErrorStep$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
 	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/ErrorStep$$serializer;
 	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
 	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/ErrorStep;
@@ -64,6 +65,7 @@ public synthetic class com/davidjonesgriz/fakellm/ErrorStep$$serializer : kotlin
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/ErrorStep;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class com/davidjonesgriz/fakellm/ErrorStep$Companion {
@@ -105,7 +107,7 @@ public final class com/davidjonesgriz/fakellm/Match {
 	public fun toString ()Ljava/lang/String;
 }
 
-public synthetic class com/davidjonesgriz/fakellm/Match$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+public final synthetic class com/davidjonesgriz/fakellm/Match$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
 	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/Match$$serializer;
 	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
 	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/Match;
@@ -113,6 +115,7 @@ public synthetic class com/davidjonesgriz/fakellm/Match$$serializer : kotlinx/se
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/Match;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class com/davidjonesgriz/fakellm/Match$Companion {
@@ -136,7 +139,7 @@ public final class com/davidjonesgriz/fakellm/Rule {
 	public fun toString ()Ljava/lang/String;
 }
 
-public synthetic class com/davidjonesgriz/fakellm/Rule$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+public final synthetic class com/davidjonesgriz/fakellm/Rule$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
 	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/Rule$$serializer;
 	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
 	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/Rule;
@@ -144,6 +147,7 @@ public synthetic class com/davidjonesgriz/fakellm/Rule$$serializer : kotlinx/ser
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/Rule;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class com/davidjonesgriz/fakellm/Rule$Companion {
@@ -167,7 +171,7 @@ public final class com/davidjonesgriz/fakellm/Scenario {
 	public fun toString ()Ljava/lang/String;
 }
 
-public synthetic class com/davidjonesgriz/fakellm/Scenario$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+public final synthetic class com/davidjonesgriz/fakellm/Scenario$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
 	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/Scenario$$serializer;
 	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
 	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/Scenario;
@@ -175,6 +179,7 @@ public synthetic class com/davidjonesgriz/fakellm/Scenario$$serializer : kotlinx
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/Scenario;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class com/davidjonesgriz/fakellm/Scenario$Companion {
@@ -219,7 +224,7 @@ public final class com/davidjonesgriz/fakellm/Step {
 	public fun toString ()Ljava/lang/String;
 }
 
-public synthetic class com/davidjonesgriz/fakellm/Step$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+public final synthetic class com/davidjonesgriz/fakellm/Step$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
 	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/Step$$serializer;
 	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
 	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/Step;
@@ -227,6 +232,7 @@ public synthetic class com/davidjonesgriz/fakellm/Step$$serializer : kotlinx/ser
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/Step;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class com/davidjonesgriz/fakellm/Step$Companion {
