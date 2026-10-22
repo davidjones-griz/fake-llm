@@ -393,6 +393,8 @@ Each process holds one scenario, one call log, and one set of occurrence counter
 
 ## Development
 
+[CONTRIBUTING.md](CONTRIBUTING.md) describes how a change reaches `main`: the plan and review steps, branch names, and commits.
+
 `./gradlew build` compiles the server, runs the Kotlin tests, and writes `build/libs/fake-llm-all.jar`.
 
 The example project tests the published artifact, not the source, so publish it first. `check` runs its tests and its quality gates, as CI does:
