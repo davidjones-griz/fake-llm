@@ -64,7 +64,7 @@ private fun controlRoute(
 ): Boolean {
     val key = "${ex.requestMethod} ${ex.requestURI.path}"
     when (key) {
-        "GET /health" ->
+        "GET /health" -> {
             respond(
                 ex,
                 HTTP_OK,
@@ -74,14 +74,28 @@ private fun controlRoute(
                     put("lenient", engine.lenient)
                 }.toString(),
             )
-        "POST /control/scenario" -> loadScenario(ex, engine)
-        "GET /control/scenarios" -> respond(ex, HTTP_OK, scenariosJson())
+        }
+
+        "POST /control/scenario" -> {
+            loadScenario(ex, engine)
+        }
+
+        "GET /control/scenarios" -> {
+            respond(ex, HTTP_OK, scenariosJson())
+        }
+
         "POST /control/reset" -> {
             engine.reset()
             respond(ex, HTTP_OK, """{"reset":true}""")
         }
-        "GET /control/calls" -> respond(ex, HTTP_OK, logJson.encodeToString(engine.calls()))
-        else -> return false
+
+        "GET /control/calls" -> {
+            respond(ex, HTTP_OK, logJson.encodeToString(engine.calls()))
+        }
+
+        else -> {
+            return false
+        }
     }
     return true
 }
@@ -93,17 +107,29 @@ private fun vendorRoute(
 ): Boolean {
     val path = ex.requestURI.path
     when {
-        ex.requestMethod == "POST" && path == "/anthropic/v1/messages" -> handleMessages(ex, engine)
-        path.startsWith("/anthropic/v1/messages/batches") ->
+        ex.requestMethod == "POST" && path == "/anthropic/v1/messages" -> {
+            handleMessages(ex, engine)
+        }
+
+        path.startsWith("/anthropic/v1/messages/batches") -> {
             respond(
                 ex,
                 HTTP_NOT_IMPLEMENTED,
                 """{"fake_llm_error":"the Anthropic Batches API is not implemented"}""",
             )
-        ex.requestMethod == "POST" && path == "/openai/v1/chat/completions" -> handleOpenAi(ex, engine)
-        ex.requestMethod == "POST" && path.startsWith("/gemini/") && path.contains(":generateContent") ->
+        }
+
+        ex.requestMethod == "POST" && path == "/openai/v1/chat/completions" -> {
+            handleOpenAi(ex, engine)
+        }
+
+        ex.requestMethod == "POST" && path.startsWith("/gemini/") && path.contains(":generateContent") -> {
             handleGemini(ex, engine, path)
-        else -> return false
+        }
+
+        else -> {
+            return false
+        }
     }
     return true
 }

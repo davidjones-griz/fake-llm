@@ -11,6 +11,9 @@ plugins {
     id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.1"
     // Measures test coverage of src/main; `check` fails when it drops below the floors set further down.
     id("org.jetbrains.kotlinx.kover") version "0.9.11"
+    // Static analysis and formatting; both run as part of `check`. See config/detekt/detekt.yml.
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
 }
 
 // The version lives in gradle.properties so examples/ can read the same value.
@@ -45,6 +48,15 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+ktlint {
+    version.set(providers.gradleProperty("ktlintVersion"))
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(file("config/detekt/detekt.yml"))
 }
 
 // Coverage floors: raise them when coverage rises; never lower one without a reason in the PR.

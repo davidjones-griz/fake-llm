@@ -92,6 +92,5 @@ class SummarizerTest {
         assertContains(failure.message!!, "no rule in scenario 'other-model-only' matches this request")
     }
 
-    private fun scenario(vararg steps: Step) =
-        Scenario(name = "inline", rules = listOf(Rule(role = "summarize", respond = steps.toList())))
+    private fun scenario(vararg steps: Step) = Scenario(name = "inline", rules = listOf(Rule(role = "summarize", respond = steps.toList())))
 }

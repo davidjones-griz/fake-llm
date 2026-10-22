@@ -52,11 +52,25 @@ class ScenarioLoaderTest {
             ScenarioLoader.setScenarioDirectory(dir)
 
             val overridden = ScenarioLoader.load("hello")
-            assertEquals("Directory scenario wins.", overridden.rules.single().respond.single().text)
+            assertEquals(
+                "Directory scenario wins.",
+                overridden.rules
+                    .single()
+                    .respond
+                    .single()
+                    .text,
+            )
             assertEquals("override", overridden.rules.single().role)
 
             val local = ScenarioLoader.load("local-only")
-            assertEquals("from the directory", local.rules.single().respond.single().text)
+            assertEquals(
+                "from the directory",
+                local.rules
+                    .single()
+                    .respond
+                    .single()
+                    .text,
+            )
 
             val names = ScenarioLoader.availableNames()
             assertEquals(names.sorted(), names)
@@ -68,7 +82,11 @@ class ScenarioLoaderTest {
             val restored = ScenarioLoader.load("hello")
             assertEquals(
                 "Hello. I can help with the weather, a simple recipe, or a short how-to.",
-                restored.rules.single().respond.single().text,
+                restored.rules
+                    .single()
+                    .respond
+                    .single()
+                    .text,
             )
         } finally {
             dir.deleteRecursively()
@@ -94,8 +112,24 @@ class ScenarioLoaderTest {
             ScenarioLoader.setScenarioDirectory(dir)
             val classpath = ScenarioLoader.load("refusal")
             assertEquals("refusal", classpath.name)
-            assertEquals("I can't help with that request.", classpath.rules.single().respond.single().text)
-            assertEquals("from the directory", ScenarioLoader.load("local-only").rules.single().respond.single().text)
+            assertEquals(
+                "I can't help with that request.",
+                classpath.rules
+                    .single()
+                    .respond
+                    .single()
+                    .text,
+            )
+            assertEquals(
+                "from the directory",
+                ScenarioLoader
+                    .load("local-only")
+                    .rules
+                    .single()
+                    .respond
+                    .single()
+                    .text,
+            )
         } finally {
             dir.deleteRecursively()
         }

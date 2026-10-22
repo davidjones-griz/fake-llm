@@ -1,3 +1,6 @@
+// Shared test helpers, not one class's file: TestClient plus the request and response helpers.
+@file:Suppress("MatchingDeclarationName")
+
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.Json
@@ -11,7 +14,9 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 
-internal class TestClient(private val port: Int) {
+internal class TestClient(
+    private val port: Int,
+) {
     private val http =
         HttpClient
             .newBuilder()
@@ -31,8 +36,7 @@ internal class TestClient(private val port: Int) {
         authorization: String? = null,
     ): HttpResponse<String> = send(request(path).GET(), caller = null, authorization = authorization)
 
-    private fun request(path: String): HttpRequest.Builder =
-        HttpRequest.newBuilder(URI("http://127.0.0.1:$port$path"))
+    private fun request(path: String): HttpRequest.Builder = HttpRequest.newBuilder(URI("http://127.0.0.1:$port$path"))
 
     private fun send(
         builder: HttpRequest.Builder,
@@ -75,13 +79,33 @@ internal fun anthropicBody(
 }
 
 internal fun anthropicText(body: String): String {
-    val content = Json.parseToJsonElement(body).jsonObject.getValue("content").jsonArray
-    val block = content.first { it.jsonObject.getValue("type").jsonPrimitive.content == "text" }
-    return block.jsonObject.getValue("text").jsonPrimitive.content
+    val content =
+        Json
+            .parseToJsonElement(body)
+            .jsonObject
+            .getValue("content")
+            .jsonArray
+    val block =
+        content.first {
+            it.jsonObject
+                .getValue("type")
+                .jsonPrimitive.content == "text"
+        }
+    return block.jsonObject
+        .getValue("text")
+        .jsonPrimitive.content
 }
 
 internal fun anthropicStopReason(body: String): String =
-    Json.parseToJsonElement(body).jsonObject.getValue("stop_reason").jsonPrimitive.content
+    Json
+        .parseToJsonElement(body)
+        .jsonObject
+        .getValue("stop_reason")
+        .jsonPrimitive.content
 
 internal fun errorDetail(body: String): String =
-    Json.parseToJsonElement(body).jsonObject.getValue("detail").jsonPrimitive.content
+    Json
+        .parseToJsonElement(body)
+        .jsonObject
+        .getValue("detail")
+        .jsonPrimitive.content

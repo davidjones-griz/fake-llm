@@ -394,7 +394,13 @@ class ScenarioEngineTest {
         assertEquals("example-model", body.getValue("model").jsonPrimitive.content)
         assertEquals("string", body.getValue("system_shape").jsonPrimitive.content)
         assertFalse(body.getValue("message_count").jsonPrimitive.isString)
-        assertEquals(2, body.getValue("message_count").jsonPrimitive.content.toInt())
+        assertEquals(
+            2,
+            body
+                .getValue("message_count")
+                .jsonPrimitive.content
+                .toInt(),
+        )
         assertEquals("planner", body.getValue("caller").jsonPrimitive.content)
         assertEquals(prompt.take(200), body.getValue("prompt_preview").jsonPrimitive.content)
 
@@ -411,7 +417,13 @@ class ScenarioEngineTest {
         assertEquals("gemini", geminiBody.getValue("vendor").jsonPrimitive.content)
         assertEquals("example-gemini", geminiBody.getValue("model").jsonPrimitive.content)
         assertEquals("absent", geminiBody.getValue("system_shape").jsonPrimitive.content)
-        assertEquals(3, geminiBody.getValue("message_count").jsonPrimitive.content.toInt())
+        assertEquals(
+            3,
+            geminiBody
+                .getValue("message_count")
+                .jsonPrimitive.content
+                .toInt(),
+        )
 
         val calls = engine.calls()
         assertEquals(listOf("UNMATCHED", "UNMATCHED", "UNMATCHED"), calls.map { it.role })
@@ -521,13 +533,48 @@ class ScenarioEngineTest {
                 ),
             )
         val body = engine.handle("anthropic", req()).body
-        val content = Json.parseToJsonElement(body).jsonObject.getValue("content").jsonArray
+        val content =
+            Json
+                .parseToJsonElement(body)
+                .jsonObject
+                .getValue("content")
+                .jsonArray
         assertEquals(2, content.size)
-        assertEquals("thinking", content[0].jsonObject.getValue("type").jsonPrimitive.content)
-        assertEquals("the thinking", content[0].jsonObject.getValue("thinking").jsonPrimitive.content)
-        assertTrue(content[0].jsonObject.getValue("signature").jsonPrimitive.content.isNotBlank())
-        assertEquals("text", content[1].jsonObject.getValue("type").jsonPrimitive.content)
-        assertEquals("the reply", content[1].jsonObject.getValue("text").jsonPrimitive.content)
+        assertEquals(
+            "thinking",
+            content[0]
+                .jsonObject
+                .getValue("type")
+                .jsonPrimitive.content,
+        )
+        assertEquals(
+            "the thinking",
+            content[0]
+                .jsonObject
+                .getValue("thinking")
+                .jsonPrimitive.content,
+        )
+        assertTrue(
+            content[0]
+                .jsonObject
+                .getValue("signature")
+                .jsonPrimitive.content
+                .isNotBlank(),
+        )
+        assertEquals(
+            "text",
+            content[1]
+                .jsonObject
+                .getValue("type")
+                .jsonPrimitive.content,
+        )
+        assertEquals(
+            "the reply",
+            content[1]
+                .jsonObject
+                .getValue("text")
+                .jsonPrimitive.content,
+        )
         assertEquals("end_turn", anthropicStopReason(body))
     }
 }

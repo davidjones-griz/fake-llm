@@ -78,8 +78,7 @@ internal fun geminiEnvelope(
         put("fake_llm_seq", seq)
     }.toString()
 
-private fun geminiFinishReason(anthropicStopReason: String): String =
-    if (anthropicStopReason == "max_tokens") "MAX_TOKENS" else "STOP"
+private fun geminiFinishReason(anthropicStopReason: String): String = if (anthropicStopReason == "max_tokens") "MAX_TOKENS" else "STOP"
 
 internal fun geminiModelFromPath(path: String): String {
     val marker = "/models/"

@@ -24,14 +24,18 @@ internal data class ParsedRequest(
 
 private fun hasCacheControl(el: JsonElement?): Boolean =
     when (el) {
-        is JsonArray ->
+        is JsonArray -> {
             el
                 .map { block ->
                     val cacheControl = (block as? JsonObject)?.get("cache_control")
                     if (cacheControl != null) validateCacheControl(cacheControl)
                     cacheControl != null
                 }.any { it }
-        else -> false
+        }
+
+        else -> {
+            false
+        }
     }
 
 private val VALID_CACHE_TTLS = setOf("5m", "1h")
@@ -89,12 +93,18 @@ internal fun parseAnthropicRequest(
 private fun StringBuilder.appendTexts(el: JsonElement?) {
     when (el) {
         null -> {}
-        is JsonPrimitive -> append(el.content).append('\n')
-        is JsonArray ->
+
+        is JsonPrimitive -> {
+            append(el.content).append('\n')
+        }
+
+        is JsonArray -> {
             el.forEach { block ->
                 val t = (block as? JsonObject)?.get("text") as? JsonPrimitive
                 if (t != null) append(t.content).append('\n')
             }
+        }
+
         else -> {}
     }
 }

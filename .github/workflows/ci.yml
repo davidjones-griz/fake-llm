@@ -26,8 +26,8 @@ jobs:
           retention-days: 14
       - name: Publish to the build-local repository
         run: ./gradlew publishAllPublicationsToBuildLocalRepository --no-daemon
-      - name: Test examples/ against the published artifact
-        run: ./gradlew -p examples test --no-daemon
+      - name: Test and lint examples/ against the published artifact
+        run: ./gradlew -p examples check --no-daemon
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: fake-llm-all

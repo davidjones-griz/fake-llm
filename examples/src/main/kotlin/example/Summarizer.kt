@@ -48,7 +48,12 @@ class Summarizer(
             if (status !in RETRYABLE || attempt >= maxAttempts) {
                 error("summarize failed with HTTP $status: ${response.body()}")
             }
-            val waitSeconds = response.headers().firstValue("retry-after").map(String::toLong).orElse(1L)
+            val waitSeconds =
+                response
+                    .headers()
+                    .firstValue("retry-after")
+                    .map(String::toLong)
+                    .orElse(1L)
             Thread.sleep(waitSeconds * MILLIS_PER_SECOND)
             attempt++
         }

@@ -210,9 +210,12 @@ private fun streamAnthropicMessages(
 
 private const val DEFAULT_PORT = "8080"
 private const val HTTP_THREADS = 16
+private const val MAX_PORT = 65535
 private const val CALLER_HEADER = "X-Fake-LLM-Caller"
 
-internal class StartupUsageException(message: String) : RuntimeException(message)
+internal class StartupUsageException(
+    message: String,
+) : RuntimeException(message)
 
 internal data class StartupConfig(
     val port: Int,
@@ -242,24 +245,30 @@ internal fun parseStartupConfig(
                 portFlag = optionValue(args, i, arg)
                 i += 2
             }
+
             "--scenario" -> {
                 scenarioFlag = optionValue(args, i, arg)
                 i += 2
             }
+
             "--scenario-dir" -> {
                 scenarioDirFlag = optionValue(args, i, arg)
                 i += 2
             }
+
             "--lenient" -> {
                 lenientFlag = true
                 i += 1
             }
-            else -> usage(if (arg.startsWith("-")) "unknown flag '$arg'" else "unknown argument '$arg'")
+
+            else -> {
+                usage(if (arg.startsWith("-")) "unknown flag '$arg'" else "unknown argument '$arg'")
+            }
         }
     }
     // A present flag overrides the environment variable for the same setting.
     val portRaw = portFlag ?: env["PORT"]?.takeIf { it.isNotBlank() } ?: DEFAULT_PORT
-    val port = portRaw.toIntOrNull()?.takeIf { it in 0..65535 } ?: usage("invalid port '$portRaw'")
+    val port = portRaw.toIntOrNull()?.takeIf { it in 0..MAX_PORT } ?: usage("invalid port '$portRaw'")
     val scenario = scenarioFlag ?: env["FAKE_LLM_SCENARIO"]?.takeIf { it.isNotBlank() }
     val scenarioDirRaw = scenarioDirFlag ?: env["FAKE_LLM_SCENARIO_DIR"]?.takeIf { it.isNotBlank() }
     val lenient = lenientFlag || parseLenientEnv(env["FAKE_LLM_LENIENT"])
