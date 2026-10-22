@@ -12,7 +12,7 @@ import kotlinx.serialization.json.put
 
 private val geminiLenientJson = Json { ignoreUnknownKeys = true }
 
-fun parseGeminiRequest(
+internal fun parseGeminiRequest(
     body: String,
     modelFromPath: String,
     caller: String? = null,
@@ -39,7 +39,7 @@ fun parseGeminiRequest(
     )
 }
 
-fun geminiEnvelope(
+internal fun geminiEnvelope(
     text: String,
     stopReason: String,
     seq: Long,
@@ -81,7 +81,7 @@ fun geminiEnvelope(
 private fun geminiFinishReason(anthropicStopReason: String): String =
     if (anthropicStopReason == "max_tokens") "MAX_TOKENS" else "STOP"
 
-fun geminiModelFromPath(path: String): String {
+internal fun geminiModelFromPath(path: String): String {
     val marker = "/models/"
     val idx = path.indexOf(marker)
     if (idx < 0) return ""

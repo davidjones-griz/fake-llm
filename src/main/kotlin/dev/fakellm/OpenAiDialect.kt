@@ -12,7 +12,7 @@ import kotlinx.serialization.json.put
 
 private val openAiLenientJson = Json { ignoreUnknownKeys = true }
 
-fun parseOpenAiRequest(
+internal fun parseOpenAiRequest(
     body: String,
     caller: String? = null,
 ): ParsedRequest {
@@ -46,7 +46,7 @@ fun parseOpenAiRequest(
     )
 }
 
-fun openAiEnvelope(
+internal fun openAiEnvelope(
     text: String,
     stopReason: String,
     seq: Long,

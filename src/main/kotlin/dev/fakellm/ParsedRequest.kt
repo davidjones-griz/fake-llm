@@ -11,7 +11,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
-data class ParsedRequest(
+internal data class ParsedRequest(
     val model: String,
     val systemShape: String,
     val promptText: String,
@@ -50,7 +50,7 @@ private fun validateCacheControl(raw: JsonElement) {
 
 private val lenientJson = Json { ignoreUnknownKeys = true }
 
-fun parseAnthropicRequest(
+internal fun parseAnthropicRequest(
     body: String,
     caller: String? = null,
 ): ParsedRequest {
@@ -99,7 +99,7 @@ private fun StringBuilder.appendTexts(el: JsonElement?) {
     }
 }
 
-fun anthropicEnvelope(
+internal fun anthropicEnvelope(
     text: String,
     stopReason: String,
     seq: Long,

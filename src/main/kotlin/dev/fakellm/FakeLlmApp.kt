@@ -3,6 +3,7 @@ package dev.fakellm
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.File
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.system.exitProcess
 
@@ -59,20 +60,50 @@ fun main(args: Array<String>) {
     val engine = ScenarioEngine(lenient = config.lenient)
     config.scenario?.let { engine.load(it) }
     val server = startFakeLlmServer(config.port, engine)
-    println("fake-llm listening on :${config.port} (scenario=${engine.currentScenarioName() ?: "none"})")
-    Runtime.getRuntime().addShutdownHook(Thread { server.stop(0) })
+    println("fake-llm listening on :${server.port} (scenario=${engine.currentScenarioName() ?: "none"})")
+    Runtime.getRuntime().addShutdownHook(Thread { server.close() })
 }
 
+/**
+ * Starts a server in this process, serving [engine]. Pass `port = 0` for an ephemeral port and
+ * read it back from [FakeLlmServer.port]. [controlToken] defaults to `FAKE_LLM_CONTROL_TOKEN`
+ * (see [readControlToken]); null leaves the control routes open.
+ */
 fun startFakeLlmServer(
     port: Int,
     engine: ScenarioEngine,
     controlToken: String? = readControlToken(),
-): HttpServer {
+): FakeLlmServer {
     val server = createFakeLlmHttpServer(port)
+    val executor = Executors.newFixedThreadPool(HTTP_THREADS)
     server.createContext("/") { ex -> route(ex, engine, controlToken) }
-    server.executor = Executors.newFixedThreadPool(HTTP_THREADS)
+    server.executor = executor
     server.start()
-    return server
+    return FakeLlmServer(server, executor, engine)
+}
+
+/**
+ * A running server from [startFakeLlmServer]. Load scenarios and read the call log through
+ * [engine], or over HTTP at [baseUrl]. [close] stops the listener and its handler threads.
+ */
+class FakeLlmServer internal constructor(
+    private val server: HttpServer,
+    private val executor: ExecutorService,
+    val engine: ScenarioEngine,
+) : AutoCloseable {
+    /** The bound port. With `port = 0` this is the ephemeral port the OS chose. */
+    val port: Int = server.address.port
+
+    /**
+     * `http://127.0.0.1:<port>`. Vendor SDK base URLs append `/anthropic`, `/openai/v1`, or
+     * `/gemini/`.
+     */
+    val baseUrl: String = "http://127.0.0.1:$port"
+
+    override fun close() {
+        server.stop(0)
+        executor.shutdownNow()
+    }
 }
 
 internal fun handleMessages(

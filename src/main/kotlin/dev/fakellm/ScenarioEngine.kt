@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /** What the HTTP layer sends back for one faked vendor call. */
-data class FakeResponse(
+internal data class FakeResponse(
     val status: Int,
     val body: String,
     val headers: Map<String, String> = emptyMap(),
@@ -102,7 +102,7 @@ class ScenarioEngine(
     fun calls(): List<CallRecord> = synchronized(log) { log.toList() }
 
     /** Whole JSON response for one request. */
-    fun handle(
+    internal fun handle(
         vendor: String,
         req: ParsedRequest,
     ): FakeResponse {

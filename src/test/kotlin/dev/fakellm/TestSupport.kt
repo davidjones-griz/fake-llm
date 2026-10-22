@@ -1,6 +1,5 @@
 package dev.fakellm
 
-import com.sun.net.httpserver.HttpServer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -11,7 +10,6 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
-import java.util.concurrent.ExecutorService
 
 internal class TestClient(private val port: Int) {
     private val http =
@@ -53,19 +51,10 @@ internal fun withServer(
     controlToken: String? = null,
     block: (client: TestClient, engine: ScenarioEngine) -> Unit,
 ) {
-    val server = startFakeLlmServer(port = 0, engine = engine, controlToken = controlToken)
-    val port = server.address.port
-    check(port != 0) { "test server did not bind an ephemeral port" }
-    try {
-        block(TestClient(port), engine)
-    } finally {
-        server.stopTestServer()
+    startFakeLlmServer(port = 0, engine = engine, controlToken = controlToken).use { server ->
+        check(server.port != 0) { "test server did not bind an ephemeral port" }
+        block(TestClient(server.port), engine)
     }
-}
-
-internal fun HttpServer.stopTestServer() {
-    stop(0)
-    (executor as? ExecutorService)?.shutdownNow()
 }
 
 internal fun anthropicBody(
