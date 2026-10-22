@@ -22,6 +22,9 @@ change the public API.
 - Library use: the `com.davidjonesgriz:fake-llm` Maven publication with sources and javadoc jars, and
   `startFakeLlmServer`, which returns a `FakeLlmServer` handle (`port`, `baseUrl`, `engine`,
   `close()`) for starting the server in-process from tests.
+- `ScenarioEngine(scenarioDirectory = path)`: a per-engine directory that `load(name)` searches
+  before the classpath and `GET /control/scenarios` lists, so engines in one JVM can load
+  same-named scenarios from different directories.
 - `examples/`, a separate build that tests a small client against the published artifact.
 - Public API checks: Kotlin explicit API mode, and `api/fake-llm.api`, which `./gradlew check`
   compares with the compiled API.
@@ -30,8 +33,9 @@ change the public API.
 
 Compared with pre-release builds of `main`:
 
-- `ScenarioLoader` is internal. The scenario directory is set only by `--scenario-dir` or
-  `FAKE_LLM_SCENARIO_DIR`.
+- `ScenarioLoader` is internal. The scenario directory belongs to each `ScenarioEngine` instead of
+  the whole process; `--scenario-dir` and `FAKE_LLM_SCENARIO_DIR` set it for the command-line
+  server's engine and behave as before.
 - `CallRecord`'s constructor and `copy` are internal.
 - `Scenario.rules` has no default value. A scenario file without `rules` now fails as a missing
   field instead of as an empty list.
