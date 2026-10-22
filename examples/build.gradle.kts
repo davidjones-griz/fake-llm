@@ -3,12 +3,16 @@ import java.util.Properties
 plugins {
     kotlin("jvm") version "2.1.21"
     kotlin("plugin.serialization") version "2.1.21"
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
 }
+
+// Shared with the root build: the fake-llm version and the ktlint version.
+val rootProperties = Properties().apply { file("../gradle.properties").reader().use { load(it) } }
 
 // The fake-llm version under test: -PfakeLlmVersion=..., else the version in ../gradle.properties.
 val fakeLlmVersion: String =
-    providers.gradleProperty("fakeLlmVersion").orNull
-        ?: Properties().apply { file("../gradle.properties").reader().use { load(it) } }.getProperty("version")
+    providers.gradleProperty("fakeLlmVersion").orNull ?: rootProperties.getProperty("version")
 
 repositories {
     // Filled by `./gradlew publishAllPublicationsToBuildLocalRepository` in the repository root.
@@ -32,4 +36,13 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+ktlint {
+    version.set(rootProperties.getProperty("ktlintVersion"))
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(file("../config/detekt/detekt.yml"))
 }

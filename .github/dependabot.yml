@@ -19,6 +19,10 @@ updates:
           - "org.jetbrains.kotlin.*"
           - "org.jetbrains.kotlin:*"
           - "org.jetbrains.kotlinx:kotlinx-serialization-*"
+      # detekt and ktlint bumps can bring new findings; keep them out of the general group so they
+      # don't hold back other updates.
+      lint-tools:
+        patterns: ["io.gitlab.arturbosch.detekt", "org.jlleitschuh.gradle.ktlint"]
       gradle-minor-patch:
         update-types: [minor, patch]
     ignore:

@@ -393,11 +393,11 @@ Each process holds one scenario, one call log, and one set of occurrence counter
 
 `./gradlew build` compiles the server, runs the Kotlin tests, and writes `build/libs/fake-llm-all.jar`.
 
-The example project tests the published artifact, not the source, so publish it first:
+The example project tests the published artifact, not the source, so publish it first. `check` runs its tests and its quality gates, as CI does:
 
 ```bash
 ./gradlew publishAllPublicationsToBuildLocalRepository
-./gradlew -p examples test
+./gradlew -p examples check
 ```
 
 `./gradlew -p examples test --include-build ..` runs the same tests against the source instead, through a composite build.
@@ -408,17 +408,24 @@ Kotlin explicit API mode is on, so a new public declaration in `src/main` needs 
 
 ### Quality gates
 
-Compiler warnings are errors. A warning in the main or test code fails `./gradlew build`, and one in `examples/` fails `./gradlew -p examples test`; CI runs both.
+Compiler warnings are errors. A warning in the main or test code fails `./gradlew build`, and one in `examples/` fails `./gradlew -p examples check`; CI runs both.
 
 `./gradlew check`, and so `./gradlew build` and CI, measures the test coverage of `src/main` with [Kover](https://github.com/Kotlin/kotlinx-kover) and fails when line coverage drops below 95% or branch coverage below 65%. The floors are set in `build.gradle.kts`, which is the source of truth; update the numbers here when they change. Raise a floor when coverage rises, and never lower one without a reason in the pull request. To see the current numbers, run `./gradlew koverHtmlReport` and open `build/reports/kover/html/index.html`, which shows line and branch coverage; `./gradlew koverLog` prints line coverage only. CI attaches the same report as the `coverage-report` artifact on every run where the tests pass. Nothing is excluded from the measurement, so a new `@Serializable` class usually adds one uncovered generated line.
 
+`./gradlew check` also runs [ktlint](https://pinterest.github.io/ktlint/) over the Kotlin sources and build scripts, and [detekt](https://detekt.dev/) over `src/main` and `src/test`, in the root build and in `examples/` (`./gradlew -p examples check`); CI runs both builds.
+
+- **Formatting** follows ktlint's `ktlint_official` code style, set in `.editorconfig`. IntelliJ's own formatter does not produce that style, so before committing run `./gradlew ktlintFormat` and `./gradlew -p examples ktlintFormat`, which fix most findings in place; the ktlint IntelliJ plugin can apply the same rules as you type. The ktlint version is set once, as `ktlintVersion` in `gradle.properties`.
+- **Static analysis** uses detekt's default rules plus the overrides in `config/detekt/detekt.yml`, each with its reason; the reports are written to `build/reports/detekt/` in each build (`examples/build/reports/detekt/` for `examples/`). Fix a finding rather than suppress it. When a suppression is the right call, put it on the narrowest declaration and give the reason in a comment beside it, as the existing ones do; reviewers check that every suppression has one. There is no baseline file: the code has no unexplained findings.
+- Commits that only reformat code are listed in `.git-blame-ignore-revs`, which GitHub's blame view honours; locally, run `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
 ### Dependency updates
 
-[Dependabot](.github/dependabot.yml) opens version-update pull requests every Monday for the Gradle builds (the root build and `examples/`, including the Gradle wrapper), the GitHub Actions in `.github/workflows/`, and the Dockerfile base images. Minor and patch updates are grouped into one pull request per ecosystem, and the two base-image digests are updated together. Kotlin, its Gradle plugins and the kotlinx-serialization runtime move together in one group across both builds, majors included. Every other major update arrives on its own. Each update must pass the same required checks as any other pull request.
+[Dependabot](.github/dependabot.yml) opens version-update pull requests every Monday for the Gradle builds (the root build and `examples/`, including the Gradle wrapper), the GitHub Actions in `.github/workflows/`, and the Dockerfile base images. Minor and patch updates are grouped into one pull request per ecosystem, and the two base-image digests are updated together. Kotlin, its Gradle plugins and the kotlinx-serialization runtime move together in one group across both builds, majors included, and the detekt and ktlint plugins have a group of their own, because a new rule release can bring new findings. Every other major update arrives on its own. Each update must pass the same required checks as any other pull request.
 
 - A Kotlin or kotlinx-serialization bump can change the generated members in `api/fake-llm.api`; see [Public API](#public-api) for the `apiDump` step. A bump that adds a compiler warning or lowers coverage is fixed on its pull request; the [quality gates](#quality-gates) are not lowered to let it through.
 - `main` only accepts branches that are up to date with it, so merge Dependabot pull requests one at a time. After each merge, comment `@dependabot rebase` on the next one; otherwise Dependabot only rebases it on its next weekly run. Once anyone pushes a commit to a Dependabot branch, such as an `apiDump`, Dependabot stops rebasing it: bring it up to date with "Update branch" instead. `@dependabot recreate` rebuilds the pull request from scratch and discards pushed commits.
 - Actions are pinned to a full commit SHA with the release in a trailing comment (`uses: actions/checkout@<sha> # v4.4.0`), and base images to a digest (`eclipse-temurin:21-jdk@sha256:...`). Keep that form when editing by hand; Dependabot updates both. Java major versions of the base images are ignored on purpose, because the supported Java version is a separate decision ([#39](https://github.com/davidjones-griz/fake-llm/issues/39)).
+- The ktlint version itself (`ktlintVersion` in `gradle.properties`) is not visible to Dependabot. Raise it by hand when a new ktlint release comes out, run `./gradlew ktlintFormat` and `./gradlew -p examples ktlintFormat`, and commit any reformatting separately, adding that commit to `.git-blame-ignore-revs`.
 - Dependabot security alerts do not cover the Gradle dependencies yet. Gradle needs its dependency graph submitted from CI first, which is tracked in [#41](https://github.com/davidjones-griz/fake-llm/issues/41).
 
 ## Roadmap

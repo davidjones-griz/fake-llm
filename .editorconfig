@@ -1,0 +1,5 @@
+root = true
+
+# ktlint reads its settings from here, for the root build and examples/ alike.
+[*.{kt,kts}]
+ktlint_code_style = ktlint_official

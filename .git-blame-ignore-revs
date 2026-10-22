@@ -1,0 +1,4 @@
+# Commits that only reformat code; `git blame --ignore-revs-file` and GitHub's blame view skip them.
+
+# Apply ktlint formatting (ktlint_official, ktlint 1.8.0)
+a60b629d6eda8fef1c230913a9697fed045d5bf9

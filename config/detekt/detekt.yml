@@ -1,0 +1,21 @@
+# Overrides of detekt's default rules (buildUponDefaultConfig = true). Every entry gives its reason.
+#
+# `./gradlew check` runs the plain `detekt` task, which analyses src/main and src/test without
+# type resolution, so rules that need type information are skipped. detekt 1.23 embeds Kotlin
+# 2.0; a Kotlin upgrade that stabilises new syntax may need detekt 2.x.
+
+complexity:
+  # The size rules below guard production code. Tests are long by design: table-driven cases,
+  # whole SSE sequences asserted in order, and builders with one named parameter per field.
+  # They stay in force for src/main.
+  LargeClass:
+    excludes: ["**/src/test/**"]
+  LongMethod:
+    excludes: ["**/src/test/**"]
+  LongParameterList:
+    excludes: ["**/src/test/**"]
+
+style:
+  MaxLineLength:
+    # ktlint owns line length (140 columns under ktlint_official), so the two tools never disagree.
+    active: false
