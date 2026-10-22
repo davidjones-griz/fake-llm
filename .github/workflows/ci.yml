@@ -16,22 +16,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Test and build the fat jar
         run: ./gradlew build --no-daemon
+      - name: Publish to the build-local repository
+        run: ./gradlew publishAllPublicationsToBuildLocalRepository --no-daemon
+      - name: Test examples/ against the published artifact
+        run: ./gradlew -p examples test --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: fake-llm-all
           path: build/libs/fake-llm-all.jar
           if-no-files-found: error
-
-  python:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Judge-agreement unit tests
-        working-directory: tools/judge-agreement
-        run: python -m unittest
 
   docker:
     runs-on: ubuntu-latest

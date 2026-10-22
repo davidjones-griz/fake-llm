@@ -1,4 +1,5 @@
 build/
 .gradle/
 .git/
-tools/
+examples/build/
+examples/.gradle/

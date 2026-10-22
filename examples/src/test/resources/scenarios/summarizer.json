@@ -1,0 +1,11 @@
+{
+  "name": "summarizer",
+  "description": "One-sentence summaries. Loaded by name from this project's test classpath.",
+  "rules": [
+    {
+      "role": "summarize",
+      "match": { "promptContainsAll": ["Summarize in one sentence"] },
+      "respond": [{ "text": "Quarterly revenue rose 12% on subscription growth." }]
+    }
+  ]
+}

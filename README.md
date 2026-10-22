@@ -97,6 +97,41 @@ curl -s http://localhost:8080/anthropic/v1/messages \
   -d '{"model":"example-model","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
 ```
 
+## Use as a library
+
+Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `com.davidjonesgriz:fake-llm:0.1.0`. Classes are in the `com.davidjonesgriz.fakellm` package. The artifact is not on Maven Central yet, so for now either publish it to your local Maven repository:
+
+```bash
+./gradlew publishToMavenLocal
+```
+
+```kotlin
+repositories { mavenLocal() }
+dependencies { testImplementation("com.davidjonesgriz:fake-llm:0.1.0") }
+```
+
+or include a checkout of this repository as a composite build. Gradle then substitutes the dependency with the checkout's source, with no publishing step:
+
+```kotlin
+// settings.gradle.kts
+includeBuild("../fake-llm")
+```
+
+`startFakeLlmServer` returns a `FakeLlmServer`. Pass port `0` for an ephemeral port. `baseUrl` is `http://127.0.0.1:<port>`, `engine` loads scenarios and reads the call log without going through HTTP, and `close()` stops the server and its threads:
+
+```kotlin
+startFakeLlmServer(port = 0, engine = ScenarioEngine(), controlToken = null).use { server ->
+    server.engine.load("hello")
+    val client = MyClient(baseUrl = "${server.baseUrl}/anthropic")
+    // ... exercise the code under test ...
+    assertEquals("text", server.engine.calls().single().outcome)
+}
+```
+
+`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, counters, and call log. The scenario directory set with `ScenarioLoader.setScenarioDirectory` is shared by the whole JVM.
+
+[examples/](examples/) is a complete consumer: a small client with retry logic, tested against the published artifact.
+
 ## Scenarios
 
 A scenario file is JSON. Unknown keys are rejected. `name` is required, `description` defaults to an empty string, and `rules` must be non-empty. For a load by name, the file is `<dir>/<name>.json` or the bundled resource `/scenarios/<name>.json`, the declared `name` must equal the file name, and the name must match `[A-Za-z0-9_-]+`.
@@ -350,15 +385,18 @@ The server does not simulate tool use or function calling. Responses are text, p
 
 Each process holds one scenario, one call log, and one set of occurrence counters in memory. Nothing is written to disk. Another process does not share that state.
 
-## tools/judge-agreement
-
-`tools/judge-agreement/agreement.py` scores a judge's labels against a human label file. It prints a confusion matrix, raw accuracy, Cohen's kappa, and per-class precision and recall for the ids present in both files. Usage, the CSV and JSON shapes, and the exit codes are in [tools/judge-agreement/README.md](tools/judge-agreement/README.md).
-
 ## Development
 
 `./gradlew build` compiles the server, runs the Kotlin tests, and writes `build/libs/fake-llm-all.jar`.
 
-From `tools/judge-agreement`, `python -m unittest` runs the judge-agreement tests. They use the standard library. CI runs them on Python 3.12.
+The example project tests the published artifact, not the source, so publish it first:
+
+```bash
+./gradlew publishAllPublicationsToBuildLocalRepository
+./gradlew -p examples test
+```
+
+`./gradlew -p examples test --include-build ..` runs the same tests against the source instead, through a composite build.
 
 ## Roadmap
 
