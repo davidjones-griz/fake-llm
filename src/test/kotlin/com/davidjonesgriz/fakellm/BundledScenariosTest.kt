@@ -6,7 +6,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -28,11 +27,6 @@ class BundledScenariosTest {
             "thinking-stream",
         )
 
-    @BeforeTest
-    fun useClasspathScenarios() {
-        ScenarioLoader.setScenarioDirectory(null)
-    }
-
     private fun TestClient.load(name: String) {
         val resp = post("/control/scenario", """{"name":"$name"}""")
         assertEquals(200, resp.statusCode(), resp.body())
@@ -42,10 +36,10 @@ class BundledScenariosTest {
 
     @Test
     fun `every bundled scenario name loads and matches its file`() {
-        val names = ScenarioLoader.availableNames()
+        val names = ScenarioLoader.availableNames(directory = null)
         assertEquals(bundledNames, names)
         names.forEach { name ->
-            val scenario = ScenarioLoader.load(name)
+            val scenario = ScenarioLoader.load(name, directory = null)
             assertEquals(name, scenario.name)
             assertTrue(scenario.rules.isNotEmpty(), name)
         }

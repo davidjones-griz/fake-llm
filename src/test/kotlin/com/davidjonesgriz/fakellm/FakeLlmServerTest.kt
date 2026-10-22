@@ -654,7 +654,6 @@ class FakeLlmServerTest {
 
     @Test
     fun `the scenario index lists the names the loader can see`() {
-        ScenarioLoader.setScenarioDirectory(null)
         withServer { client, _ ->
             val resp = client.get("/control/scenarios")
             assertEquals(200, resp.statusCode(), resp.body())
@@ -662,7 +661,7 @@ class FakeLlmServerTest {
                 Json.parseToJsonElement(resp.body()).jsonObject.getValue("scenarios").jsonArray.map {
                     it.jsonPrimitive.content
                 }
-            assertEquals(ScenarioLoader.availableNames(), names)
+            assertEquals(ScenarioLoader.availableNames(directory = null), names)
             assertContains(names, "hello")
             assertContains(names, "fail-then-retry")
             assertContains(names, "rate-limit-429")

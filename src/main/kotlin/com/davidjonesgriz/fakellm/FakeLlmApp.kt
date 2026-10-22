@@ -2,7 +2,8 @@ package com.davidjonesgriz.fakellm
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
-import java.io.File
+import java.nio.file.InvalidPathException
+import java.nio.file.Path
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.system.exitProcess
@@ -60,8 +61,7 @@ public fun main(args: Array<String>) {
             System.err.println(e.message)
             exitProcess(1)
         }
-    ScenarioLoader.setScenarioDirectory(config.scenarioDir)
-    val engine = ScenarioEngine(lenient = config.lenient)
+    val engine = config.engine()
     config.scenario?.let { engine.load(it) }
     val server = startFakeLlmServer(config.port, engine)
     println("fake-llm listening on :${server.port} (scenario=${engine.currentScenarioName() ?: "none"})")
@@ -220,9 +220,24 @@ internal class StartupUsageException(
 internal data class StartupConfig(
     val port: Int,
     val scenario: String?,
-    val scenarioDir: File?,
+    val scenarioDir: Path?,
     val lenient: Boolean,
-)
+) {
+    /** The engine [main] serves: this lenient mode and scenario directory. */
+    fun engine(): ScenarioEngine = ScenarioEngine(lenient = lenient, scenarioDirectory = scenarioDir)
+
+    companion object {
+        /** A path the platform cannot represent (for example `foo*` on Windows) is a usage error. */
+        fun parseScenarioDir(raw: String?): Path? {
+            if (raw == null) return null
+            return try {
+                Path.of(raw)
+            } catch (e: InvalidPathException) {
+                usage("invalid scenario directory '$raw': ${e.reason}")
+            }
+        }
+    }
+}
 
 /**
  * Flags win over [env]. An unknown flag or a bad value throws [StartupUsageException].
@@ -275,7 +290,7 @@ internal fun parseStartupConfig(
     return StartupConfig(
         port = port,
         scenario = scenario,
-        scenarioDir = scenarioDirRaw?.let(::File),
+        scenarioDir = StartupConfig.parseScenarioDir(scenarioDirRaw),
         lenient = lenient,
     )
 }

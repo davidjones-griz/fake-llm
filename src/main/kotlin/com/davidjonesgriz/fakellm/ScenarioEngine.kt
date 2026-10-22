@@ -3,6 +3,7 @@ package com.davidjonesgriz.fakellm
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.nio.file.Path
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -66,11 +67,26 @@ internal data class Resolution(
  * rendered in the dialect the caller requested; (c) otherwise HTTP 400, logged with outcome
  * `"unmatched"` and role `"UNMATCHED"`. Strict is the default, so a request the scenario does not
  * cover fails instead of returning a reply the caller can treat as success.
+ *
+ * Each engine has its own scenario, counters, call log and [scenarioDirectory], so engines in the
+ * same JVM do not affect each other.
  */
 public class ScenarioEngine(
     /** Unmatched requests get the canned reply when true, and HTTP 400 when false. */
     public val lenient: Boolean = false,
+    /**
+     * Searched before the classpath when [load] reads a scenario by name, as
+     * `<scenarioDirectory>/<name>.json`. Null searches the classpath only. A relative path resolves
+     * against the JVM's working directory. `GET /control/scenarios` lists the `*.json` files in it.
+     */
+    public val scenarioDirectory: Path? = null,
 ) {
+    /**
+     * No scenario directory. Kept as its own constructor so Java callers have `new ScenarioEngine(lenient)`;
+     * `@JvmOverloads` on the primary constructor would give the same JVM signatures.
+     */
+    public constructor(lenient: Boolean) : this(lenient, null)
+
     @Volatile private var scenario: Scenario? = null
     private val occurrences = ConcurrentHashMap<Int, AtomicInteger>()
 
@@ -84,13 +100,13 @@ public class ScenarioEngine(
     private val seq = AtomicLong(0)
 
     /**
-     * Loads the scenario [name] from the classpath resource `/scenarios/<name>.json` and installs it
-     * as [loadInline] does. When the command-line server was started with `--scenario-dir` or
-     * `FAKE_LLM_SCENARIO_DIR`, that directory is searched first. Throws when the name
-     * is not `[A-Za-z0-9_-]+`, no such scenario exists, the file does not decode, or its declared
-     * name differs from [name].
+     * Loads the scenario [name] and installs it as [loadInline] does. Reads
+     * `<scenarioDirectory>/<name>.json` when [scenarioDirectory] is set and that file exists, and
+     * otherwise the classpath resource `/scenarios/<name>.json`. Throws when the name is not
+     * `[A-Za-z0-9_-]+`, no such scenario exists, the file does not decode, or its declared name
+     * differs from [name].
      */
-    public fun load(name: String): Scenario = loadInline(ScenarioLoader.load(name))
+    public fun load(name: String): Scenario = loadInline(ScenarioLoader.load(name, scenarioDirectory))
 
     /**
      * Installs [s] as the active scenario and resets counters and the call log.

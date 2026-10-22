@@ -5,6 +5,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.nio.file.Files
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -480,7 +482,6 @@ class ScenarioEngineTest {
 
     @Test
     fun `an unknown scenario name is rejected`() {
-        ScenarioLoader.setScenarioDirectory(null)
         val failure = assertFailsWith<IllegalStateException> { ScenarioEngine().load("missing-scenario") }
         assertTrue(failure.message!!.contains("unknown scenario"))
     }
@@ -577,4 +578,35 @@ class ScenarioEngineTest {
         )
         assertEquals("end_turn", anthropicStopReason(body))
     }
+
+    @Test
+    fun `engines in one JVM load same-named scenarios from their own directories`() {
+        val first = Files.createTempDirectory("fake-llm-first")
+        val second = Files.createTempDirectory("fake-llm-second")
+        try {
+            first.resolve("same.json").writeText(sameScenario("from the first directory"))
+            second.resolve("same.json").writeText(sameScenario("from the second directory"))
+            val a = ScenarioEngine(scenarioDirectory = first)
+            val b = ScenarioEngine(scenarioDirectory = second)
+            val classpathOnly = ScenarioEngine()
+
+            assertEquals("from the first directory", a.load("same").singleText())
+            assertEquals("from the second directory", b.load("same").singleText())
+            assertEquals("from the first directory", a.load("same").singleText())
+            assertFailsWith<IllegalStateException> { classpathOnly.load("same") }
+            assertNull(classpathOnly.scenarioDirectory)
+        } finally {
+            first.toFile().deleteRecursively()
+            second.toFile().deleteRecursively()
+        }
+    }
+
+    private fun sameScenario(text: String): String = """{"name":"same","rules":[{"role":"r","respond":[{"text":"$text"}]}]}"""
+
+    private fun Scenario.singleText(): String? =
+        rules
+            .single()
+            .respond
+            .single()
+            .text
 }

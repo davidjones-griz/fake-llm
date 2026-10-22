@@ -5,6 +5,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.File
+import java.nio.file.Path
 
 /**
  * One named behavior of the fake: an ordered list of [Rule]s. The first rule whose [Match]
@@ -16,9 +17,9 @@ import java.io.File
  * succeed) is well-defined when the caller sends those requests one at a time: overlapping calls
  * share one counter and take successive steps in arrival order.
  *
- * Scenario files are JSON in this shape. [ScenarioEngine.load] reads one by name from the
- * classpath resource `/scenarios/<name>.json`, and [ScenarioEngine.loadInline] takes one built in
- * code.
+ * Scenario files are JSON in this shape. [ScenarioEngine.load] reads one by name from the engine's
+ * [ScenarioEngine.scenarioDirectory] or the classpath resource `/scenarios/<name>.json`, and
+ * [ScenarioEngine.loadInline] takes one built in code.
  *
  * @throws IllegalArgumentException when [rules] is empty. The message text is diagnostic, not part
  *   of the API.
@@ -144,26 +145,21 @@ public data class ErrorStep(
 )
 
 /**
- * Loads named scenarios. An unknown name is a hard error.
+ * Loads named scenarios. An unknown name is a hard error. Holds no state: each call takes the
+ * directory of the [ScenarioEngine] it serves.
  *
- * When [setScenarioDirectory] is set, `<dir>/<name>.json` is tried first and the classpath resource
- * `/scenarios/<name>.json` is the fallback. [main] installs the directory from `--scenario-dir`, or
- * from `FAKE_LLM_SCENARIO_DIR` when that flag is absent. The flag wins when both are set.
+ * When a directory is given, `<directory>/<name>.json` is tried first and the classpath resource
+ * `/scenarios/<name>.json` is the fallback. With no directory, only the classpath is searched.
  */
 internal object ScenarioLoader {
     private val json = Json { ignoreUnknownKeys = false }
 
-    /** Directory searched before the classpath. Null uses only bundled `/scenarios`. */
-    @Volatile
-    private var scenarioDirectory: File? = null
-
-    fun setScenarioDirectory(dir: File?) {
-        scenarioDirectory = dir
-    }
-
-    fun load(name: String): Scenario {
+    fun load(
+        name: String,
+        directory: Path?,
+    ): Scenario {
         require(name.matches(Regex("[A-Za-z0-9_-]+"))) { "illegal scenario name '$name'" }
-        val text = readScenarioText(name)
+        val text = readScenarioText(name, directory?.toFile())
         val scenario = json.decodeFromString<Scenario>(text)
         check(scenario.name == name) {
             "scenario file $name.json declares name '${scenario.name}' — file name and declared name must match"
@@ -175,14 +171,16 @@ internal object ScenarioLoader {
     internal fun decode(element: JsonElement): Scenario = json.decodeFromJsonElement(element)
 
     /**
-     * Names from the scenario directory (`*.json` files in that directory) and from the classpath
-     * index `/scenarios/index.txt` (one name per line; blank lines and `#` comments are skipped).
-     * The combined list is deduplicated and sorted.
+     * Names from [directory] (`*.json` files in it; none when it is null or missing) and from the
+     * classpath index `/scenarios/index.txt` (one name per line; blank lines and `#` comments are
+     * skipped). The combined list is deduplicated and sorted.
      */
-    fun availableNames(): List<String> = (directoryNames() + classpathNames()).distinct().sorted()
+    fun availableNames(directory: Path?): List<String> = (directoryNames(directory?.toFile()) + classpathNames()).distinct().sorted()
 
-    private fun readScenarioText(name: String): String {
-        val dir = scenarioDirectory
+    private fun readScenarioText(
+        name: String,
+        dir: File?,
+    ): String {
         if (dir != null) {
             val file = File(dir, "$name.json")
             if (file.isFile) return file.readText()
@@ -198,8 +196,8 @@ internal object ScenarioLoader {
         error("unknown scenario '$name' — $where")
     }
 
-    private fun directoryNames(): List<String> {
-        val files = scenarioDirectory?.takeIf { it.isDirectory }?.listFiles() ?: return emptyList()
+    private fun directoryNames(dir: File?): List<String> {
+        val files = dir?.takeIf { it.isDirectory }?.listFiles() ?: return emptyList()
         return files
             .filter { it.isFile && it.name.endsWith(".json") }
             .map { it.name.removeSuffix(".json") }
