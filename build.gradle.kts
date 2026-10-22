@@ -1,3 +1,5 @@
+import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
+
 plugins {
     kotlin("jvm") version "2.1.21"
     kotlin("plugin.serialization") version "2.1.21"
@@ -7,6 +9,8 @@ plugins {
     // Writes the public API to api/fake-llm.api; `check` fails when the code drifts from it.
     // Newer Kotlin Gradle plugins include ABI validation of their own; revisit on a Kotlin upgrade.
     id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.1"
+    // Measures test coverage of src/main; `check` fails when it drops below the floors set further down.
+    id("org.jetbrains.kotlinx.kover") version "0.9.11"
 }
 
 // The version lives in gradle.properties so examples/ can read the same value.
@@ -20,6 +24,8 @@ kotlin {
     jvmToolchain(21)
     // Every public declaration in src/main needs an explicit `public`, so API is never accidental.
     explicitApi()
+    // Warnings fail the build in main and test code, so they never pile up.
+    compilerOptions { allWarningsAsErrors.set(true) }
 }
 
 java {
@@ -39,6 +45,20 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// Coverage floors: raise them when coverage rises; never lower one without a reason in the PR.
+// The README's Development section quotes these values; update it with them.
+val lineCoverageFloor = 95
+val branchCoverageFloor = 65
+
+kover {
+    reports {
+        verify {
+            rule("Line coverage") { minBound(lineCoverageFloor, CoverageUnit.LINE) }
+            rule("Branch coverage") { minBound(branchCoverageFloor, CoverageUnit.BRANCH) }
+        }
+    }
 }
 
 tasks.shadowJar {

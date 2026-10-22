@@ -406,6 +406,12 @@ The example project tests the published artifact, not the source, so publish it 
 
 Kotlin explicit API mode is on, so a new public declaration in `src/main` needs an explicit `public` modifier. `./gradlew check`, and so `./gradlew build` and CI, compares the compiled public API with `api/fake-llm.api` and fails on any difference. For an intended change, run `./gradlew apiDump`, commit the updated `api/fake-llm.api` with the change, and add a CHANGELOG entry. Add new fields to the scenario model classes last, with a default value, so existing Kotlin call sites still compile. A Kotlin or kotlinx-serialization upgrade can change the generated members in the dump, so run `apiDump` after one and review the diff.
 
+### Quality gates
+
+Compiler warnings are errors. A warning in the main or test code fails `./gradlew build`, and one in `examples/` fails `./gradlew -p examples test`; CI runs both.
+
+`./gradlew check`, and so `./gradlew build` and CI, measures the test coverage of `src/main` with [Kover](https://github.com/Kotlin/kotlinx-kover) and fails when line coverage drops below 95% or branch coverage below 65%. The floors are set in `build.gradle.kts`, which is the source of truth; update the numbers here when they change. Raise a floor when coverage rises, and never lower one without a reason in the pull request. To see the current numbers, run `./gradlew koverHtmlReport` and open `build/reports/kover/html/index.html`, which shows line and branch coverage; `./gradlew koverLog` prints line coverage only. CI attaches the same report as the `coverage-report` artifact on every run where the tests pass. Nothing is excluded from the measurement, so a new `@Serializable` class usually adds one uncovered generated line.
+
 ## Roadmap
 
 Tracked in https://github.com/davidjones-griz/fake-llm/issues
