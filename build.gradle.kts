@@ -4,6 +4,9 @@ plugins {
     application
     `maven-publish`
     id("com.gradleup.shadow") version "8.3.11"
+    // Writes the public API to api/fake-llm.api; `check` fails when the code drifts from it.
+    // Newer Kotlin Gradle plugins include ABI validation of their own; revisit on a Kotlin upgrade.
+    id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.1"
 }
 
 // The version lives in gradle.properties so examples/ can read the same value.
@@ -15,6 +18,8 @@ repositories {
 
 kotlin {
     jvmToolchain(21)
+    // Every public declaration in src/main needs an explicit `public`, so API is never accidental.
+    explicitApi()
 }
 
 java {
@@ -27,7 +32,8 @@ application {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+    // `api`: the public scenario model exposes kotlinx-serialization types (KSerializer).
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     testImplementation(kotlin("test"))
 }
 

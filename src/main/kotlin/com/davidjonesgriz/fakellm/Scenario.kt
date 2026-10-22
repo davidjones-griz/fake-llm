@@ -16,22 +16,34 @@ import java.io.File
  * succeed) is well-defined when the caller sends those requests one at a time: overlapping calls
  * share one counter and take successive steps in arrival order.
  *
- * Scenario files are JSON. [ScenarioLoader] reads `<dir>/<name>.json` from the optional scenario
- * directory first, then the classpath resource `/scenarios/<name>.json`.
+ * Scenario files are JSON in this shape. [ScenarioEngine.load] reads one by name from the
+ * classpath resource `/scenarios/<name>.json`, and [ScenarioEngine.loadInline] takes one built in
+ * code.
+ *
+ * @throws IllegalArgumentException when [rules] is empty. The message text is diagnostic, not part
+ *   of the API.
  */
 @Serializable
-data class Scenario(
+public data class Scenario(
     val name: String,
     val description: String = "",
-    val rules: List<Rule> = emptyList(),
+    val rules: List<Rule>,
 ) {
     init {
         require(rules.isNotEmpty()) { "scenario '$name' has no rules" }
     }
 }
 
+/**
+ * One rule of a [Scenario]: the [match] a request must pass, and the [respond] steps it serves.
+ * Call `n` to match this rule gets `respond[n - 1]`, and the last step repeats once the list runs
+ * out.
+ *
+ * @throws IllegalArgumentException when [respond] is empty, or a step sets both or neither of
+ *   [Step.text] and [Step.error]. The message text is diagnostic, not part of the API.
+ */
 @Serializable
-data class Rule(
+public data class Rule(
     /** Free-form label recorded in the call log for each request this rule serves. */
     val role: String,
     val match: Match = Match(),
@@ -49,7 +61,7 @@ data class Rule(
 
 /** All present predicates must hold (AND). An empty match matches everything — order rules accordingly. */
 @Serializable
-data class Match(
+public data class Match(
     /** Substring of the request's `model` field. */
     val modelContains: String? = null,
     /** Every entry must appear in the request's combined prompt text (system + all message content). */
@@ -65,8 +77,15 @@ data class Match(
     val caller: String? = null,
 )
 
+/**
+ * One scripted reply: assistant [text], optionally with [thinking], or a scripted [error]. A
+ * [Rule] requires exactly one of [text] and [error] on each of its steps.
+ *
+ * @throws IllegalArgumentException when a value is invalid. The message text is diagnostic, not
+ *   part of the API.
+ */
 @Serializable
-data class Step(
+public data class Step(
     /** Assistant text copied into the vendor response. */
     val text: String? = null,
     val thinking: String? = null,
@@ -115,8 +134,9 @@ data class Step(
 
 private const val DEFAULT_STREAM_CHUNK_CHARS = 24
 
+/** A scripted HTTP error in place of a text reply: the [status], the [body], and extra [headers]. */
 @Serializable
-data class ErrorStep(
+public data class ErrorStep(
     val status: Int,
     val body: String = "",
     /** Extra response headers, for example `retry-after`. Sent as given. */
@@ -130,7 +150,7 @@ data class ErrorStep(
  * `/scenarios/<name>.json` is the fallback. [main] installs the directory from `--scenario-dir`, or
  * from `FAKE_LLM_SCENARIO_DIR` when that flag is absent. The flag wins when both are set.
  */
-object ScenarioLoader {
+internal object ScenarioLoader {
     private val json = Json { ignoreUnknownKeys = false }
 
     /** Directory searched before the classpath. Null uses only bundled `/scenarios`. */

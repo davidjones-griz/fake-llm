@@ -15,9 +15,14 @@ internal data class FakeResponse(
     val headers: Map<String, String> = emptyMap(),
 )
 
-/** One request the fake served. `GET /control/calls` returns these. */
+/**
+ * One request the fake served. [ScenarioEngine.calls] and `GET /control/calls` return these.
+ * Records are read-only for library users: the constructor and `copy` are internal, so fields
+ * added with default values do not break callers.
+ */
+@ConsistentCopyVisibility
 @Serializable
-data class CallRecord(
+public data class CallRecord internal constructor(
     val seq: Long,
     val vendor: String,
     val model: String,
@@ -62,9 +67,9 @@ internal data class Resolution(
  * `"unmatched"` and role `"UNMATCHED"`. Strict is the default, so a request the scenario does not
  * cover fails instead of returning a reply the caller can treat as success.
  */
-class ScenarioEngine(
+public class ScenarioEngine(
     /** Unmatched requests get the canned reply when true, and HTTP 400 when false. */
-    val lenient: Boolean = false,
+    public val lenient: Boolean = false,
 ) {
     @Volatile private var scenario: Scenario? = null
     private val occurrences = ConcurrentHashMap<Int, AtomicInteger>()
@@ -78,28 +83,37 @@ class ScenarioEngine(
     private val log = Collections.synchronizedList(mutableListOf<CallRecord>())
     private val seq = AtomicLong(0)
 
-    fun load(name: String): Scenario = loadInline(ScenarioLoader.load(name))
+    /**
+     * Loads the scenario [name] from the classpath resource `/scenarios/<name>.json` and installs it
+     * as [loadInline] does. When the command-line server was started with `--scenario-dir` or
+     * `FAKE_LLM_SCENARIO_DIR`, that directory is searched first. Throws when the name
+     * is not `[A-Za-z0-9_-]+`, no such scenario exists, the file does not decode, or its declared
+     * name differs from [name].
+     */
+    public fun load(name: String): Scenario = loadInline(ScenarioLoader.load(name))
 
     /**
      * Installs [s] as the active scenario and resets counters and the call log.
      * By-name [load] delegates here. `POST /control/scenario` with a `scenario` object does too.
      */
-    fun loadInline(s: Scenario): Scenario {
+    public fun loadInline(s: Scenario): Scenario {
         scenario = s
         reset()
         return s
     }
 
     /** Clears counters and the call log. Keeps the loaded scenario. */
-    fun reset() {
+    public fun reset() {
         occurrences.clear()
         genericDefaultOccurrences.set(0)
         log.clear()
     }
 
-    fun currentScenarioName(): String? = scenario?.name
+    /** The loaded scenario's name, or null when none is loaded. */
+    public fun currentScenarioName(): String? = scenario?.name
 
-    fun calls(): List<CallRecord> = synchronized(log) { log.toList() }
+    /** A snapshot of the call log, oldest first. */
+    public fun calls(): List<CallRecord> = synchronized(log) { log.toList() }
 
     /** Whole JSON response for one request. */
     internal fun handle(

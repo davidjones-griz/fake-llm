@@ -23,4 +23,17 @@ change the public API.
   `startFakeLlmServer`, which returns a `FakeLlmServer` handle (`port`, `baseUrl`, `engine`,
   `close()`) for starting the server in-process from tests.
 - `examples/`, a separate build that tests a small client against the published artifact.
+- Public API checks: Kotlin explicit API mode, and `api/fake-llm.api`, which `./gradlew check`
+  compares with the compiled API.
+
+### Changed
+
+Compared with pre-release builds of `main`:
+
+- `ScenarioLoader` is internal. The scenario directory is set only by `--scenario-dir` or
+  `FAKE_LLM_SCENARIO_DIR`.
+- `CallRecord`'s constructor and `copy` are internal.
+- `Scenario.rules` has no default value. A scenario file without `rules` now fails as a missing
+  field instead of as an empty list.
+- `kotlinx-serialization-json` is an `api` dependency.
 - Docker image and the `fake-llm-all.jar` fat jar.
