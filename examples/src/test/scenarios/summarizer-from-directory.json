@@ -1,0 +1,11 @@
+{
+  "name": "summarizer-from-directory",
+  "description": "One-sentence summaries. Loaded by name from this project's src/test/scenarios directory.",
+  "rules": [
+    {
+      "role": "summarize",
+      "match": { "promptContainsAll": ["Summarize in one sentence"] },
+      "respond": [{ "text": "Churn fell to 2% after the onboarding redesign." }]
+    }
+  ]
+}

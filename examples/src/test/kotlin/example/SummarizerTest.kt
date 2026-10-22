@@ -8,6 +8,7 @@ import com.davidjonesgriz.fakellm.Scenario
 import com.davidjonesgriz.fakellm.ScenarioEngine
 import com.davidjonesgriz.fakellm.Step
 import com.davidjonesgriz.fakellm.startFakeLlmServer
+import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -45,6 +46,19 @@ class SummarizerTest {
         val call = server.engine.calls().single()
         assertEquals("summarize", call.role)
         assertContains(call.promptSample, "Revenue for the quarter")
+    }
+
+    @Test
+    fun `loads a scenario from this project's own directory`() {
+        // Gradle runs tests with the project directory as the working directory, so this relative
+        // path is examples/src/test/scenarios. The engine reads <name>.json there before the classpath.
+        val engine = ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))
+        startFakeLlmServer(port = 0, engine = engine, controlToken = null).use { directoryServer ->
+            engine.load("summarizer-from-directory")
+            val fromDirectory = Summarizer(baseUrl = "${directoryServer.baseUrl}/anthropic", apiKey = "not-used", model = "example-model")
+
+            assertEquals("Churn fell to 2% after the onboarding redesign.", fromDirectory.summarize("Churn for the quarter ...").text)
+        }
     }
 
     @Test
