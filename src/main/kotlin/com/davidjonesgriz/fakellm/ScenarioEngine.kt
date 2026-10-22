@@ -81,10 +81,7 @@ public class ScenarioEngine(
      */
     public val scenarioDirectory: Path? = null,
 ) {
-    /**
-     * No scenario directory. Kept as its own constructor so Java callers have `new ScenarioEngine(lenient)`;
-     * `@JvmOverloads` on the primary constructor would give the same JVM signatures.
-     */
+    /** Creates an engine with no scenario directory; for Java, `new ScenarioEngine(lenient)`. */
     public constructor(lenient: Boolean) : this(lenient, null)
 
     @Volatile private var scenario: Scenario? = null

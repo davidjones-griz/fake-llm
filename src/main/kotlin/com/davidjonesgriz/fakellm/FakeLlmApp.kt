@@ -41,8 +41,9 @@ import kotlin.system.exitProcess
  * Startup flags override the matching environment variable when both are set: `--port <n>` (`PORT`,
  * default 8080), `--scenario <name>` (`FAKE_LLM_SCENARIO`), `--scenario-dir <path>`
  * (`FAKE_LLM_SCENARIO_DIR`). `--lenient` (no value) turns lenient mode on; without it,
- * `FAKE_LLM_LENIENT=true` or `false` (any case) decides, default false. Any other
- * `FAKE_LLM_LENIENT` value, or an unknown flag, prints a short usage line and exits.
+ * `FAKE_LLM_LENIENT=true` or `false` (any case) decides, default false. An unknown flag, a port
+ * outside 0–65535, a scenario directory that is not a valid path, or any other `FAKE_LLM_LENIENT`
+ * value prints a short usage line and exits.
  *
  * **Control auth.** When [readControlToken] resolves a token, every path under `/control/` requires
  * `Authorization: Bearer <token>`. The check is a path prefix, so `/health` stays open. With no
@@ -227,13 +228,16 @@ internal data class StartupConfig(
     fun engine(): ScenarioEngine = ScenarioEngine(lenient = lenient, scenarioDirectory = scenarioDir)
 
     companion object {
-        /** A path the platform cannot represent (for example `foo*` on Windows) is a usage error. */
+        /**
+         * A path the platform cannot represent (a NUL character anywhere, or for example `foo*` on
+         * Windows) is a usage error.
+         */
         fun parseScenarioDir(raw: String?): Path? {
             if (raw == null) return null
             return try {
                 Path.of(raw)
             } catch (e: InvalidPathException) {
-                usage("invalid scenario directory '$raw': ${e.reason}")
+                usage("invalid scenario directory: ${e.reason}")
             }
         }
     }
