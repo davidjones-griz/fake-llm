@@ -39,6 +39,8 @@ Compared with pre-release builds of `main`:
 - Built with Kotlin 2.4, and the `kotlinx-serialization-json` dependency is 1.12.0. A Kotlin build
   that uses the library needs Kotlin 2.4 (2.3 may work, on a best-effort basis). A Java build needs
   Java 21, and gets `kotlin-stdlib` 2.4 and `kotlinx-serialization-json` 1.12.0 as dependencies.
+- Including this repository as a composite build (`includeBuild`) needs Gradle 9.2 or newer in
+  the including project, running on JDK 17 or newer.
 - A scenario that fails validation while being decoded from JSON now throws kotlinx-serialization's
   `SerializationException` (still an `IllegalArgumentException`), whose message wraps the
   validation message with the JSON path and input, and whose cause is the validation exception.

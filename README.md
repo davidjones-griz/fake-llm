@@ -110,7 +110,7 @@ repositories { mavenLocal() }
 dependencies { testImplementation("com.davidjonesgriz:fake-llm:0.1.0") }
 ```
 
-or include a checkout of this repository as a composite build. Gradle then substitutes the dependency with the checkout's source, with no publishing step:
+or include a checkout of this repository as a composite build. Gradle then substitutes the dependency with the checkout's source, with no publishing step. The included build runs on your project's Gradle, which must be 9.2 or newer (and so run on JDK 17 or newer):
 
 ```kotlin
 // settings.gradle.kts
