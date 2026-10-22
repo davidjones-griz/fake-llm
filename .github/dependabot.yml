@@ -1,5 +1,5 @@
-# Weekly version updates. Minor and patch updates are grouped per ecosystem; majors arrive as
-# separate pull requests. See "Dependency updates" in README.md.
+# Weekly version updates. Minor and patch updates are grouped per ecosystem; other majors arrive
+# as separate pull requests, except in the kotlin group below. See "Dependency updates" in README.md.
 version: 2
 updates:
   - package-ecosystem: gradle
@@ -10,8 +10,11 @@ updates:
     groups:
       # Kotlin, its Gradle plugins and the serialization runtime move together in both builds,
       # majors included. Dependabot names a `kotlin("jvm")` plugin `jvm`, not by its full plugin ID;
-      # the `org.jetbrains.kotlin*` patterns cover the `id("...")` form. A dependency joins the
-      # first group it matches, so this group must come before gradle-minor-patch.
+      # the `org.jetbrains.kotlin*` patterns cover the `id("...")` form.
+      # Group order does not matter. A dependency that matches several groups stays in the one
+      # whose matching pattern is most specific: an exact name beats a wildcard. A group with no
+      # `patterns` scores higher than any of the wildcards here and never gives a dependency up,
+      # so every group here needs `patterns`.
       kotlin:
         patterns:
           - "jvm"
@@ -23,7 +26,9 @@ updates:
       # don't hold back other updates.
       lint-tools:
         patterns: ["io.gitlab.arturbosch.detekt", "org.jlleitschuh.gradle.ktlint"]
+      # Everything else. `*` is the least specific pattern, so the named groups above win.
       gradle-minor-patch:
+        patterns: ["*"]
         update-types: [minor, patch]
     ignore:
       # examples/ consumes this repository's own artifact from build/local-repo, which is on no

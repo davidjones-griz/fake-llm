@@ -36,4 +36,10 @@ Compared with pre-release builds of `main`:
 - `Scenario.rules` has no default value. A scenario file without `rules` now fails as a missing
   field instead of as an empty list.
 - `kotlinx-serialization-json` is an `api` dependency.
+- Built with Kotlin 2.4, and the `kotlinx-serialization-json` dependency is 1.12.0. A Kotlin build
+  that uses the library needs Kotlin 2.4 (2.3 may work, on a best-effort basis). A Java build needs
+  Java 21, and gets `kotlin-stdlib` 2.4 and `kotlinx-serialization-json` 1.12.0 as dependencies.
+- A scenario that fails validation while being decoded from JSON now throws kotlinx-serialization's
+  `SerializationException` (still an `IllegalArgumentException`), whose message wraps the
+  validation message with the JSON path and input, and whose cause is the validation exception.
 - Docker image and the `fake-llm-all.jar` fat jar.
