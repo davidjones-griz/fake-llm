@@ -1,3 +1,6 @@
+// Shared test helpers, not one class's file: TestClient plus the request and response helpers.
+@file:Suppress("MatchingDeclarationName")
+
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.Json

@@ -238,7 +238,7 @@ private fun recordCall(
     )
 }
 
-@Suppress("LongParameterList")
+@Suppress("LongParameterList") // the vendor-neutral reply fields, passed through to one dialect
 internal fun vendorEnvelope(
     vendor: String,
     text: String,

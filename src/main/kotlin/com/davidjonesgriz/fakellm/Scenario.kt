@@ -199,9 +199,7 @@ internal object ScenarioLoader {
     }
 
     private fun directoryNames(): List<String> {
-        val dir = scenarioDirectory ?: return emptyList()
-        if (!dir.isDirectory) return emptyList()
-        val files = dir.listFiles() ?: return emptyList()
+        val files = scenarioDirectory?.takeIf { it.isDirectory }?.listFiles() ?: return emptyList()
         return files
             .filter { it.isFile && it.name.endsWith(".json") }
             .map { it.name.removeSuffix(".json") }
