@@ -1,0 +1,51 @@
+# Weekly version updates. Minor and patch updates are grouped per ecosystem; majors arrive as
+# separate pull requests. See "Dependency updates" in README.md.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directories: ["/", "/examples"]
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      # Kotlin, its Gradle plugins and the serialization runtime move together in both builds,
+      # majors included. Dependabot names a `kotlin("jvm")` plugin `jvm`, not by its full plugin ID;
+      # the `org.jetbrains.kotlin*` patterns cover the `id("...")` form. A dependency joins the
+      # first group it matches, so this group must come before gradle-minor-patch.
+      kotlin:
+        patterns:
+          - "jvm"
+          - "plugin.serialization"
+          - "org.jetbrains.kotlin.*"
+          - "org.jetbrains.kotlin:*"
+          - "org.jetbrains.kotlinx:kotlinx-serialization-*"
+      gradle-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # examples/ consumes this repository's own artifact from build/local-repo, which is on no
+      # registry. Dependabot skips it already (its version is a build-script variable); this is a
+      # safeguard in case that changes.
+      - dependency-name: "com.davidjonesgriz:*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      # The build and runtime images are republished together; update their digests in one PR.
+      base-images:
+        patterns: ["*"]
+    ignore:
+      # The Java version is a deliberate choice (#39): digest updates only, never eclipse-temurin 22+.
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
