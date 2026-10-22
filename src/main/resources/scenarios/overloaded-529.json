@@ -1,0 +1,21 @@
+{
+  "name": "overloaded-529",
+  "description": "The first call returns HTTP 529 with an overloaded_error body. The next call returns a normal support reply, and that success step then repeats.",
+  "rules": [
+    {
+      "role": "support",
+      "match": {},
+      "respond": [
+        {
+          "error": {
+            "status": 529,
+            "body": "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"The service is temporarily overloaded. Please try again.\"}}"
+          }
+        },
+        {
+          "text": "I can help with that. Restate the problem in one sentence, then list what you already tried."
+        }
+      ]
+    }
+  ]
+}

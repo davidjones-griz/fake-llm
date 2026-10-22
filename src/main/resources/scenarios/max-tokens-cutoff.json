@@ -1,0 +1,16 @@
+{
+  "name": "max-tokens-cutoff",
+  "description": "A single text reply that is cut off mid-sentence inside a JSON value, with stop reason max_tokens, as if the token limit ended the answer early.",
+  "rules": [
+    {
+      "role": "recipe",
+      "match": {},
+      "respond": [
+        {
+          "text": "The soup recipe is {\"name\":\"lentil soup\",\"steps\":[\"Rinse the lentils\",\"Simmer until",
+          "stopReason": "max_tokens"
+        }
+      ]
+    }
+  ]
+}

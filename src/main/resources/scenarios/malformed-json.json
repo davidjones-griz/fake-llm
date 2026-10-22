@@ -1,0 +1,20 @@
+{
+  "name": "malformed-json",
+  "description": "Matches prompts that contain \"Respond in JSON\". The first reply is prose with a broken JSON fragment. The second reply is a valid JSON object, so a client can retry after a parse failure.",
+  "rules": [
+    {
+      "role": "json-reply",
+      "match": {
+        "promptContainsAny": ["Respond in JSON"]
+      },
+      "respond": [
+        {
+          "text": "Sure, the forecast follows. {\"city\":\"Lisbon\",\"conditions\":"
+        },
+        {
+          "text": "{\"city\":\"Lisbon\",\"conditions\":\"mild and clear\",\"tempC\":21}"
+        }
+      ]
+    }
+  ]
+}

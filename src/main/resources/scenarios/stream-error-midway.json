@@ -1,0 +1,20 @@
+{
+  "name": "stream-error-midway",
+  "description": "Streaming failure after generation has started. The step emits 3 text chunks of 8 characters, then an overloaded_error event. A non-streaming client receives the same error as HTTP 529.",
+  "rules": [
+    {
+      "role": "assistant",
+      "match": {},
+      "respond": [
+        {
+          "error": {
+            "status": 529,
+            "body": "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"The stream failed because the service is overloaded.\"}}"
+          },
+          "streamErrorAfterChunks": 3,
+          "streamChunkChars": 8
+        }
+      ]
+    }
+  ]
+}

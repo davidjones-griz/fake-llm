@@ -1,0 +1,10 @@
+# Bundled example scenarios. One name per line. Blank lines and # comments are ignored.
+hello
+rate-limit-429
+overloaded-529
+refusal
+max-tokens-cutoff
+malformed-json
+stream-error-midway
+thinking-stream
+fail-then-retry
