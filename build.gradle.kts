@@ -8,7 +8,7 @@ plugins {
     id("com.gradleup.shadow") version "8.3.11"
     // Writes the public API to api/fake-llm.api; `check` fails when the code drifts from it.
     // Newer Kotlin Gradle plugins include ABI validation of their own; revisit on a Kotlin upgrade.
-    id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.1"
+    id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.2"
     // Measures test coverage of src/main; `check` fails when it drops below the floors set further down.
     id("org.jetbrains.kotlinx.kover") version "0.9.11"
 }
@@ -39,7 +39,7 @@ application {
 
 dependencies {
     // `api`: the public scenario model exposes kotlinx-serialization types (KSerializer).
-    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     testImplementation(kotlin("test"))
 }
 
