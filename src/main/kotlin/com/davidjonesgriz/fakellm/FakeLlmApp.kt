@@ -8,6 +8,10 @@ import java.util.concurrent.Executors
 import kotlin.system.exitProcess
 
 /**
+ * Command-line entry point, used by `java -jar` and the Docker image. The JVM requires it to be
+ * public, so it is listed in `api/fake-llm.api`, but it is not meant for library use: code that
+ * embeds the server calls [startFakeLlmServer] instead.
+ *
  * Deterministic, scenario-driven stand-in for vendor LLM HTTP APIs. Clients send each vendor's
  * usual JSON to this server. The `X-Fake-LLM-Caller` header is a free-form tag so scenario rules
  * can match on which part of the client is calling.
@@ -48,7 +52,7 @@ import kotlin.system.exitProcess
  * the server falls back to the IPv4 wildcard `0.0.0.0`. The choice is which address family the
  * host can bind.
  */
-fun main(args: Array<String>) {
+public fun main(args: Array<String>) {
     val config =
         try {
             parseStartupConfig(args)
@@ -66,10 +70,12 @@ fun main(args: Array<String>) {
 
 /**
  * Starts a server in this process, serving [engine]. Pass `port = 0` for an ephemeral port and
- * read it back from [FakeLlmServer.port]. [controlToken] defaults to `FAKE_LLM_CONTROL_TOKEN`
- * (see [readControlToken]); null leaves the control routes open.
+ * read it back from [FakeLlmServer.port]. When [controlToken] is non-null, every `/control/` route
+ * requires `Authorization: Bearer <token>`; null leaves them open. The default reads the
+ * `FAKE_LLM_CONTROL_TOKEN` environment variable, or the system property of the same name when the
+ * variable is absent, so pass `null` explicitly for a server that ignores the environment.
  */
-fun startFakeLlmServer(
+public fun startFakeLlmServer(
     port: Int,
     engine: ScenarioEngine,
     controlToken: String? = readControlToken(),
@@ -86,19 +92,19 @@ fun startFakeLlmServer(
  * A running server from [startFakeLlmServer]. Load scenarios and read the call log through
  * [engine], or over HTTP at [baseUrl]. [close] stops the listener and its handler threads.
  */
-class FakeLlmServer internal constructor(
+public class FakeLlmServer internal constructor(
     private val server: HttpServer,
     private val executor: ExecutorService,
-    val engine: ScenarioEngine,
+    public val engine: ScenarioEngine,
 ) : AutoCloseable {
     /** The bound port. With `port = 0` this is the ephemeral port the OS chose. */
-    val port: Int = server.address.port
+    public val port: Int = server.address.port
 
     /**
      * `http://127.0.0.1:<port>`. Vendor SDK base URLs append `/anthropic`, `/openai/v1`, or
      * `/gemini/`.
      */
-    val baseUrl: String = "http://127.0.0.1:$port"
+    public val baseUrl: String = "http://127.0.0.1:$port"
 
     override fun close() {
         server.stop(0)

@@ -128,7 +128,11 @@ startFakeLlmServer(port = 0, engine = ScenarioEngine(), controlToken = null).use
 }
 ```
 
-`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, counters, and call log. The scenario directory set with `ScenarioLoader.setScenarioDirectory` is shared by the whole JVM.
+`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, counters, and call log. A scenario directory is set only by the command-line server (`--scenario-dir` or `FAKE_LLM_SCENARIO_DIR`), which `main` applies process-wide; per-engine scenario sources are tracked in [#28](https://github.com/davidjones-griz/fake-llm/issues/28). The library depends on `kotlinx-serialization-json` as an API dependency, so `Json.decodeFromString<Scenario>(text)` also works for scenario files kept elsewhere.
+
+### API stability
+
+The public API is exactly what [api/fake-llm.api](api/fake-llm.api) lists, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Rule`, `Match`, `Step`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord` is read-only, with an internal constructor, so new fields added with default values do not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`. Exception messages from scenario validation are diagnostics, not API.
 
 [examples/](examples/) is a complete consumer: a small client with retry logic, tested against the published artifact.
 
@@ -397,6 +401,10 @@ The example project tests the published artifact, not the source, so publish it 
 ```
 
 `./gradlew -p examples test --include-build ..` runs the same tests against the source instead, through a composite build.
+
+### Public API
+
+Kotlin explicit API mode is on, so a new public declaration in `src/main` needs an explicit `public` modifier. `./gradlew check`, and so `./gradlew build` and CI, compares the compiled public API with `api/fake-llm.api` and fails on any difference. For an intended change, run `./gradlew apiDump`, commit the updated `api/fake-llm.api` with the change, and add a CHANGELOG entry. Add new fields to the scenario model classes last, with a default value, so existing Kotlin call sites still compile. A Kotlin or kotlinx-serialization upgrade can change the generated members in the dump, so run `apiDump` after one and review the diff.
 
 ## Roadmap
 

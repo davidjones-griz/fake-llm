@@ -1,0 +1,2 @@
+# Keep the public API dump byte-identical across platforms.
+*.api text eol=lf
