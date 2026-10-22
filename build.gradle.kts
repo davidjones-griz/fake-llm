@@ -5,7 +5,7 @@ plugins {
     kotlin("plugin.serialization") version "2.4.21"
     application
     `maven-publish`
-    id("com.gradleup.shadow") version "8.3.11"
+    id("com.gradleup.shadow") version "9.6.1"
     // Writes the public API to api/fake-llm.api; `check` fails when the code drifts from it.
     // The Kotlin Gradle plugin now has ABI validation of its own; whether to move to it is #53.
     id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.2"
