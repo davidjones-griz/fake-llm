@@ -115,6 +115,16 @@ public class ScenarioEngine(
         return s
     }
 
+    /**
+     * Removes the loaded scenario, then clears counters and the call log, so the engine is as if no
+     * scenario had been loaded: requests get the strict-mode 400, or the lenient canned reply.
+     * Unlike [reset], which keeps the scenario.
+     */
+    public fun unload() {
+        scenario = null
+        reset()
+    }
+
     /** Clears counters and the call log. Keeps the loaded scenario. */
     public fun reset() {
         occurrences.clear()
@@ -155,9 +165,7 @@ public class ScenarioEngine(
     internal fun resolve(
         vendor: String,
         req: ParsedRequest,
-    ): Resolution =
-        resolveScenarioRule(vendor, req)
-            ?: if (lenient) resolveGenericDefault(vendor, req) else resolveUnmatched(vendor, req)
+    ): Resolution = resolveScenarioRule(vendor, req) ?: resolveFallback(vendor, req)
 
     /** The loaded scenario's rules, first match wins. Null when none matches or none is loaded. */
     private fun resolveScenarioRule(
@@ -176,34 +184,31 @@ public class ScenarioEngine(
         return Resolution(seq = n, step = step, role = rule.role, occurrence = occurrence)
     }
 
-    /** No scenario rule matched. One canned assistant reply, in whatever dialect [handle] renders. */
-    private fun resolveGenericDefault(
-        vendor: String,
-        req: ParsedRequest,
-    ): Resolution {
-        val occurrence = genericDefaultOccurrences.incrementAndGet()
-        val step = Step(text = CANNED_ASSISTANT_TEXT)
-        val n = seq.incrementAndGet()
-        recordCall(log, n, vendor, req, role = "DEFAULT", occurrence = occurrence, outcome = "default")
-        return Resolution(seq = n, step = step, role = "DEFAULT", occurrence = occurrence)
-    }
-
     /**
-     * No scenario rule matched, and lenient mode is off. HTTP 400 with a JSON body, logged as
-     * [UNMATCHED_ROLE]. The step is an error step with [Step.streamErrorAfterChunks] unset, so the
-     * Anthropic streaming path sends that JSON and writes no SSE bytes.
+     * No scenario rule matched. In lenient mode, one canned assistant reply, in whatever dialect
+     * [handle] renders, logged as role `"DEFAULT"`. Otherwise HTTP 400 with a JSON body, logged as
+     * [UNMATCHED_ROLE] with occurrence 0; that step is an error step with
+     * [Step.streamErrorAfterChunks] unset, so the Anthropic streaming path sends that JSON and
+     * writes no SSE bytes.
      */
-    private fun resolveUnmatched(
+    private fun resolveFallback(
         vendor: String,
         req: ParsedRequest,
-    ): Resolution {
-        val loaded = scenario
-        val why = if (loaded == null) NO_SCENARIO_WHY else noRuleWhy(loaded.name)
-        val step = Step(error = ErrorStep(status = HTTP_BAD_REQUEST, body = unmatchedBody(vendor, req, why)))
-        val n = seq.incrementAndGet()
-        recordCall(log, n, vendor, req, role = UNMATCHED_ROLE, occurrence = 0, outcome = UNMATCHED_OUTCOME)
-        return Resolution(seq = n, step = step, role = UNMATCHED_ROLE, occurrence = 0)
-    }
+    ): Resolution =
+        if (lenient) {
+            val occurrence = genericDefaultOccurrences.incrementAndGet()
+            val step = Step(text = CANNED_ASSISTANT_TEXT)
+            val n = seq.incrementAndGet()
+            recordCall(log, n, vendor, req, role = "DEFAULT", occurrence = occurrence, outcome = "default")
+            Resolution(seq = n, step = step, role = "DEFAULT", occurrence = occurrence)
+        } else {
+            val loaded = scenario
+            val why = if (loaded == null) NO_SCENARIO_WHY else noRuleWhy(loaded.name)
+            val step = Step(error = ErrorStep(status = HTTP_BAD_REQUEST, body = unmatchedBody(vendor, req, why)))
+            val n = seq.incrementAndGet()
+            recordCall(log, n, vendor, req, role = UNMATCHED_ROLE, occurrence = 0, outcome = UNMATCHED_OUTCOME)
+            Resolution(seq = n, step = step, role = UNMATCHED_ROLE, occurrence = 0)
+        }
 }
 
 private fun unmatchedBody(

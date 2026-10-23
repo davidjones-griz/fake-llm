@@ -243,6 +243,7 @@ public final class com/davidjonesgriz/fakellm/ScenarioEngine {
 	public final fun load (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public final fun loadInline (Lcom/davidjonesgriz/fakellm/Scenario;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public final fun reset ()V
+	public final fun unload ()V
 }
 
 public final class com/davidjonesgriz/fakellm/Step {
