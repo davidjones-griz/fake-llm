@@ -9,6 +9,8 @@ on:
   schedule:
     - cron: "43 5 * * 1"
   workflow_dispatch:
+  # TEMPORARY for #41: run the submission on this pull request to show it works; removed before merge.
+  pull_request:
 
 permissions: {}
 
