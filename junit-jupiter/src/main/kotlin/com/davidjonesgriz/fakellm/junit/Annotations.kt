@@ -27,8 +27,9 @@ public annotation class FakeLlmTest(
 /**
  * The scenario [FakeLlmExtension] loads before each test, by name. On a method it applies to that
  * test; on a class, to every test in it and in its `@Nested` classes and subclasses. The nearest
- * annotation wins: the method's, then the class's, then each enclosing class's. A test with none
- * runs with no scenario loaded.
+ * annotation wins: the method's, then the class's (its own, then its interfaces', then its
+ * superclasses'), then each enclosing class's, the same way. It is also found inside a composed
+ * annotation. A test with none runs with no scenario loaded.
  */
 @Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
