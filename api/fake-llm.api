@@ -78,6 +78,51 @@ public final class com/davidjonesgriz/fakellm/FakeLlmAppKt {
 	public static synthetic fun startFakeLlmServer$default (ILcom/davidjonesgriz/fakellm/ScenarioEngine;Ljava/lang/String;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/FakeLlmServer;
 }
 
+public final class com/davidjonesgriz/fakellm/FakeLlmClient : java/lang/AutoCloseable {
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun calls ()Ljava/util/List;
+	public fun close ()V
+	public final fun health ()Lcom/davidjonesgriz/fakellm/FakeLlmHealth;
+	public final fun load (Ljava/lang/String;)V
+	public final fun loadInline (Lcom/davidjonesgriz/fakellm/Scenario;)V
+	public final fun reset ()V
+	public final fun scenarioNames ()Ljava/util/List;
+}
+
+public final class com/davidjonesgriz/fakellm/FakeLlmClientException : java/lang/RuntimeException {
+	public final fun getServerMessage ()Ljava/lang/String;
+	public final fun getStatusCode ()Ljava/lang/Integer;
+}
+
+public final class com/davidjonesgriz/fakellm/FakeLlmHealth {
+	public static final field Companion Lcom/davidjonesgriz/fakellm/FakeLlmHealth$Companion;
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLenient ()Z
+	public final fun getScenario ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/davidjonesgriz/fakellm/FakeLlmHealth$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/FakeLlmHealth$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/FakeLlmHealth;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/FakeLlmHealth;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/davidjonesgriz/fakellm/FakeLlmHealth$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
 public final class com/davidjonesgriz/fakellm/FakeLlmServer : java/lang/AutoCloseable {
 	public fun close ()V
 	public final fun getBaseUrl ()Ljava/lang/String;
