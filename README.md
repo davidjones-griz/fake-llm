@@ -128,7 +128,7 @@ startFakeLlmServer(port = 0, engine = ScenarioEngine(), controlToken = null).use
 }
 ```
 
-`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, counters, and call log. A scenario directory is set only by the command-line server (`--scenario-dir` or `FAKE_LLM_SCENARIO_DIR`), which `main` applies process-wide; per-engine scenario sources are tracked in [#28](https://github.com/davidjones-griz/fake-llm/issues/28). The library depends on `kotlinx-serialization-json` as an API dependency, so `Json.decodeFromString<Scenario>(text)` also works for scenario files kept elsewhere.
+`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, counters, call log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first and falls back to the classpath, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. `GET /control/scenarios` lists that directory's `*.json` names plus the names in `/scenarios/index.txt`, the bundled list. Scenarios in your own `src/test/resources/scenarios/` load by name but are not listed; do not add an `index.txt` there, because the first one on the classpath replaces the bundled list. The library depends on `kotlinx-serialization-json` as an API dependency, so `Json.decodeFromString<Scenario>(text)` also works for scenario files kept elsewhere.
 
 The library is built with Kotlin 2.4. A Kotlin project that uses it needs Kotlin 2.4 (2.3 may work, on a best-effort basis). A Java project needs Java 21, and gets `kotlin-stdlib` 2.4 and `kotlinx-serialization-json` 1.12.0 as dependencies.
 
@@ -365,7 +365,7 @@ curl -s http://localhost:8080/control/calls \
 
 ## Configuration
 
-For the port, the scenario, and the scenario directory, a flag overrides the environment variable, and a blank environment variable is ignored. `--lenient` takes no value and turns lenient mode on regardless of `FAKE_LLM_LENIENT`. An unknown flag or argument, a port outside 0–65535, or a `FAKE_LLM_LENIENT` value other than `true` or `false` (any case), prints a usage line to stderr and exits 1.
+For the port, the scenario, and the scenario directory, a flag overrides the environment variable, and a blank environment variable is ignored. `--lenient` takes no value and turns lenient mode on regardless of `FAKE_LLM_LENIENT`. An unknown flag or argument, a port outside 0–65535, a scenario directory that is not a valid path, or a `FAKE_LLM_LENIENT` value other than `true` or `false` (any case), prints a usage line to stderr and exits 1.
 
 The process binds the IPv6 wildcard `::` when the host can, and otherwise the IPv4 wildcard `0.0.0.0`.
 

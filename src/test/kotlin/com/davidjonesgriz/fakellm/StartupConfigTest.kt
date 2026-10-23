@@ -1,9 +1,12 @@
 package com.davidjonesgriz.fakellm
 
-import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -23,7 +26,44 @@ class StartupConfigTest {
             )
         assertEquals(9090, config.port)
         assertEquals("hello", config.scenario)
-        assertEquals(File("/tmp/fake-llm-scenarios"), config.scenarioDir)
+        assertEquals(Path.of("/tmp/fake-llm-scenarios"), config.scenarioDir)
+    }
+
+    @Test
+    fun `the served engine gets the configured scenario directory and lenient mode`() {
+        val withDir = parseStartupConfig(arrayOf("--scenario-dir", "/tmp/fake-llm-scenarios", "--lenient"), env = emptyMap()).engine()
+        assertEquals(Path.of("/tmp/fake-llm-scenarios"), withDir.scenarioDirectory)
+        assertTrue(withDir.lenient)
+
+        val defaults = parseStartupConfig(emptyArray(), env = emptyMap()).engine()
+        assertNull(defaults.scenarioDirectory)
+        assertFalse(defaults.lenient)
+    }
+
+    @Test
+    fun `FAKE_LLM_SCENARIO_DIR reaches the served engine's scenario listing`() {
+        val dir = Files.createTempDirectory("fake-llm-env-scenarios")
+        try {
+            dir.resolve("from-env.json").writeText("""{"name":"from-env","rules":[{"role":"r","respond":[{"text":"x"}]}]}""")
+            val engine = parseStartupConfig(emptyArray(), env = mapOf("FAKE_LLM_SCENARIO_DIR" to dir.toString())).engine()
+            withServer(engine) { client, _ ->
+                val listing = client.get("/control/scenarios").body()
+                assertTrue(listing.contains("\"from-env\""), listing)
+                assertTrue(listing.contains("\"hello\""), listing)
+                assertEquals(200, client.post("/control/scenario", """{"name":"from-env"}""").statusCode())
+            }
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a scenario directory the platform cannot represent is a usage error`() {
+        val failure =
+            assertFailsWith<StartupUsageException> {
+                parseStartupConfig(arrayOf("--scenario-dir", "bad\u0000dir"), env = emptyMap())
+            }
+        assertTrue(failure.message!!.contains("invalid scenario directory"), failure.message)
     }
 
     @Test
@@ -33,7 +73,7 @@ class StartupConfigTest {
         assertEquals(expectedPort, config.port)
         assertEquals(System.getenv("FAKE_LLM_SCENARIO")?.takeIf { it.isNotBlank() }, config.scenario)
         val dir = System.getenv("FAKE_LLM_SCENARIO_DIR")?.takeIf { it.isNotBlank() }
-        assertEquals(dir?.let(::File), config.scenarioDir)
+        assertEquals(dir?.let { Path.of(it) }, config.scenarioDir)
         if (System.getenv("PORT").isNullOrBlank()) {
             assertEquals(8080, config.port)
         }

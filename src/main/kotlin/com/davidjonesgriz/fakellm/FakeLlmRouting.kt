@@ -81,7 +81,7 @@ private fun controlRoute(
         }
 
         "GET /control/scenarios" -> {
-            respond(ex, HTTP_OK, scenariosJson())
+            respond(ex, HTTP_OK, scenariosJson(engine))
         }
 
         "POST /control/reset" -> {
@@ -164,8 +164,8 @@ private fun loadScenario(
     respond(ex, HTTP_OK, """{"loaded":${jsonString(scenario.name)},"rules":${scenario.rules.size}}""")
 }
 
-private fun scenariosJson(): String {
-    val names = ScenarioLoader.availableNames()
+private fun scenariosJson(engine: ScenarioEngine): String {
+    val names = ScenarioLoader.availableNames(engine.scenarioDirectory)
     return buildJsonObject {
         put(
             "scenarios",
