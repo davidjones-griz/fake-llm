@@ -323,16 +323,60 @@ class InheritedFixture : AnnotatedBase() {
     }
 }
 
-/** One scenario that does not exist; the class's other test still runs. */
+/** A team's own annotations, composed from the extension's. */
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.RUNTIME)
+@FakeLlmTest(lenient = true)
+@FakeLlmScenario("hello")
+annotation class ComposedLlmTest
+
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+@FakeLlmScenario("refusal")
+annotation class RefusalScenario
+
+/** The configuration and scenarios come from composed annotations on the class and a method. */
+@Fixture
+@ComposedLlmTest
+class ComposedFixture {
+    @Test
+    fun classScenario(server: FakeLlmServer) {
+        Sink.add("composed:lenient", server.engine.lenient)
+        Sink.add("composed:classScenario", server.engine.currentScenarioName())
+    }
+
+    @Test
+    @RefusalScenario
+    fun methodScenario(engine: ScenarioEngine) {
+        Sink.add("composed:methodScenario", engine.currentScenarioName())
+    }
+}
+
+@FakeLlmTest(lenient = true)
+@FakeLlmScenario("hello")
+interface FakeLlmInterface
+
+/** The configuration and scenario come from an interface the class implements. */
+@Fixture
+class InterfaceFixture : FakeLlmInterface {
+    @Test
+    fun fromInterface(server: FakeLlmServer) {
+        Sink.add("interface:lenient", server.engine.lenient)
+        Sink.add("interface:scenario", server.engine.currentScenarioName())
+    }
+}
+
+/** One scenario that does not exist; the class's other test, which runs after it, still runs. */
 @Fixture
 @FakeLlmTest
+@TestMethodOrder(MethodOrderer.MethodName::class)
 class UnknownScenarioFixture {
     @Test
     @FakeLlmScenario("no-such-scenario")
-    fun unknown() = Unit
+    fun a() = Unit
 
     @Test
-    fun known(server: FakeLlmServer) {
+    fun b(server: FakeLlmServer) {
         Sink.add("unknown:port", server.port)
     }
 }

@@ -1,5 +1,6 @@
 package com.davidjonesgriz.fakellm.junit
 
+import com.davidjonesgriz.fakellm.junit.fixtures.ComposedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ConcurrentMethodsFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ConfiguredFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.CounterBalanceFixture
@@ -8,6 +9,7 @@ import com.davidjonesgriz.fakellm.junit.fixtures.FIXTURES_PARAMETER
 import com.davidjonesgriz.fakellm.junit.fixtures.InheritedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InjectionFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InstanceRegisteredFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.InterfaceFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.IsolationFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.JavaFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.NestedInstanceRegisteredFixture
@@ -140,6 +142,16 @@ class FakeLlmExtensionTest {
     }
 
     @Test
+    fun `the annotations are found inside composed annotations and on interfaces`() {
+        run(ComposedFixture::class.java, InterfaceFixture::class.java).assertAllPassed(tests = 3)
+        assertEquals(listOf(true), Sink.get("composed:lenient"))
+        assertEquals(listOf("hello"), Sink.get("composed:classScenario"))
+        assertEquals(listOf("refusal"), Sink.get("composed:methodScenario"))
+        assertEquals(listOf(true), Sink.get("interface:lenient"))
+        assertEquals(listOf("hello"), Sink.get("interface:scenario"))
+    }
+
+    @Test
     fun `Java code uses the annotations the same way`() {
         run(JavaFixture::class.java).assertAllPassed(tests = 1)
         assertEquals(listOf("hello"), Sink.get("java"))
@@ -150,7 +162,7 @@ class FakeLlmExtensionTest {
     fun `an unknown scenario fails only its own test, and the server still closes`() {
         val results = run(UnknownScenarioFixture::class.java)
         results.testEvents().assertStatistics { it.started(2).succeeded(1).failed(1) }
-        val failure = results.failures().getValue("unknown()")
+        val failure = results.failures().getValue("a()")
         assertContains(failure.message.orEmpty(), "no-such-scenario")
         assertClosed(Sink.get("unknown:port").single() as Int)
     }
@@ -198,7 +210,8 @@ class FakeLlmExtensionTest {
                 ExtensionContext::class.java.`package`.implementationVersion,
                 "the JUnit Jupiter version is unknown, so this test cannot tell whether it applies",
             )
-        val (major, minor) = version.split(".").map { it.toInt() }
+        // Only the first two parts, so a pre-release such as 6.2.0-M1 still parses.
+        val (major, minor) = version.split(".").take(2).map { it.toInt() }
         assumeTrue(major > 5 || minor >= 12, "JUnit $version has no test_method extension context scope")
 
         val scoped = mapOf("junit.jupiter.extensions.testinstantiation.extensioncontextscope.default" to "test_method")

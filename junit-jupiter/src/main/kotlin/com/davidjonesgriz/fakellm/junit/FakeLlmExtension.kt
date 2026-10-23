@@ -9,6 +9,8 @@ import org.junit.jupiter.api.extension.BeforeEachCallback
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.api.extension.ParameterContext
 import org.junit.jupiter.api.extension.ParameterResolver
+import org.junit.platform.commons.support.AnnotationSupport
+import java.lang.reflect.AnnotatedElement
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -103,7 +105,7 @@ public class FakeLlmExtension
                 .getOrComputeIfAbsent(SERVER, { startServer(context) }, ServerHolder::class.java)
 
         private fun startServer(context: ExtensionContext): ServerHolder {
-            val annotation = findOnClassOrEnclosing(context.requiredTestClass) { it.getAnnotation(FakeLlmTest::class.java) }
+            val annotation = findOnClassOrEnclosing(context.requiredTestClass) { it.find<FakeLlmTest>() }
             val directory =
                 if (annotation != null) annotation.scenarioDirectory.takeIf { it.isNotEmpty() }?.let { Path.of(it) } else scenarioDirectory
             val engine = ScenarioEngine(lenient = annotation?.lenient ?: lenient, scenarioDirectory = directory)
@@ -117,7 +119,7 @@ public class FakeLlmExtension
  * store, so it is shared by the class's tests (and its `@Nested` classes, whose stores fall back to
  * it) whichever context a callback receives.
  */
-internal fun classContext(context: ExtensionContext): ExtensionContext {
+private fun classContext(context: ExtensionContext): ExtensionContext {
     var current = context
     while (current.testMethod.isPresent) {
         current = current.parent.orElseThrow()
@@ -126,12 +128,18 @@ internal fun classContext(context: ExtensionContext): ExtensionContext {
 }
 
 /** The scenario for this test: the method's [FakeLlmScenario], then the class's, then each enclosing class's. */
-internal fun scenarioFor(context: ExtensionContext): String? =
+private fun scenarioFor(context: ExtensionContext): String? =
     context.testMethod
         .orElse(null)
-        ?.getAnnotation(FakeLlmScenario::class.java)
+        ?.find<FakeLlmScenario>()
         ?.value
-        ?: findOnClassOrEnclosing(context.requiredTestClass) { it.getAnnotation(FakeLlmScenario::class.java) }?.value
+        ?: findOnClassOrEnclosing(context.requiredTestClass) { it.find<FakeLlmScenario>() }?.value
+
+/**
+ * Finds the annotation the way JUnit finds `@ExtendWith`: directly present, inside a composed
+ * annotation, or (for classes) on an implemented interface or, if `@Inherited`, a superclass.
+ */
+private inline fun <reified A : Annotation> AnnotatedElement.find(): A? = AnnotationSupport.findAnnotation(this, A::class.java).orElse(null)
 
 private fun <T> findOnClassOrEnclosing(
     testClass: Class<*>,
@@ -143,7 +151,7 @@ private fun <T> findOnClassOrEnclosing(
  * [ExtensionContext.Store.CloseableResource]; 5.13 and later close [AutoCloseable] ones (and warn
  * about values that are only the former). Implementing both closes it on every version, once.
  */
-internal class ServerHolder(
+private class ServerHolder(
     val server: FakeLlmServer,
 ) : ExtensionContext.Store.CloseableResource,
     AutoCloseable {
