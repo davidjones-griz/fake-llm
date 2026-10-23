@@ -1,5 +1,7 @@
 build/
 .gradle/
 .git/
+junit-jupiter/build/
+junit-jupiter/.gradle/
 examples/build/
 examples/.gradle/
