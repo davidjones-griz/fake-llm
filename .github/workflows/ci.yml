@@ -28,7 +28,16 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |
           img=$(sed -n 's/^FROM //p' .github/linters/hadolint.Dockerfile)
-          docker run --rm -v "$PWD:/repo" -w /repo "$img" hadolint --config .hadolint.yaml Dockerfile
+          # hadolint falls back to its defaults (a laxer threshold, ignore comments allowed) when
+          # it cannot parse its config, and only says so on stderr; treat that as a failure.
+          rc=0
+          docker run --rm -v "$PWD:/repo" -w /repo "$img" hadolint --config .hadolint.yaml Dockerfile 2> hadolint.err || rc=$?
+          cat hadolint.err >&2
+          if grep -q 'Error parsing your config file' hadolint.err; then
+            echo "::error file=.hadolint.yaml::hadolint could not parse .hadolint.yaml"
+            exit 1
+          fi
+          exit "$rc"
       - name: Links inside the repository (lychee)
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |
