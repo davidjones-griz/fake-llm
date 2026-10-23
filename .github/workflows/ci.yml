@@ -19,6 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         id: checkout
+      - name: TEMPORARY violations for #38 (actionlint expression error and shellcheck SC2086)
+        if: ${{ steps.nope.outputs.x == 'y' }}
+        run: echo $HOME
       - name: actionlint
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |

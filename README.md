@@ -512,6 +512,8 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 - JUnit versions are ignored by Dependabot. The extension compiles against the oldest JUnit Jupiter it supports (5.10.5, `minimumJupiter` in `junit-jupiter/build.gradle.kts`) and its tests run again on newer releases (the `testJupiter514` and `testJupiter6` tasks, both part of `check`). Update the tested releases by hand; raise the minimum only as a deliberate, documented change.
 - Dependabot security alerts do not cover the Gradle dependencies yet. Gradle needs its dependency graph submitted from CI first, which is tracked in [#41](https://github.com/davidjones-griz/fake-llm/issues/41).
 
+TEMPORARY violations for #38: [a missing file](docs/no-such-file.md), [a missing anchor](#no-such-heading), [a missing external page](https://github.com/davidjones-griz/fake-llm/blob/main/no-such-file-38.md).
+
 ## Roadmap
 
 Tracked in https://github.com/davidjones-griz/fake-llm/issues
