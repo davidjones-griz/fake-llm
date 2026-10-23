@@ -31,6 +31,9 @@ kotlin {
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     testImplementation("com.davidjonesgriz:fake-llm:$fakeLlmVersion")
+    testImplementation("com.davidjonesgriz:fake-llm-junit-jupiter:$fakeLlmVersion")
+    // The extension supports JUnit Jupiter 5.10.5 and later; kotlin("test") alone brings in 5.10.1.
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
     testImplementation(kotlin("test"))
 }
 

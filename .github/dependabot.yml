@@ -35,6 +35,11 @@ updates:
       # registry. Dependabot skips it already (its version is a build-script variable); this is a
       # safeguard in case that changes.
       - dependency-name: "com.davidjonesgriz:*"
+      # junit-jupiter/ compiles against the oldest JUnit Jupiter it supports (5.10.5) and tests on
+      # newer releases; a bump would quietly raise that minimum. Those versions are set by hand.
+      - dependency-name: "org.junit:*"
+      - dependency-name: "org.junit.jupiter:*"
+      - dependency-name: "org.junit.platform:*"
 
   - package-ecosystem: github-actions
     directory: "/"

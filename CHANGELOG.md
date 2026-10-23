@@ -28,6 +28,12 @@ change the public API.
 - `ScenarioEngine(scenarioDirectory = path)`: a per-engine directory that `load(name)` searches
   before the classpath and `GET /control/scenarios` lists, so engines in one JVM can load
   same-named scenarios from different directories.
+- `com.davidjonesgriz:fake-llm-junit-jupiter`, a JUnit Jupiter extension (5.10.5 or newer,
+  including 6.x): `@FakeLlmTest` runs one in-process server per test class, `@FakeLlmScenario`
+  loads a scenario before each test, and `FakeLlmServer` and `ScenarioEngine` are injected as
+  parameters. The annotations also work inside composed annotations and on interfaces. Also
+  usable through `@RegisterExtension` with `FakeLlmExtension`.
+- `ScenarioEngine.unload()`: removes the loaded scenario and clears the call log and counters.
 - `examples/`, a separate build that tests a small client against the published artifact.
 - Public API checks: Kotlin explicit API mode, and `api/fake-llm.api`, which `./gradlew check`
   compares with the compiled API.

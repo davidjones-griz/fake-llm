@@ -61,8 +61,9 @@ detekt {
 
 // Coverage floors: raise them when coverage rises; never lower one without a reason in the PR.
 // The README's Development section quotes these values; update it with them.
-val lineCoverageFloor = 95
-val branchCoverageFloor = 65
+// The junit-jupiter module reads the same floors from here.
+val lineCoverageFloor by extra(95)
+val branchCoverageFloor by extra(65)
 
 kover {
     reports {
@@ -87,32 +88,45 @@ publishing {
                     "Scenario-driven local stand-in for the Anthropic, OpenAI and Gemini HTTP APIs, " +
                         "for testing LLM-calling code without real model calls.",
                 )
-                url.set("https://github.com/davidjones-griz/fake-llm")
-                licenses {
-                    license {
-                        name.set("Apache-2.0")
-                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-                    }
-                }
-                developers {
-                    developer {
-                        id.set("davidjones-griz")
-                        name.set("David Jones")
-                    }
-                }
-                scm {
-                    url.set("https://github.com/davidjones-griz/fake-llm")
-                    connection.set("scm:git:https://github.com/davidjones-griz/fake-llm.git")
-                    developerConnection.set("scm:git:ssh://git@github.com/davidjones-griz/fake-llm.git")
-                }
             }
         }
     }
-    repositories {
-        // A file repository inside build/, for examples/ and CI to consume the published artifact.
-        maven {
-            name = "buildLocal"
-            url = uri(layout.buildDirectory.dir("local-repo"))
+}
+
+// Every published module (this one and junit-jupiter/) shares the POM metadata below and the
+// build-local repository that examples/ and CI read.
+allprojects {
+    pluginManager.withPlugin("maven-publish") {
+        configure<PublishingExtension> {
+            publications.withType<MavenPublication>().configureEach {
+                pom {
+                    url.set("https://github.com/davidjones-griz/fake-llm")
+                    licenses {
+                        license {
+                            name.set("Apache-2.0")
+                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    developers {
+                        developer {
+                            id.set("davidjones-griz")
+                            name.set("David Jones")
+                        }
+                    }
+                    scm {
+                        url.set("https://github.com/davidjones-griz/fake-llm")
+                        connection.set("scm:git:https://github.com/davidjones-griz/fake-llm.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/davidjones-griz/fake-llm.git")
+                    }
+                }
+            }
+            repositories {
+                // A file repository inside the root build/, for examples/ and CI to consume the published artifacts.
+                maven {
+                    name = "buildLocal"
+                    url = uri(rootProject.layout.buildDirectory.dir("local-repo"))
+                }
+            }
         }
     }
 }

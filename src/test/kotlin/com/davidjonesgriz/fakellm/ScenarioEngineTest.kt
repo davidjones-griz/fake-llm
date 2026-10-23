@@ -481,6 +481,41 @@ class ScenarioEngineTest {
     }
 
     @Test
+    fun `unload removes the scenario and clears the call log`() {
+        val engine = ScenarioEngine()
+        engine.load("fail-then-retry")
+        withServer(engine) { client, _ ->
+            assertEquals(500, client.post("/anthropic/v1/messages", anthropicBody("hi")).statusCode(), "first step")
+            assertEquals(1, engine.calls().size)
+
+            engine.unload()
+            assertNull(engine.currentScenarioName())
+            assertTrue(engine.calls().isEmpty())
+            val unmatched = client.post("/anthropic/v1/messages", anthropicBody("hi"))
+            assertEquals(400, unmatched.statusCode(), "with no scenario, strict mode rejects the request")
+
+            // Loading again starts the step sequence from its first step.
+            engine.load("fail-then-retry")
+            assertEquals(0, engine.calls().size)
+            val first = client.post("/anthropic/v1/messages", anthropicBody("hi"))
+            assertEquals(500, first.statusCode(), first.body())
+        }
+    }
+
+    @Test
+    fun `unload restarts the lenient default reply's counter`() {
+        val engine = ScenarioEngine(lenient = true)
+        withServer(engine) { client, _ ->
+            repeat(2) { client.post("/anthropic/v1/messages", anthropicBody("hi")) }
+            assertEquals(listOf(1, 2), engine.calls().map { it.occurrence })
+
+            engine.unload()
+            client.post("/anthropic/v1/messages", anthropicBody("hi"))
+            assertEquals(1, engine.calls().single().occurrence)
+        }
+    }
+
+    @Test
     fun `an unknown scenario name is rejected`() {
         val failure = assertFailsWith<IllegalStateException> { ScenarioEngine().load("missing-scenario") }
         assertTrue(failure.message!!.contains("unknown scenario"))

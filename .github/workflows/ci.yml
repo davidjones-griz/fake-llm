@@ -25,7 +25,9 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: coverage-report
-          path: build/reports/kover/html
+          path: |
+            build/reports/kover/html
+            junit-jupiter/build/reports/kover/html
           if-no-files-found: warn
           retention-days: 14
       - name: Publish to the build-local repository

@@ -151,9 +151,57 @@ Every failed call throws `FakeLlmClientException`. `statusCode` is the HTTP stat
 
 The client ignores response fields it does not know, so a server that has gained fields does not break it. It also leaves fields at their default values out of the scenarios it sends, so a scenario that does not use a newly added field is still accepted by a server that predates it.
 
+### JUnit Jupiter extension
+
+`com.davidjonesgriz:fake-llm-junit-jupiter:0.1.0` runs an in-process server for each test class, so a test needs no setup or teardown of its own. Its classes are in the `com.davidjonesgriz.fakellm.junit` package, and it brings `fake-llm` with it. It works with JUnit Jupiter 5.10.5 or newer, including 6.x. Your project supplies JUnit; the extension does not add it. Kotlin's `kotlin("test")` brings JUnit 5.10.1 on its own, so a Kotlin project should also add a newer BOM, such as `testImplementation(platform("org.junit:junit-bom:5.14.4"))`.
+
+```kotlin
+@FakeLlmTest
+@FakeLlmScenario("rate-limit-429")
+class MyClientTest {
+    @Test
+    fun `retries after a rate limit`(server: FakeLlmServer) {
+        val client = MyClient(baseUrl = "${server.baseUrl}/anthropic")
+        // ... exercise the code under test ...
+        assertEquals(2, server.engine.calls().size)
+    }
+
+    @Test
+    @FakeLlmScenario("hello")
+    fun `answers a greeting`(server: FakeLlmServer) { /* ... */ }
+}
+```
+
+```java
+@FakeLlmTest
+@FakeLlmScenario("hello")
+class MyClientTest {
+    @Test
+    void answers(FakeLlmServer server) { /* server.getBaseUrl(), server.getEngine().calls() */ }
+}
+```
+
+- **One server per class.** The server starts on an ephemeral port when the class first needs it, and stops when the class finishes. `@Nested` classes share it, and subclasses inherit `@FakeLlmTest`.
+- **A scenario per test.** Before each test, the nearest `@FakeLlmScenario` is loaded: the method's, then the class's (its own, then its interfaces', then its superclasses'), then each enclosing class's, the same way. Loading clears the call log and step counters, so every test starts fresh. A test with no `@FakeLlmScenario` anywhere runs with no scenario loaded (`ScenarioEngine.unload()`), so a scenario loaded by hand in `@BeforeAll` is gone again by the first test; put a shared scenario on the class instead. The extension runs before your own `@BeforeEach` methods, so they see the scenario and can replace it.
+- **Injection.** Constructors, `@BeforeAll`, `@BeforeEach` and test methods can take a `FakeLlmServer` (`baseUrl`, `port`, `engine`) or the `ScenarioEngine` itself.
+- **Configuration.** `@FakeLlmTest(scenarioDirectory = "src/test/scenarios", lenient = true)` sets the engine's scenario directory (searched before the classpath; relative to the working directory) and lenient mode. The server ignores `FAKE_LLM_CONTROL_TOKEN`. Both annotations also work inside your own composed annotation or on an interface the test class implements. When the outer class runs the extension, a `@Nested` class uses the outer class's server, so options on the nested class's own `@FakeLlmTest` have no effect.
+- **`@RegisterExtension`.** Instead of `@FakeLlmTest`, a field can hold `FakeLlmExtension(scenarioDirectory, lenient)`; from Java, `new FakeLlmExtension()` or `new FakeLlmExtension(path, lenient)`. A static field behaves like the annotation. An instance field exists only once the test instance does, so it cannot inject into its own class's constructor or a static `@BeforeAll` method, and a `@Nested` class may get a server of its own rather than the outer class's; use a static field or the annotation for those. Register the extension once per class: with both `@FakeLlmTest` and a field, JUnit rejects injected parameters because two extensions offer them.
+- **Parallel execution.** Test classes can run in parallel, each with its own server and port. The tests of one class share one engine, so they must run one at a time: a second test that starts while another is running fails immediately with an explanation. With JUnit's parallel execution enabled, run classes concurrently and methods on the same thread:
+
+  ```properties
+  # src/test/resources/junit-platform.properties
+  junit.jupiter.execution.parallel.enabled=true
+  junit.jupiter.execution.parallel.mode.default=same_thread
+  junit.jupiter.execution.parallel.mode.classes.default=concurrent
+  ```
+
+The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6 deprecates in favour of `computeIfAbsent`. JUnit 5.10 has no `computeIfAbsent`, so the extension moves to it once the minimum supported JUnit version does.
+
+[examples/](examples/) uses the extension in `SummarizerExtensionTest`.
+
 ### API stability
 
-The public API is exactly what [api/fake-llm.api](api/fake-llm.api) lists, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Rule`, `Match`, `Step`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord` or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
+The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Rule`, `Match`, `Step`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord` or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
 
 [examples/](examples/) is a complete consumer: a small client with retry logic, tested against the published artifact.
 
@@ -425,13 +473,13 @@ The example project tests the published artifact, not the source, so publish it 
 
 ### Public API
 
-Kotlin explicit API mode is on, so a new public declaration in `src/main` needs an explicit `public` modifier. `./gradlew check`, and so `./gradlew build` and CI, compares the compiled public API with `api/fake-llm.api` and fails on any difference. For an intended change, run `./gradlew apiDump`, commit the updated `api/fake-llm.api` with the change, and add a CHANGELOG entry. Add new fields to the scenario model classes last, with a default value, so existing Kotlin call sites still compile. A Kotlin or kotlinx-serialization upgrade can change the generated members in the dump, so run `apiDump` after one and review the diff.
+Kotlin explicit API mode is on, so a new public declaration in `src/main` (or `junit-jupiter/src/main`) needs an explicit `public` modifier. `./gradlew check`, and so `./gradlew build` and CI, compares the compiled public API with `api/fake-llm.api` and `junit-jupiter/api/fake-llm-junit-jupiter.api` and fails on any difference. For an intended change, run `./gradlew apiDump`, commit the updated `.api` file with the change, and add a CHANGELOG entry. Add new fields to the scenario model classes last, with a default value, so existing Kotlin call sites still compile. A Kotlin or kotlinx-serialization upgrade can change the generated members in the dump, so run `apiDump` after one and review the diff.
 
 ### Quality gates
 
 Compiler warnings are errors. A warning in the main or test code fails `./gradlew build`, and one in `examples/` fails `./gradlew -p examples check`; CI runs both.
 
-`./gradlew check`, and so `./gradlew build` and CI, measures the test coverage of `src/main` with [Kover](https://github.com/Kotlin/kotlinx-kover) and fails when line coverage drops below 95% or branch coverage below 65%. The floors are set in `build.gradle.kts`, which is the source of truth; update the numbers here when they change. Raise a floor when coverage rises, and never lower one without a reason in the pull request. To see the current numbers, run `./gradlew koverHtmlReport` and open `build/reports/kover/html/index.html`, which shows line and branch coverage; `./gradlew koverLog` prints line coverage only. CI attaches the same report as the `coverage-report` artifact on every run where the tests pass. Nothing is excluded from the measurement, so a new `@Serializable` class usually adds one uncovered generated line.
+`./gradlew check`, and so `./gradlew build` and CI, measures the test coverage of `src/main` with [Kover](https://github.com/Kotlin/kotlinx-kover) and fails when line coverage drops below 95% or branch coverage below 65%. The JUnit extension in `junit-jupiter/` is measured on its own against the same floors, so neither module's coverage can hide a drop in the other's. The floors are set in the root `build.gradle.kts`, which is the source of truth; update the numbers here when they change. Raise a floor when coverage rises, and never lower one without a reason in the pull request. To see the current numbers, run `./gradlew koverHtmlReport` and open `build/reports/kover/html/index.html` (the extension's is `junit-jupiter/build/reports/kover/html/index.html`), which shows line and branch coverage; `./gradlew koverLog` prints line coverage only. CI attaches both reports as the `coverage-report` artifact on every run where the tests pass. Nothing is excluded from the measurement, so a new `@Serializable` class usually adds one uncovered generated line.
 
 `./gradlew check` also runs [ktlint](https://pinterest.github.io/ktlint/) over the Kotlin sources and build scripts, and [detekt](https://detekt.dev/) over `src/main` and `src/test`, in the root build and in `examples/` (`./gradlew -p examples check`); CI runs both builds.
 
@@ -450,6 +498,7 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 - CI's `gradle/actions/setup-gradle` uses `cache-provider: basic`, the MIT-licensed cache built on GitHub's `actions/cache`. From v6 the action defaults to "enhanced" caching, a proprietary component under separate Gradle terms; keeping CI entirely open-source matters more here than its speed-up on a small build. Keep the setting when Dependabot updates the action.
 - The Gradle wrapper pins the distribution's SHA-256 (`distributionSha256Sum` in `gradle/wrapper/gradle-wrapper.properties`), so a download that does not match fails instead of running. Dependabot updates the checksum with the version.
 - To change the Gradle version by hand, run `./gradlew wrapper --gradle-version <version> --gradle-distribution-sha256-sum <sum>`, with the sum from `https://services.gradle.org/distributions/gradle-<version>-bin.zip.sha256`. Run it twice: the first run uses the old Gradle, and the second lets the new version regenerate `gradlew`, `gradlew.bat` and the wrapper jar.
+- JUnit versions are ignored by Dependabot. The extension compiles against the oldest JUnit Jupiter it supports (5.10.5, `minimumJupiter` in `junit-jupiter/build.gradle.kts`) and its tests run again on newer releases (the `testJupiter514` and `testJupiter6` tasks, both part of `check`). Update the tested releases by hand; raise the minimum only as a deliberate, documented change.
 - Dependabot security alerts do not cover the Gradle dependencies yet. Gradle needs its dependency graph submitted from CI first, which is tracked in [#41](https://github.com/davidjones-griz/fake-llm/issues/41).
 
 ## Roadmap
