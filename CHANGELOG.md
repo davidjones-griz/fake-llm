@@ -22,6 +22,9 @@ change the public API.
 - Library use: the `com.davidjonesgriz:fake-llm` Maven publication with sources and javadoc jars, and
   `startFakeLlmServer`, which returns a `FakeLlmServer` handle (`port`, `baseUrl`, `engine`,
   `close()`) for starting the server in-process from tests.
+- `FakeLlmClient`: a Kotlin/Java client for the control API (`health`, `scenarioNames`, `load`,
+  `loadInline`, `reset`, `calls`) with an optional bearer token. Every failed call is a
+  `FakeLlmClientException`, with the HTTP status and the server's message when a response arrived.
 - `ScenarioEngine(scenarioDirectory = path)`: a per-engine directory that `load(name)` searches
   before the classpath and `GET /control/scenarios` lists, so engines in one JVM can load
   same-named scenarios from different directories.

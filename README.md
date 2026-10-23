@@ -132,9 +132,28 @@ startFakeLlmServer(port = 0, engine = ScenarioEngine(), controlToken = null).use
 
 The library is built with Kotlin 2.4. A Kotlin project that uses it needs Kotlin 2.4 (2.3 may work, on a best-effort basis). A Java project needs Java 21, and gets `kotlin-stdlib` 2.4 and `kotlinx-serialization-json` 1.12.0 as dependencies.
 
+### Control API client
+
+`FakeLlmClient` drives a running server over HTTP, for tests that reach it by URL, such as the Docker image, `java -jar`, or a server started elsewhere in the test. Where it and `ScenarioEngine` have the same operation, the method has the same name:
+
+```kotlin
+FakeLlmClient("http://localhost:8080", controlToken = System.getenv("FAKE_LLM_CONTROL_TOKEN")).use { client ->
+    client.load("rate-limit-429")          // or client.loadInline(Scenario(...))
+    // ... exercise the code under test against http://localhost:8080 ...
+    val calls: List<CallRecord> = client.calls()
+    client.reset()
+}
+```
+
+From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's name and whether the server is lenient, and `scenarioNames()` lists what the server can load by name. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
+
+Every failed call throws `FakeLlmClientException`. `statusCode` is the HTTP status, or null when no response arrived (a refused connection, a timeout or an interrupt, kept as the `cause`). For an error status, `serverMessage` is the server's explanation, verbatim, such as `unknown scenario 'x' — ...`. A 401 says whether the token was missing or rejected.
+
+The client ignores response fields it does not know, so a server that has gained fields does not break it. It also leaves fields at their default values out of the scenarios it sends, so a scenario that does not use a newly added field is still accepted by a server that predates it.
+
 ### API stability
 
-The public API is exactly what [api/fake-llm.api](api/fake-llm.api) lists, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Rule`, `Match`, `Step`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord` is read-only, with an internal constructor, so new fields added with default values do not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`. Exception messages from scenario validation are diagnostics, not API.
+The public API is exactly what [api/fake-llm.api](api/fake-llm.api) lists, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Rule`, `Match`, `Step`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord` or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
 
 [examples/](examples/) is a complete consumer: a small client with retry logic, tested against the published artifact.
 
@@ -356,7 +375,7 @@ With a scenario directory set, `*.json` names from that directory are merged in,
 ]
 ```
 
-Pass the bearer token on each control call when one is configured:
+From Kotlin or Java, [`FakeLlmClient`](#control-api-client) makes these calls and parses the responses. With curl, pass the bearer token on each control call when one is configured:
 
 ```bash
 curl -s http://localhost:8080/control/calls \

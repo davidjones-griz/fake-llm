@@ -1,6 +1,7 @@
 package example
 
 import com.davidjonesgriz.fakellm.ErrorStep
+import com.davidjonesgriz.fakellm.FakeLlmClient
 import com.davidjonesgriz.fakellm.FakeLlmServer
 import com.davidjonesgriz.fakellm.Match
 import com.davidjonesgriz.fakellm.Rule
@@ -46,6 +47,20 @@ class SummarizerTest {
         val call = server.engine.calls().single()
         assertEquals("summarize", call.role)
         assertContains(call.promptSample, "Revenue for the quarter")
+    }
+
+    @Test
+    fun `drives the server over HTTP with the control API client`() {
+        // FakeLlmClient talks to a server by URL, as a test would with the Docker image or java -jar.
+        FakeLlmClient(server.baseUrl).use { client ->
+            client.loadInline(scenario(Step(text = "Loaded over HTTP.")))
+
+            assertEquals("Loaded over HTTP.", summarizer.summarize("doc").text)
+
+            val call = client.calls().single()
+            assertEquals("summarize", call.role)
+            assertEquals("text", call.outcome)
+        }
     }
 
     @Test
