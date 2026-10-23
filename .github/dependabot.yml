@@ -50,13 +50,19 @@ updates:
       actions-minor-patch:
         update-types: [minor, patch]
 
+  # "/" is the Dockerfile's base images; "/.github/linters" pins the images CI's lint job runs
+  # (one FROM line per tool).
   - package-ecosystem: docker
-    directory: "/"
+    directories: ["/", "/.github/linters"]
     schedule:
       interval: weekly
       day: monday
     groups:
+      # A linter update can bring new findings; keep it apart so it doesn't hold back the base images.
+      linters:
+        patterns: ["rhysd/actionlint", "hadolint/hadolint", "lycheeverse/lychee"]
       # The build and runtime images are republished together; update their digests in one PR.
+      # `*` is the least specific pattern, so the linters group above wins for the linter images.
       base-images:
         patterns: ["*"]
     ignore:

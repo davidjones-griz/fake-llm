@@ -1,0 +1,12 @@
+# lychee link-checker configuration, shared by CI's lint job (relative links, --offline), the
+# weekly links workflow (all links) and the local commands in README.md ("Quality gates").
+
+# Markdown only, including hidden directories such as .github/, but not .git/.
+extensions = ["md"]
+hidden = true
+exclude_path = ['(^|/)\.git/']
+
+# Check that #anchors exist in the linked page.
+include_fragments = "anchor-only"
+
+no_progress = true

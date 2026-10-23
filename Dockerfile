@@ -8,7 +8,8 @@ FROM eclipse-temurin:21-jre@sha256:227118764cccd3c3294617061aaa93a08309c63a395ee
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin fakellm
 WORKDIR /app
 COPY --from=build /src/build/libs/fake-llm-all.jar /app/fake-llm-all.jar
-USER fakellm
+# The fakellm user, by UID, so the runtime user is unambiguous without reading /etc/passwd.
+USER 10001
 EXPOSE 8080
 # Exec form: arguments after the image name are appended, so
 # `docker run fake-llm --scenario hello` reaches the process.
