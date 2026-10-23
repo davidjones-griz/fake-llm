@@ -1,0 +1,13 @@
+# hadolint configuration for the Dockerfile, read by CI's lint job and the local command in
+# README.md ("Quality gates"). Valid keys include failure-threshold, disable-ignore-pragma,
+# ignored, override and trustedRegistries; hadolint ignores a misspelled key without an error.
+
+# Fail on every finding, down to style.
+failure-threshold: style
+
+# Exceptions live here, not in "# hadolint ignore=" comments in the Dockerfile.
+disable-ignore-pragma: true
+
+# Rules to ignore. Each entry needs a comment with the reason, and so does any severity
+# change under "override".
+ignored: []

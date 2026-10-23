@@ -1,0 +1,25 @@
+name: Links
+
+# Checks every link in the Markdown files, external ones included, once a week. Pull requests
+# check only links inside the repository (ci.yml's lint job), so an outage elsewhere can't fail
+# an unrelated pull request. See "Quality gates" in README.md.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: All links (lychee)
+        env:
+          # lychee authenticates its github.com requests with it, avoiding rate limits.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          img=$(sed -n 's/^FROM //p' .github/linters/lychee.Dockerfile)
+          docker run --rm -e GITHUB_TOKEN -v "$PWD:/repo" -w /repo "$img" --config lychee.toml .

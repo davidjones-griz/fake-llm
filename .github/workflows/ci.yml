@@ -1,10 +1,49 @@
 name: CI
 
 on:
+  # Pull requests run CI through pull_request; pushes are only built for main.
   push:
+    branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
+  # Lints the workflows (actionlint, with shellcheck for run: scripts), the Dockerfile (hadolint)
+  # and the links inside the repository (lychee, offline; external links are checked weekly by
+  # links.yml). Each tool runs from the image pinned in .github/linters/, which Dependabot updates.
+  # Every step runs even when an earlier one failed, so one run reports every finding.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+      - name: actionlint
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          img=$(sed -n 's/^FROM //p' .github/linters/actionlint.Dockerfile)
+          docker run --rm -v "$PWD:/repo" -w /repo "$img" -color
+      - name: hadolint
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          img=$(sed -n 's/^FROM //p' .github/linters/hadolint.Dockerfile)
+          # hadolint falls back to its defaults (a laxer threshold, ignore comments allowed) when
+          # it cannot parse its config, and only says so on stderr; treat that as a failure.
+          rc=0
+          docker run --rm -v "$PWD:/repo" -w /repo "$img" hadolint --config .hadolint.yaml Dockerfile 2> hadolint.err || rc=$?
+          cat hadolint.err >&2
+          if grep -q 'Error parsing your config file' hadolint.err; then
+            echo "::error file=.hadolint.yaml::hadolint could not parse .hadolint.yaml"
+            exit 1
+          fi
+          exit "$rc"
+      - name: Links inside the repository (lychee)
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          img=$(sed -n 's/^FROM //p' .github/linters/lychee.Dockerfile)
+          docker run --rm -v "$PWD:/repo" -w /repo "$img" --config lychee.toml --offline .
+
   gradle:
     runs-on: ubuntu-latest
     steps:
