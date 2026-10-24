@@ -380,7 +380,11 @@ One JSON `generateContent` body: one candidate whose part text is the step text,
 
 ### Control API
 
-When `FAKE_LLM_CONTROL_TOKEN` is set to a non-blank value, every path under `/control/` requires an `Authorization` header whose value is exactly `Bearer <token>`. A missing or different header is HTTP 401:
+The reference for the control API, `/health` and `/openapi` is the OpenAPI 3.1 document [openapi/fake-llm.yaml](openapi/fake-llm.yaml). A running server serves the copy for its version at `GET /openapi` (as `application/yaml`, with no token needed), so a client in any language can read the contract, or generate code from it. The spec lists the vendor routes too and links to each provider's own reference. This section summarises it.
+
+Clients should ignore response fields they do not know, since a later version may add fields. Request bodies are strict: `POST /control/scenario` rejects unknown fields, as does the scenario format. Human-readable messages, such as most `fake_llm_error` texts and the `detail` of a 400, are diagnostics, not part of the contract.
+
+When `FAKE_LLM_CONTROL_TOKEN` is set to a non-blank value, every path under `/control/` requires an `Authorization` header whose value is exactly `Bearer <token>`. A missing or different header is HTTP 401, with `WWW-Authenticate: Bearer`:
 
 ```json
 {"fake_llm_error":"unauthorized: missing or invalid Authorization: Bearer <token>"}
@@ -495,6 +499,7 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
   ```
 
   Drop `--offline` to check links to other sites too.
+- **The HTTP API is spec-first.** [openapi/fake-llm.yaml](openapi/fake-llm.yaml) is the hand-written contract, and a change to the control API starts there. `OpenApiConformanceTest` runs every control route and `/health` against a real server, and fails when a status, header or body differs from the spec, when a response has a field the spec doesn't document, or when a status the spec documents is never exercised. It also checks every scenario file in the repository against the spec's scenario format. CI's `lint` job validates the spec itself with [Redocly](https://redocly.com/docs/cli/) (`recommended-strict`, configured in `redocly.yaml`; a rule exempted for one location is listed in `.redocly.lint-ignore.yaml` with its reason). Locally, from the repository root: `docker run --rm -v "$PWD:/repo" -w /repo "$(sed -n 's/^FROM //p' .github/linters/redocly.Dockerfile)" lint openapi/fake-llm.yaml`. lychee checks only the Markdown files, so the provider links in the spec are not link-checked.
 - Commits that only reformat code are listed in `.git-blame-ignore-revs`, which GitHub's blame view honours; locally, run `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 
 ### Dependency updates
@@ -504,7 +509,7 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 - A Kotlin or kotlinx-serialization bump can change the generated members in `api/fake-llm.api`; see [Public API](#public-api) for the `apiDump` step. A bump that adds a compiler warning or lowers coverage is fixed on its pull request; the [quality gates](#quality-gates) are not lowered to let it through.
 - `main` only accepts branches that are up to date with it, so merge Dependabot pull requests one at a time. After each merge, comment `@dependabot rebase` on the next one; otherwise Dependabot only rebases it on its next weekly run. Once anyone pushes a commit to a Dependabot branch, such as an `apiDump`, Dependabot stops rebasing it: bring it up to date with "Update branch" instead. `@dependabot recreate` rebuilds the pull request from scratch and discards pushed commits.
 - Actions are pinned to a full commit SHA with the release in a trailing comment (`uses: actions/checkout@<sha> # v4.4.0`), and base images to a digest (`eclipse-temurin:21-jdk@sha256:...`). Keep that form when editing by hand; Dependabot updates both. Java major versions of the base images are ignored on purpose: the images stay on Java 21, the supported minimum ([#39](https://github.com/davidjones-griz/fake-llm/issues/39)), and newer Java versions are tested by CI's `java25` job instead. When a newer LTS becomes the one to test, rename that job and its required check.
-- The linter images (actionlint, hadolint and lychee) are updated in a group of their own, tag and digest together. A new release can bring new findings; fix them on that pull request rather than adding exceptions to get it through.
+- The linter images (actionlint, hadolint, lychee and Redocly) are updated in a group of their own, tag and digest together. A new release can bring new findings; fix them on that pull request rather than adding exceptions to get it through.
 - The ktlint version itself (`ktlintVersion` in `gradle.properties`) is not visible to Dependabot. Raise it by hand when a new ktlint release comes out, run `./gradlew ktlintFormat` and `./gradlew -p examples ktlintFormat`, and commit any reformatting separately, adding that commit to `.git-blame-ignore-revs`.
 - CI's `gradle/actions/setup-gradle` and the dependency submission workflow's `gradle/actions/dependency-submission` use `cache-provider: basic`, the MIT-licensed cache built on GitHub's `actions/cache`. From v6 the action defaults to "enhanced" caching, a proprietary component under separate Gradle terms; keeping CI entirely open-source matters more here than its speed-up on a small build. Keep the setting in both when Dependabot updates the actions.
 - The Gradle wrapper pins the distribution's SHA-256 (`distributionSha256Sum` in `gradle/wrapper/gradle-wrapper.properties`), so a download that does not match fails instead of running. Dependabot updates the checksum with the version.
