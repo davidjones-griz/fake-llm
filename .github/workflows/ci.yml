@@ -71,6 +71,31 @@ jobs:
           retention-days: 14
       - name: Publish to the build-local repository
         run: ./gradlew publishAllPublicationsToBuildLocalRepository --no-daemon
+      # Java 21 is the supported minimum (#39); fail if any class in the published jars targets
+      # anything else (class-file major version 65).
+      - name: Check the published jars target Java 21
+        run: |
+          version=$(sed -n 's/^version=//p' gradle.properties)
+          repo=build/local-repo/com/davidjonesgriz
+          for jar in "$repo/fake-llm/$version/fake-llm-$version.jar" \
+                     "$repo/fake-llm-junit-jupiter/$version/fake-llm-junit-jupiter-$version.jar"; do
+            # Multi-release classes under META-INF/versions/ would be skipped below; there are none.
+            if unzip -Z1 "$jar" | grep -q '^META-INF/versions/'; then
+              echo "::error::$jar is a multi-release jar; extend this check to META-INF/versions/"
+              exit 1
+            fi
+            mapfile -t classes < <(unzip -Z1 "$jar" '*.class' | grep -v -e '^META-INF/' -e 'module-info' | sed 's/\.class$//')
+            if [ "${#classes[@]}" -eq 0 ]; then
+              echo "::error::no classes found in $jar"
+              exit 1
+            fi
+            n=$(javap -v -cp "$jar" "${classes[@]}" | grep -c '^  major version: 65$' || true)
+            if [ "$n" != "${#classes[@]}" ]; then
+              echo "::error::$jar: $n of ${#classes[@]} classes target Java 21 (major version 65)"
+              exit 1
+            fi
+            echo "$jar: all ${#classes[@]} classes target Java 21"
+          done
       - name: Test and lint examples/ against the published artifact
         run: ./gradlew -p examples check --no-daemon
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -78,6 +103,30 @@ jobs:
           name: fake-llm-all
           path: build/libs/fake-llm-all.jar
           if-no-files-found: error
+
+  # The tests and examples/ on the current Java LTS; the gradle job covers the minimum, Java 21.
+  # Rename this job (and its required check) when a new LTS becomes the one to test.
+  java25:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          # The last one listed (21) stays the default JDK; Gradle finds 25 as a toolchain.
+          java-version: |
+            25
+            21
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+      # Auto-download is off so a JDK 25 that Gradle fails to detect is an error, not a download.
+      - name: Test on Java 25
+        run: >-
+          ./gradlew test testJupiter514 testJupiter6 publishAllPublicationsToBuildLocalRepository
+          -PtestJavaVersion=25 -Porg.gradle.java.installations.auto-download=false --no-daemon
+      - name: Test examples/ on Java 25
+        run: ./gradlew -p examples test -PtestJavaVersion=25 -Porg.gradle.java.installations.auto-download=false --no-daemon
 
   docker:
     runs-on: ubuntu-latest
