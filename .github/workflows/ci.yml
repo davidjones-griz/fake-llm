@@ -157,3 +157,5 @@ jobs:
             docker logs fake-llm-ci
             exit 1
           fi
+          # The image serves the OpenAPI document bundled in the jar.
+          curl -fsS http://127.0.0.1:8080/openapi | grep -q '^openapi: 3\.1\.'

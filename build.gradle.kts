@@ -52,6 +52,12 @@ tasks.test {
     useJUnitPlatform()
 }
 
+// The OpenAPI document is the language-neutral contract, kept at the repository root; the server
+// serves the copy bundled here at GET /openapi.
+tasks.processResources {
+    from("openapi") { into("openapi") }
+}
+
 ktlint {
     version.set(providers.gradleProperty("ktlintVersion"))
 }

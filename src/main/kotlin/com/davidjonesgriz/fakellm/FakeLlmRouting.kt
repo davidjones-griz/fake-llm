@@ -44,6 +44,7 @@ internal fun route(
                 ex,
                 HTTP_UNAUTHORIZED,
                 """{"fake_llm_error":"unauthorized: missing or invalid Authorization: Bearer <token>"}""",
+                headers = mapOf("WWW-Authenticate" to "Bearer"),
             )
             return@runCatching
         }
@@ -74,6 +75,11 @@ private fun controlRoute(
                     put("lenient", engine.lenient)
                 }.toString(),
             )
+        }
+
+        "GET /openapi" -> {
+            val (status, contentType, body) = openApiResponse(bundledOpenApiSpec)
+            respond(ex, status, body, contentType = contentType)
         }
 
         "POST /control/scenario" -> {
@@ -143,6 +149,8 @@ private fun loadScenario(
     val obj =
         root as? JsonObject
             ?: error("body must be a JSON object with exactly one of \"name\" or \"scenario\"")
+    val unknown = obj.keys - setOf("name", "scenario")
+    if (unknown.isNotEmpty()) error("unknown field(s) ${unknown.sorted()}; the body takes exactly one of \"name\" or \"scenario\"")
     val hasName = "name" in obj
     val hasScenario = "scenario" in obj
     if (hasName == hasScenario) {
@@ -176,15 +184,20 @@ private fun scenariosJson(engine: ScenarioEngine): String {
     }.toString()
 }
 
+/**
+ * Sends [body] with [status]. [headers] are set after the content type, so a scripted
+ * `content-type` (from an error step) replaces it rather than adding a second one.
+ */
 internal fun respond(
     ex: HttpExchange,
     status: Int,
     body: String,
     headers: Map<String, String> = emptyMap(),
+    contentType: String = "application/json",
 ) {
     val bytes = body.toByteArray(StandardCharsets.UTF_8)
-    ex.responseHeaders.add("Content-Type", "application/json")
-    headers.forEach { (k, v) -> ex.responseHeaders.add(k, v) }
+    ex.responseHeaders.set("Content-Type", contentType)
+    headers.forEach { (k, v) -> ex.responseHeaders.set(k, v) }
     ex.sendResponseHeaders(status, bytes.size.toLong())
     ex.responseBody.use { it.write(bytes) }
 }
@@ -193,7 +206,21 @@ internal fun jsonString(s: String?): String = if (s == null) "null" else JsonPri
 
 private val logJson = Json { encodeDefaults = true }
 
+/** The OpenAPI document bundled in the jar (see openapi/fake-llm.yaml), or null if it is missing. */
+private val bundledOpenApiSpec: String? by lazy {
+    FakeLlmServer::class.java.getResourceAsStream("/openapi/fake-llm.yaml")?.use { it.readBytes().decodeToString() }
+}
+
+/** `GET /openapi`: the bundled document, or HTTP 500 when the jar was built without it. */
+internal fun openApiResponse(spec: String?): Triple<Int, String, String> =
+    if (spec != null) {
+        Triple(HTTP_OK, "application/yaml", spec)
+    } else {
+        Triple(HTTP_INTERNAL_ERROR, "application/json", """{"fake_llm_error":"the OpenAPI document is not bundled in this build"}""")
+    }
+
 private const val HTTP_BAD_REQUEST = 400
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_NOT_FOUND = 404
+private const val HTTP_INTERNAL_ERROR = 500
 private const val HTTP_NOT_IMPLEMENTED = 501

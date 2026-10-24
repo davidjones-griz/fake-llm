@@ -60,7 +60,12 @@ public data class Rule(
     }
 }
 
-/** All present predicates must hold (AND). An empty match matches everything — order rules accordingly. */
+/**
+ * All present predicates must hold (AND). An empty match matches everything — order rules accordingly.
+ *
+ * @throws IllegalArgumentException when [systemShape] is not one of the values below. The message
+ *   text is diagnostic, not part of the API.
+ */
 @Serializable
 public data class Match(
     /** Substring of the request's `model` field. */
@@ -76,7 +81,15 @@ public data class Match(
      * of the client is calling. Null (the default) skips this predicate. ANDed with the others.
      */
     val caller: String? = null,
-)
+) {
+    init {
+        require(systemShape == null || systemShape in MATCHABLE_SYSTEM_SHAPES) {
+            "systemShape must be one of $MATCHABLE_SYSTEM_SHAPES, got '$systemShape'"
+        }
+    }
+}
+
+private val MATCHABLE_SYSTEM_SHAPES = listOf("blocks", "string", "absent")
 
 /**
  * One scripted reply: assistant [text], optionally with [thinking], or a scripted [error]. A
@@ -135,14 +148,27 @@ public data class Step(
 
 private const val DEFAULT_STREAM_CHUNK_CHARS = 24
 
-/** A scripted HTTP error in place of a text reply: the [status], the [body], and extra [headers]. */
+/**
+ * A scripted HTTP error in place of a text reply: the [status], the [body], and extra [headers].
+ *
+ * @throws IllegalArgumentException when [status] is not an HTTP status (100 to 599). The message
+ *   text is diagnostic, not part of the API.
+ */
 @Serializable
 public data class ErrorStep(
     val status: Int,
     val body: String = "",
     /** Extra response headers, for example `retry-after`. Sent as given. */
     val headers: Map<String, String> = emptyMap(),
-)
+) {
+    init {
+        require(status in HTTP_STATUS_RANGE) { "status must be an HTTP status (100 to 599), got $status" }
+    }
+}
+
+private const val MIN_HTTP_STATUS = 100
+private const val MAX_HTTP_STATUS = 599
+private val HTTP_STATUS_RANGE = MIN_HTTP_STATUS..MAX_HTTP_STATUS
 
 /**
  * Loads named scenarios. An unknown name is a hard error. Holds no state: each call takes the

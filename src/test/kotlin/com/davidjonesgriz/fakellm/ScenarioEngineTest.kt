@@ -534,6 +534,25 @@ class ScenarioEngineTest {
     }
 
     @Test
+    fun `a match's systemShape must be a shape a request can have`() {
+        listOf("blocks", "string", "absent").forEach { Match(systemShape = it) }
+        Match(systemShape = null)
+        // "unknown" is recorded for an Anthropic system object, but a rule cannot target it.
+        listOf("unknown", "Blocks", "").forEach { shape ->
+            assertFailsWith<IllegalArgumentException>(shape) { Match(systemShape = shape) }
+        }
+    }
+
+    @Test
+    fun `an error step's status must be an HTTP status`() {
+        ErrorStep(100)
+        ErrorStep(599)
+        listOf(42, 99, 600, -1).forEach { status ->
+            assertFailsWith<IllegalArgumentException>("$status") { ErrorStep(status) }
+        }
+    }
+
+    @Test
     fun `thinking and streaming fields are constrained`() {
         assertFailsWith<IllegalArgumentException> { Step(error = ErrorStep(500), thinking = "x") }
         assertFailsWith<IllegalArgumentException> { Step(text = "x", streamErrorAfterChunks = 3) }
