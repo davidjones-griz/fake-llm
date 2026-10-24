@@ -10,9 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  # Lints the workflows (actionlint, with shellcheck for run: scripts), the Dockerfile (hadolint)
-  # and the links inside the repository (lychee, offline; external links are checked weekly by
-  # links.yml). Each tool runs from the image pinned in .github/linters/, which Dependabot updates.
+  # Lints the workflows (actionlint, with shellcheck for run: scripts), the Dockerfile (hadolint),
+  # the OpenAPI spec (Redocly) and the links inside the repository (lychee, offline; external
+  # links are checked weekly by links.yml). Each tool runs from the image pinned in
+  # .github/linters/, which Dependabot updates.
   # Every step runs even when an earlier one failed, so one run reports every finding.
   lint:
     runs-on: ubuntu-latest
@@ -38,6 +39,11 @@ jobs:
             exit 1
           fi
           exit "$rc"
+      - name: OpenAPI spec (Redocly)
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          img=$(sed -n 's/^FROM //p' .github/linters/redocly.Dockerfile)
+          docker run --rm -v "$PWD:/repo" -w /repo "$img" lint openapi/fake-llm.yaml --format github-actions
       - name: Links inside the repository (lychee)
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |
