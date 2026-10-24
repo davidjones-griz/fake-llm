@@ -10,9 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  # Lints the workflows (actionlint, with shellcheck for run: scripts), the Dockerfile (hadolint)
-  # and the links inside the repository (lychee, offline; external links are checked weekly by
-  # links.yml). Each tool runs from the image pinned in .github/linters/, which Dependabot updates.
+  # Lints the workflows (actionlint, with shellcheck for run: scripts), the Dockerfile (hadolint),
+  # the OpenAPI spec (Redocly) and the links inside the repository (lychee, offline; external
+  # links are checked weekly by links.yml). Each tool runs from the image pinned in
+  # .github/linters/, which Dependabot updates.
   # Every step runs even when an earlier one failed, so one run reports every finding.
   lint:
     runs-on: ubuntu-latest
@@ -38,6 +39,11 @@ jobs:
             exit 1
           fi
           exit "$rc"
+      - name: OpenAPI spec (Redocly)
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        run: |
+          img=$(sed -n 's/^FROM //p' .github/linters/redocly.Dockerfile)
+          docker run --rm -v "$PWD:/repo" -w /repo "$img" lint openapi/fake-llm.yaml --format github-actions
       - name: Links inside the repository (lychee)
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |
@@ -134,7 +140,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the image
         run: docker build -t fake-llm:ci .
-      - name: Run, check /health, stop
+      - name: Run, check /health and /openapi, stop
         run: |
           set -eu
           docker run -d --name fake-llm-ci -p 8080:8080 fake-llm:ci
@@ -151,3 +157,6 @@ jobs:
             docker logs fake-llm-ci
             exit 1
           fi
+          # The image serves the OpenAPI document bundled in the jar.
+          curl -fsS -o "$RUNNER_TEMP/openapi.yaml" http://127.0.0.1:8080/openapi
+          grep -q '^openapi: 3\.1\.' "$RUNNER_TEMP/openapi.yaml"

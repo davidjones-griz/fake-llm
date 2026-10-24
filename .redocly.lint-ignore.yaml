@@ -1,0 +1,20 @@
+# Locations exempt from single rules in redocly.yaml, each with its reason. Maintained by hand:
+# don't regenerate it with `redocly lint --generate-ignore-file`, which drops these comments.
+openapi/fake-llm.yaml:
+  operation-4xx-response:
+    # /health and /openapi take no input and have no client error to report.
+    - '#/paths/~1health/get/responses'
+    - '#/paths/~1openapi/get/responses'
+    # The Batches API stand-in answers 501 to everything; inventing a 4xx would be false.
+    - '#/paths/~1anthropic~1v1~1messages~1batches/get/responses'
+    - '#/paths/~1anthropic~1v1~1messages~1batches/post/responses'
+    - '#/paths/~1anthropic~1v1~1messages~1batches~1{batchId}/get/responses'
+  operation-2xx-response:
+    # Not implemented: these operations never succeed.
+    - '#/paths/~1anthropic~1v1~1messages~1batches/get/responses'
+    - '#/paths/~1anthropic~1v1~1messages~1batches/post/responses'
+    - '#/paths/~1anthropic~1v1~1messages~1batches~1{batchId}/get/responses'
+  no-unused-components:
+    # The 404 for an unmatched route: OpenAPI has no catch-all path to attach it to. The
+    # conformance tests check responses against it directly.
+    - '#/components/responses/NoRoute'

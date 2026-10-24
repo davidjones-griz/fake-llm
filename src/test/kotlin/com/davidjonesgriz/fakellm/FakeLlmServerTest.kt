@@ -620,7 +620,7 @@ class FakeLlmServerTest {
     @Test
     fun `loading a scenario requires exactly one of name or scenario`() {
         val inline = """{"name":"inline","rules":[{"role":"r","respond":[{"text":"t"}]}]}"""
-        withServer { client, _ ->
+        withServer { client, engine ->
             val both = client.post("/control/scenario", """{"name":"hello","scenario":$inline}""")
             assertEquals(400, both.statusCode())
             assertContains(errorDetail(both.body()), "exactly one")
@@ -640,7 +640,105 @@ class FakeLlmServerTest {
             val scenarioNotObject = client.post("/control/scenario", """{"scenario":"hello"}""")
             assertEquals(400, scenarioNotObject.statusCode())
             assertContains(errorDetail(scenarioNotObject.body()), "JSON object")
+
+            val extraField = client.post("/control/scenario", """{"name":"hello","extra":1}""")
+            assertEquals(400, extraField.statusCode())
+            assertContains(errorDetail(extraField.body()), "unknown field(s) [extra]")
+            assertEquals(null, engine.currentScenarioName(), "a rejected body loads nothing")
         }
+    }
+
+    @Test
+    fun `an inline scenario with an invalid systemShape or error status is rejected`() {
+        withServer { client, engine ->
+            val badShape = """{"scenario":{"name":"s","rules":[{"role":"r","match":{"systemShape":"Blocks"},"respond":[{"text":"t"}]}]}}"""
+            val shape = client.post("/control/scenario", badShape)
+            assertEquals(400, shape.statusCode(), shape.body())
+            assertContains(errorDetail(shape.body()), "systemShape")
+
+            val badStatus = """{"scenario":{"name":"s","rules":[{"role":"r","respond":[{"error":{"status":42}}]}]}}"""
+            val status = client.post("/control/scenario", badStatus)
+            assertEquals(400, status.statusCode(), status.body())
+            assertContains(errorDetail(status.body()), "HTTP status")
+            assertEquals(null, engine.currentScenarioName())
+        }
+    }
+
+    @Test
+    fun `a scripted content-type header replaces the default instead of adding a second one`() {
+        withServer { client, engine ->
+            engine.loadInline(
+                Scenario(
+                    name = "html-error",
+                    rules =
+                        listOf(
+                            Rule(
+                                role = "r",
+                                respond =
+                                    listOf(
+                                        Step(
+                                            error =
+                                                ErrorStep(
+                                                    503,
+                                                    "<p>down</p>",
+                                                    mapOf("content-type" to "text/html"),
+                                                ),
+                                        ),
+                                    ),
+                            ),
+                        ),
+                ),
+            )
+            val resp = client.post("/anthropic/v1/messages", anthropicBody("hi"))
+            assertEquals(503, resp.statusCode())
+            assertEquals(listOf("text/html"), resp.headers().allValues("content-type"))
+        }
+    }
+
+    @Test
+    fun `scripted headers other than content-type are added as given`() {
+        withServer { client, engine ->
+            val headers = mapOf("X-Retry-Hint" to "1", "x-retry-hint" to "2")
+            engine.loadInline(
+                Scenario(name = "h", rules = listOf(Rule(role = "r", respond = listOf(Step(error = ErrorStep(429, "{}", headers)))))),
+            )
+            val resp = client.post("/anthropic/v1/messages", anthropicBody("hi"))
+            assertEquals(listOf("1", "2"), resp.headers().allValues("x-retry-hint").sorted())
+            assertEquals(listOf("application/json"), resp.headers().allValues("content-type"))
+        }
+    }
+
+    @Test
+    fun `the gemini and batches routes match their documented paths exactly`() {
+        withServer { client, _ ->
+            val body = """{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}"""
+            assertEquals(400, client.post("/gemini/v1beta/models/m:generateContent", body).statusCode(), "the documented path, unmatched")
+            assertEquals(404, client.post("/gemini/m:generateContent", body).statusCode())
+            assertEquals(404, client.post("/gemini/v1beta/models/m:generateContentXYZ", body).statusCode())
+            assertEquals(404, client.post("/gemini/v1beta/models/m/extra:generateContent", body).statusCode())
+            assertEquals(501, client.get("/anthropic/v1/messages/batches/abc/results").statusCode())
+            assertEquals(404, client.get("/anthropic/v1/messages/batchesXYZ").statusCode())
+        }
+    }
+
+    @Test
+    fun `the OpenAPI document is served as YAML, byte for byte`() {
+        withServer { client, _ ->
+            val resp = client.get("/openapi")
+            assertEquals(200, resp.statusCode())
+            assertEquals(listOf("application/yaml"), resp.headers().allValues("content-type"))
+            // Gradle runs tests from the project directory, where the source of the bundled copy lives.
+            assertEquals(java.io.File("openapi/fake-llm.yaml").readText(), resp.body())
+        }
+    }
+
+    @Test
+    fun `a build without the OpenAPI document answers 500 instead of failing the request oddly`() {
+        val (status, contentType, body) = openApiResponse(null)
+        assertEquals(500, status)
+        assertEquals("application/json", contentType)
+        assertContains(body, "not bundled")
+        assertEquals(Triple(200, "application/yaml", "spec"), openApiResponse("spec"))
     }
 
     @Test
@@ -696,6 +794,7 @@ class FakeLlmServerTest {
             responses.forEach { resp ->
                 assertEquals(401, resp.statusCode(), resp.body())
                 assertContains(resp.body(), "unauthorized")
+                assertEquals(listOf("Bearer"), resp.headers().allValues("www-authenticate"))
             }
         }
     }

@@ -1,0 +1,698 @@
+openapi: 3.1.0
+info:
+  title: fake-llm
+  version: 0.1.0
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  description: |
+    The HTTP API of fake-llm, a scenario-driven local stand-in for the Anthropic, OpenAI and
+    Gemini HTTP APIs. This document is the contract for the control API, `/health` and
+    `/openapi`: the server and its tests are checked against it. The vendor-compatible routes are
+    listed, and link to each provider's own API reference instead of re-specifying it.
+
+    **Routing.** Paths match exactly: the query string is ignored, a trailing slash is a different
+    path, and a known path with another method is HTTP 404 (not 405). `HEAD` and `OPTIONS` are not
+    supported. Any request that matches no route gets the `NoRoute` response (404).
+
+    **Control token.** When the server is started with `FAKE_LLM_CONTROL_TOKEN` set to a
+    non-blank value, every path under `/control/` requires an `Authorization` header whose value
+    is exactly `Bearer <token>` (compared byte for byte, so the scheme name is case-sensitive),
+    and a request without it gets HTTP 401 before any routing, so even an unknown `/control/`
+    path answers 401. Without a token configured, the control routes are open.
+
+    **Compatibility.** Clients should ignore response fields they do not know: a later version
+    may add fields. Request bodies are strict: unknown fields are rejected. Human-readable
+    messages (`fake_llm_error` texts other than `"exception"` and `"unmatched request"`, and
+    `detail`) are diagnostics, not part of the contract. Integers are written as JSON integers,
+    without a fraction or exponent: `24.0` is rejected where an integer is expected.
+
+    **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
+    cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.
+servers:
+  - url: http://localhost:8080
+    description: The default port of the command-line server and the Docker image.
+tags:
+  - name: health
+    description: Liveness and the loaded scenario.
+  - name: control
+    description: Load scenarios, reset state and read the call log.
+  - name: vendor
+    description: Stand-ins for the providers' HTTP APIs, driven by the loaded scenario.
+paths:
+  /health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Report liveness, the loaded scenario and lenient mode
+      security: []
+      responses:
+        "200":
+          description: The server is up.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /openapi:
+    get:
+      tags: [health]
+      operationId: getOpenApi
+      summary: This document, as served by the running version
+      security: []
+      responses:
+        "200":
+          description: The OpenAPI document, byte for byte as in the repository.
+          content:
+            application/yaml:
+              schema:
+                type: string
+        "500":
+          description: The server was built without the document (a packaging fault).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageError"
+  /control/scenario:
+    post:
+      tags: [control]
+      operationId: loadScenario
+      summary: Load a scenario by name or inline
+      description: |
+        Replaces the loaded scenario and clears the call log and the occurrence counters. A
+        name is looked up as `<name>.json` in the server's scenario directory, when one is set,
+        and then as the classpath resource `/scenarios/<name>.json`; the file's declared `name`
+        must equal the file name.
+      security:
+        - controlToken: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoadRequest"
+      responses:
+        "200":
+          description: The scenario is loaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoadResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /control/scenarios:
+    get:
+      tags: [control]
+      operationId: listScenarios
+      summary: List the scenario names the server can load
+      description: |
+        The bundled names, merged with the `*.json` names in the server's scenario directory when
+        one is set; deduplicated and sorted.
+      security:
+        - controlToken: []
+        - {}
+      responses:
+        "200":
+          description: The names.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioNames"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /control/reset:
+    post:
+      tags: [control]
+      operationId: resetState
+      summary: Clear the call log and occurrence counters, keeping the scenario
+      description: The request body is ignored. Sequence numbers are not restarted.
+      security:
+        - controlToken: []
+        - {}
+      responses:
+        "200":
+          description: The state is reset.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /control/calls:
+    get:
+      tags: [control]
+      operationId: listCalls
+      summary: Read the call log, oldest first
+      security:
+        - controlToken: []
+        - {}
+      responses:
+        "200":
+          description: The calls served since the last load or reset.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CallRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /anthropic/v1/messages:
+    post:
+      tags: [vendor]
+      operationId: createAnthropicMessage
+      summary: Anthropic Messages API stand-in
+      description: |
+        Request and success response follow the Anthropic Messages API
+        (https://docs.anthropic.com/en/api/messages), including server-sent events when the
+        request sets `"stream": true`. A step's scripted error can return any status and body.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A reply in the Anthropic Messages format, or an SSE stream.
+          content:
+            application/json:
+              schema:
+                type: object
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/VendorBadRequest"
+        default:
+          $ref: "#/components/responses/ScriptedError"
+  /anthropic/v1/messages/batches:
+    get:
+      tags: [vendor]
+      operationId: listAnthropicMessageBatches
+      summary: Anthropic Message Batches API (not implemented)
+      description: Every method and subpath under this prefix answers 501.
+      security: []
+      responses:
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+    post:
+      tags: [vendor]
+      operationId: createAnthropicMessageBatch
+      summary: Anthropic Message Batches API (not implemented)
+      description: Every method and subpath under this prefix answers 501.
+      security: []
+      responses:
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /anthropic/v1/messages/batches/{batchId}:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [vendor]
+      operationId: getAnthropicMessageBatch
+      summary: Anthropic Message Batches API (not implemented)
+      description: |
+        Every method and subpath under `/anthropic/v1/messages/batches` answers 501, including
+        deeper paths such as `/results`, which OpenAPI cannot express.
+      security: []
+      responses:
+        "501":
+          $ref: "#/components/responses/NotImplemented"
+  /openai/v1/chat/completions:
+    post:
+      tags: [vendor]
+      operationId: createOpenAiChatCompletion
+      summary: OpenAI Chat Completions API stand-in
+      description: |
+        Request and success response follow the OpenAI Chat Completions API
+        (https://platform.openai.com/docs/api-reference/chat). Streaming is not supported. A
+        step's scripted error can return any status and body.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A reply in the OpenAI Chat Completions format.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/VendorBadRequest"
+        default:
+          $ref: "#/components/responses/ScriptedError"
+  /gemini/{version}/models/{model}:generateContent:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The API version segment, such as `v1beta`.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: generateGeminiContent
+      summary: Gemini generateContent API stand-in
+      description: |
+        Request and success response follow the Gemini `generateContent` API
+        (https://ai.google.dev/api/generate-content). A step's scripted error can return any
+        status and body.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A reply in the Gemini generateContent format.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/VendorBadRequest"
+        default:
+          $ref: "#/components/responses/ScriptedError"
+components:
+  securitySchemes:
+    controlToken:
+      type: http
+      scheme: bearer
+      description: |
+        Enforced only when the server is started with `FAKE_LLM_CONTROL_TOKEN` set; otherwise
+        the control routes are open.
+  headers:
+    WWW-Authenticate:
+      description: The authentication scheme the control routes accept.
+      schema:
+        type: string
+        const: Bearer
+  responses:
+    BadRequest:
+      description: |
+        The request could not be handled: a body that is not valid JSON or does not match the
+        request schema, or a scenario that cannot be found or decoded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ExceptionError"
+    Unauthorized:
+      description: A control token is configured and the request did not carry it.
+      headers:
+        WWW-Authenticate:
+          $ref: "#/components/headers/WWW-Authenticate"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MessageError"
+    NotImplemented:
+      description: The route exists in the provider's API but is not implemented here.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MessageError"
+    NoRoute:
+      description: |
+        No route matches the method and path. OpenAPI has no catch-all path, so this response is
+        not attached to an operation; see the routing rules in the description above.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MessageError"
+    VendorBadRequest:
+      description: |
+        fake-llm's own 400s, not the provider's. In strict mode (the default), a request that no
+        rule of the loaded scenario matches, or any request when no scenario is loaded, gets
+        `UnmatchedRequestError`. A request body that is not valid JSON, or lacks the `messages`
+        (Anthropic, OpenAI) or `contents` (Gemini) array, gets `ExceptionError`. A step's scripted
+        error is outside these schemas, even when its status is 400: see `ScriptedError`.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: "#/components/schemas/UnmatchedRequestError"
+              - $ref: "#/components/schemas/ExceptionError"
+    ScriptedError:
+      description: |
+        A step's scripted error, sent exactly as the scenario scripts it: any status from 100 to
+        599, the scripted body, and the scripted headers. A scripted `content-type` replaces the
+        default `application/json`. Its body is not described here.
+  schemas:
+    Health:
+      type: object
+      required: [status, scenario, lenient]
+      properties:
+        status:
+          type: string
+          const: ok
+        scenario:
+          type: [string, "null"]
+          description: The loaded scenario's name, or null when none is loaded.
+        lenient:
+          type: boolean
+          description: Whether an unmatched request gets the canned reply instead of HTTP 400.
+    LoadRequest:
+      description: Exactly one of `name` or `scenario`.
+      oneOf:
+        - type: object
+          title: By name
+          required: [name]
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+              pattern: "^[A-Za-z0-9_-]+$"
+              description: A scenario name, looked up as described for the operation.
+        - type: object
+          title: Inline
+          required: [scenario]
+          additionalProperties: false
+          properties:
+            scenario:
+              $ref: "#/components/schemas/Scenario"
+    LoadResult:
+      type: object
+      required: [loaded, rules]
+      properties:
+        loaded:
+          type: string
+          description: The loaded scenario's name.
+        rules:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: How many rules it has.
+    ScenarioNames:
+      type: object
+      required: [scenarios]
+      properties:
+        scenarios:
+          type: array
+          items:
+            type: string
+    ResetResult:
+      type: object
+      required: [reset]
+      properties:
+        reset:
+          type: boolean
+          const: true
+    CallRecord:
+      type: object
+      description: One request the server served.
+      required:
+        - seq
+        - vendor
+        - model
+        - systemShape
+        - messageCount
+        - role
+        - occurrence
+        - outcome
+        - timestampMs
+        - promptSample
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+          maximum: 9223372036854775807
+          description: Sequence number, increasing across loads and resets.
+        vendor:
+          type: string
+          enum: [anthropic, openai, gemini]
+        model:
+          type: string
+        systemShape:
+          $ref: "#/components/schemas/RequestSystemShape"
+        messageCount:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          description: The length of the request's `messages` (Anthropic, OpenAI) or `contents` (Gemini) array.
+        role:
+          type: string
+          description: |
+            The matched rule's `role`, `DEFAULT` when lenient mode served the canned reply, or
+            `UNMATCHED` when strict mode rejected the request.
+        occurrence:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          description: |
+            1-based count of the calls the matched rule (or the lenient canned reply) has served;
+            0 for an unmatched request.
+        outcome:
+          type: string
+          pattern: "^(text|default|unmatched|error:[1-5][0-9]{2})$"
+          description: "`text`, `error:<status>` (a scripted error), `default` (the lenient canned reply) or `unmatched`."
+        timestampMs:
+          type: integer
+          minimum: 0
+          maximum: 9223372036854775807
+          description: Wall-clock time the call was recorded, in milliseconds since the epoch.
+        promptSample:
+          type: string
+          description: The last 500 UTF-16 code units of the combined prompt text (see `promptContainsAll`).
+    RequestSystemShape:
+      type: string
+      enum: [blocks, string, absent, unknown]
+      description: |
+        The shape of the request's system prompt. Anthropic: `absent` when `system` is missing,
+        `string` when it is a JSON string (or another scalar, including `null`; see issue #68),
+        `blocks` when it is an array, `unknown` when it is an object. OpenAI: `blocks` when a
+        message has role `system`, else `absent`. Gemini: always `absent` (`systemInstruction`
+        is not read).
+    MessageError:
+      type: object
+      required: [fake_llm_error]
+      properties:
+        fake_llm_error:
+          type: string
+          description: A human-readable explanation; not part of the contract.
+    ExceptionError:
+      type: object
+      required: [fake_llm_error, detail]
+      properties:
+        fake_llm_error:
+          type: string
+          const: exception
+        detail:
+          type: [string, "null"]
+          description: A human-readable explanation; not part of the contract.
+    UnmatchedRequestError:
+      type: object
+      required:
+        - fake_llm_error
+        - why
+        - vendor
+        - model
+        - system_shape
+        - message_count
+        - caller
+        - prompt_preview
+      properties:
+        fake_llm_error:
+          type: string
+          const: unmatched request
+        why:
+          type: string
+          description: Why nothing matched; not part of the contract.
+        vendor:
+          type: string
+          enum: [anthropic, openai, gemini]
+        model:
+          type: string
+        system_shape:
+          $ref: "#/components/schemas/RequestSystemShape"
+        message_count:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+        caller:
+          type: [string, "null"]
+          description: The `X-Fake-LLM-Caller` request header, or null when absent.
+        prompt_preview:
+          type: string
+          description: The first 200 UTF-16 code units of the combined prompt text.
+    Scenario:
+      type: object
+      description: |
+        One named behaviour: an ordered list of rules. The first rule whose `match` accepts a
+        request wins. Each match takes the rule's next `respond` step, and the last step repeats
+        once the list runs out.
+      required: [name, rules]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          default: ""
+        rules:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Rule"
+    Rule:
+      type: object
+      required: [role, respond]
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+          description: Free-form label recorded in the call log for each request this rule serves.
+        match:
+          $ref: "#/components/schemas/Match"
+        respond:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Step"
+    Match:
+      type: object
+      description: |
+        Every predicate that is set must hold (AND). An empty match accepts every request, so
+        order rules accordingly.
+      additionalProperties: false
+      properties:
+        modelContains:
+          type: [string, "null"]
+          description: |
+            A case-sensitive substring of the request's model: the body's `model` (Anthropic,
+            OpenAI; empty when absent), or the `{model}` path segment (Gemini).
+        promptContainsAll:
+          type: array
+          items:
+            type: string
+          description: |
+            Every entry must appear (case-sensitive substring) in the combined prompt text: each
+            text piece of the request, in order, each followed by a newline. Anthropic: `system`
+            when it is a string or an array of text blocks, then each message `content` that is a
+            string or an array of text blocks (other blocks contribute nothing). OpenAI: each
+            message `content` that is a JSON string, including a system message (array content
+            is skipped). Gemini: each `contents[].parts[].text`.
+        promptContainsAny:
+          type: array
+          items:
+            type: string
+          description: |
+            When non-empty, at least one entry must appear in the combined prompt text (see
+            `promptContainsAll`).
+        systemShape:
+          type: [string, "null"]
+          enum: [blocks, string, absent, null]
+          description: |
+            Exact match on the request's system-prompt shape (see `RequestSystemShape`). A rule
+            cannot target `unknown`.
+        caller:
+          type: [string, "null"]
+          description: |
+            Exact match on the request's `X-Fake-LLM-Caller` header. A request without the header
+            does not match a rule that sets `caller`.
+    Step:
+      type: object
+      description: |
+        One scripted reply: assistant `text` (optionally with `thinking`), or a scripted `error`.
+        Exactly one of `text` and `error` is set (and not null).
+      additionalProperties: false
+      oneOf:
+        - required: [text]
+          properties:
+            text:
+              type: string
+        - required: [error]
+          properties:
+            error:
+              type: object
+      allOf:
+        - if:
+            required: [thinking]
+            properties:
+              thinking:
+                type: string
+          then:
+            required: [text]
+            properties:
+              text:
+                type: string
+        - if:
+            required: [streamErrorAfterChunks]
+            properties:
+              streamErrorAfterChunks:
+                type: integer
+          then:
+            required: [error]
+            properties:
+              error:
+                type: object
+      properties:
+        text:
+          type: [string, "null"]
+        thinking:
+          type: [string, "null"]
+          description: An Anthropic thinking block, before the text. Only on a text step.
+        stopReason:
+          type: string
+          default: end_turn
+          description: The `stop_reason` of a text step; `max_tokens` reports a truncated reply.
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/ErrorStep"
+            - type: "null"
+        streamChunkChars:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          default: 24
+          description: Size of each streamed delta, in Unicode code points.
+        streamInterChunkDelayMs:
+          type: integer
+          minimum: 0
+          maximum: 9223372036854775807
+          default: 0
+          description: Milliseconds to wait between streamed deltas.
+        streamErrorAfterChunks:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 2147483647
+          description: |
+            Only on an error step, and only when streamed: send this many text deltas, then an
+            in-stream error event.
+    ErrorStep:
+      type: object
+      description: A scripted HTTP error in place of a text reply.
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        body:
+          type: string
+          default: ""
+          description: The response body, sent as given.
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Extra response headers, such as `retry-after`, sent as given.

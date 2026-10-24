@@ -1,0 +1,9 @@
+# Redocly CLI configuration: CI's lint job validates openapi/fake-llm.yaml with it (see "Quality
+# gates" in README.md). recommended-strict makes every finding an error. Exceptions for single
+# locations are in .redocly.lint-ignore.yaml, each with its reason.
+extends:
+  - recommended-strict
+rules:
+  # fake-llm is a local test stand-in: http://localhost:8080 is its real default address.
+  no-server-example.com: off
+telemetry: off
