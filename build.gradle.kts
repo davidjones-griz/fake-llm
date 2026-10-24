@@ -6,8 +6,10 @@ plugins {
     application
     `maven-publish`
     id("com.gradleup.shadow") version "9.6.1"
-    // Writes the public API to api/fake-llm.api; `check` fails when the code drifts from it.
-    // The Kotlin Gradle plugin now has ABI validation of its own; whether to move to it is #53.
+    // Writes each module's public API to its api/*.api file; `check` fails when the code drifts from it.
+    // Kept over the Kotlin Gradle plugin's own ABI validation, which in Kotlin 2.4 still needs an
+    // explicit opt-in (@ExperimentalAbiValidation) and whose DSL is still changing (2.4 removed
+    // several earlier parts). Revisit when a Kotlin release makes it stable (#53).
     id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.18.2"
     // Measures test coverage of src/main; `check` fails when it drops below the floors set further down.
     id("org.jetbrains.kotlinx.kover") version "0.9.11"
