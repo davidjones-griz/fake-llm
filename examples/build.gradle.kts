@@ -41,6 +41,17 @@ tasks.test {
     useJUnitPlatform()
 }
 
+// -PtestJavaVersion=<major> runs the tests on that Java version, while the code is still
+// compiled for Java 21. A copy of the block in the root build.gradle.kts (examples/ is a
+// separate build); keep the two in sync.
+providers.gradleProperty("testJavaVersion").orNull?.let { value ->
+    val testJava = value.toIntOrNull() ?: error("testJavaVersion must be a Java major version, e.g. 25")
+    tasks.withType<Test>().configureEach {
+        javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(testJava)) })
+        doFirst { logger.lifecycle("$path runs on Java ${javaLauncher.get().metadata.javaRuntimeVersion}") }
+    }
+}
+
 ktlint {
     version.set(rootProperties.getProperty("ktlintVersion"))
 }

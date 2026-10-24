@@ -111,7 +111,7 @@ publishing {
                 name.set("fake-llm-junit-jupiter")
                 description.set(
                     "JUnit Jupiter extension for fake-llm: a per-class server, a scenario per test, and " +
-                        "the server injected into tests.",
+                        "the server injected into tests. Requires Java 21 or newer.",
                 )
             }
         }

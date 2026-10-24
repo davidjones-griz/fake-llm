@@ -86,7 +86,7 @@ publishing {
                 name.set("fake-llm")
                 description.set(
                     "Scenario-driven local stand-in for the Anthropic, OpenAI and Gemini HTTP APIs, " +
-                        "for testing LLM-calling code without real model calls.",
+                        "for testing LLM-calling code without real model calls. Requires Java 21 or newer.",
                 )
             }
         }
@@ -96,6 +96,16 @@ publishing {
 // Every published module (this one and junit-jupiter/) shares the POM metadata below and the
 // build-local repository that examples/ and CI read.
 allprojects {
+    // -PtestJavaVersion=<major> runs every Test task on that Java version, while the code is still
+    // compiled for Java 21; CI's java25 job uses it to test on the current LTS.
+    providers.gradleProperty("testJavaVersion").orNull?.let { value ->
+        val testJava = value.toIntOrNull() ?: error("testJavaVersion must be a Java major version, e.g. 25")
+        tasks.withType<Test>().configureEach {
+            javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(testJava)) })
+            doFirst { logger.lifecycle("$path runs on Java ${javaLauncher.get().metadata.javaRuntimeVersion}") }
+        }
+    }
+
     pluginManager.withPlugin("maven-publish") {
         configure<PublishingExtension> {
             publications.withType<MavenPublication>().configureEach {
