@@ -1,0 +1,660 @@
+package com.davidjonesgriz.fakellm
+
+import com.networknt.schema.SchemaLocation
+import com.networknt.schema.SchemaRegistry
+import com.networknt.schema.dialect.Dialects
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.json.JsonMapper
+import tools.jackson.databind.node.ObjectNode
+import tools.jackson.dataformat.yaml.YAMLMapper
+import java.io.File
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFails
+import kotlin.test.assertTrue
+
+/**
+ * Checks the server against openapi/fake-llm.yaml, the hand-written contract. Each exchange in
+ * [exchanges] runs against a real server: its status must be documented for the operation, its
+ * Content-Type and documented headers must match, and its body must validate against the
+ * documented schema. Response schemas are checked strictly (undocumented fields fail), though the
+ * spec itself leaves them open for clients. Request bodies are validated too, and must be valid
+ * exactly when the exchange says so. Every documented status of /health, /openapi and the control
+ * routes must be exercised.
+ */
+class OpenApiConformanceTest {
+    @Test
+    fun `every exchange conforms to the spec, and every documented control status is exercised`() {
+        val exercised = mutableSetOf<Triple<String, String, String>>()
+        val failures =
+            exchanges.mapNotNull { exchange ->
+                runCatching { exercised += check(exchange) }.exceptionOrNull()?.let { "${exchange.name}: ${it.message}" }
+            }
+        assertTrue(failures.isEmpty(), failures.joinToString("\n"))
+
+        val documented =
+            spec.path("paths").properties().flatMap { (path, item) ->
+                item.properties().filter { (method, _) -> method in HTTP_METHODS }.flatMap { (method, operation) ->
+                    operation.path("responses").propertyNames().map { status -> Triple(path, method, status) }
+                }
+            }
+        val mustCover = documented.filter { (path) -> path == "/health" || path == "/openapi" || path.startsWith("/control/") }
+        assertEquals(emptyList(), mustCover - exercised, "documented but never exercised")
+    }
+
+    @Test
+    fun `validation is not vacuous`() {
+        // A response body with an undocumented field must fail the strict check, and a request body
+        // the server rejects must fail the request schema.
+        val health = "#/paths/~1health/get/responses/200/content/application~1json/schema"
+        assertEquals(emptyList(), validate(health, """{"status":"ok","scenario":null,"lenient":false}"""))
+        assertTrue(validate(health, """{"status":"ok","scenario":null,"lenient":false,"extra":1}""").isNotEmpty())
+        val load = "#/paths/~1control~1scenario/post/requestBody/content/application~1json/schema"
+        assertEquals(emptyList(), validate(load, """{"name":"hello"}"""))
+        assertTrue(validate(load, """{"name":"hello","extra":1}""").isNotEmpty())
+    }
+
+    @Test
+    fun `strictness is injected only into response schemas, never into the request and scenario schemas`() {
+        assertEquals(emptySet(), strictSchemas intersect REQUEST_SCHEMAS.map { "#/components/schemas/$it" }.toSet())
+        assertTrue("#/components/schemas/CallRecord" in strictSchemas, "$strictSchemas")
+    }
+
+    @Test
+    fun `every scenario file in the repository conforms to the Scenario schema`() {
+        val files =
+            listOf(
+                "src/main/resources/scenarios",
+                "examples/src/test/resources/scenarios",
+                "examples/src/test/scenarios",
+                "junit-jupiter/src/test/fixture-scenarios",
+            ).flatMap { dir -> File(dir).listFiles { f -> f.extension == "json" }.orEmpty().toList() }
+        assertTrue(files.size >= MIN_SCENARIO_FILES, "found only ${files.map { it.path }}")
+        files.forEach { file ->
+            assertEquals(emptyList(), validate(SCENARIO, file.readText()), file.path)
+        }
+    }
+
+    @Test
+    fun `the Scenario schema and the server's decoder reject the same invalid scenarios`() {
+        invalidScenarios.forEach { (why, body) ->
+            assertTrue(validate(SCENARIO, body).isNotEmpty(), "schema accepted: $why")
+            assertFails("decoder accepted: $why") {
+                ScenarioLoader.decode(
+                    kotlinx.serialization.json.Json
+                        .parseToJsonElement(body),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `the Scenario schema and the server's decoder both accept explicit nulls`() {
+        val withNulls =
+            """{"name":"nulls","rules":[
+              {"role":"a","match":{"modelContains":null,"systemShape":null,"caller":null},
+               "respond":[{"text":null,"thinking":null,"error":{"status":500}}]},
+              {"role":"b","respond":[{"text":"t","error":null,"streamErrorAfterChunks":null}]}
+            ]}"""
+        assertEquals(emptyList(), validate(SCENARIO, withNulls))
+        ScenarioLoader.decode(
+            kotlinx.serialization.json.Json
+                .parseToJsonElement(withNulls),
+        )
+    }
+
+    @Test
+    fun `the spec's version is the build's version`() {
+        val version = File("gradle.properties").readLines().first { it.startsWith("version=") }.removePrefix("version=")
+        assertEquals(version, spec.path("info").path("version").asString())
+    }
+
+    /** Runs [exchange] and checks it against the spec; returns the (path, method, status) it exercised. */
+    private fun check(exchange: Exchange): Triple<String, String, String> {
+        val engine = ScenarioEngine(lenient = exchange.lenient)
+        startFakeLlmServer(port = 0, engine = engine, controlToken = exchange.serverToken).use { server ->
+            exchange.setup(server)
+            val response = send(server, exchange.method, exchange.path, exchange.body, exchange.authorization)
+            val status = response.statusCode().toString()
+            val responsePointer =
+                when (val target = exchange.target) {
+                    is Target.Operation -> {
+                        val operation = operationPointer(target.path, exchange.method)
+                        check(!spec.atRef(operation).isMissingNode) { "no operation ${exchange.method} ${target.path} in the spec" }
+                        checkRequest(exchange, operation)
+                        val pointer = "$operation/responses/$status"
+                        check(!spec.atRef(pointer).isMissingNode) {
+                            "status $status is not documented for ${exchange.method} ${target.path} (body ${response.body()})"
+                        }
+                        pointer
+                    }
+
+                    is Target.Response -> {
+                        assertEquals(target.status, status, response.body())
+                        "#/components/responses/${target.name}"
+                    }
+                }
+            checkResponse(resolve(responsePointer), response)
+            exchange.expectStatus?.let { assertEquals(it, response.statusCode(), response.body()) }
+            exchange.assertBody(response.body())
+            val path = (exchange.target as? Target.Operation)?.path ?: "#/components/responses/${(exchange.target as Target.Response).name}"
+            return Triple(path, exchange.method.lowercase(), status)
+        }
+    }
+
+    private fun checkRequest(
+        exchange: Exchange,
+        operation: String,
+    ) {
+        val schema = "$operation/requestBody/content/application~1json/schema"
+        if (exchange.body == null || spec.atRef(schema).isMissingNode) return
+        val valid = runCatching { validate(schema, exchange.body) }.getOrNull()?.isEmpty() ?: false
+        assertEquals(exchange.requestValid, valid, "request body validity against the spec: ${exchange.body}")
+    }
+
+    private fun checkResponse(
+        responsePointer: String,
+        response: HttpResponse<String>,
+    ) {
+        val documented = spec.atRef(responsePointer)
+        documented.path("headers").properties().forEach { (name, header) ->
+            val values = response.headers().allValues(name)
+            assertEquals(1, values.size, "header $name: $values")
+            val headerSchema = resolve(pointerOf(header) ?: "$responsePointer/headers/${escape(name)}") + "/schema"
+            assertEquals(emptyList(), validate(headerSchema, json.writeValueAsString(values.single())), "header $name")
+        }
+        val media = documented.path("content").propertyNames().toList()
+        if (media.isEmpty()) return
+        val contentTypes = response.headers().allValues("content-type")
+        assertEquals(1, contentTypes.size, "Content-Type: $contentTypes")
+        val mediaType = contentTypes.single()
+        assertTrue(mediaType in media, "Content-Type $mediaType is not documented ($media)")
+        val schema = "$responsePointer/content/${escape(mediaType)}/schema"
+        val body = if (mediaType == "application/json") response.body() else json.writeValueAsString(response.body())
+        assertEquals(emptyList(), validate(schema, body), "response body ${response.body()}")
+    }
+
+    private sealed interface Target {
+        /** An operation in `paths`, by its path template. */
+        data class Operation(
+            val path: String,
+        ) : Target
+
+        /** A reusable response under `components.responses`, for routes no operation describes. */
+        data class Response(
+            val name: String,
+            val status: String,
+        ) : Target
+    }
+
+    private data class Exchange(
+        val name: String,
+        val method: String,
+        val path: String,
+        val target: Target,
+        val body: String? = null,
+        /** Whether [body] should validate against the operation's request schema. */
+        val requestValid: Boolean = true,
+        val authorization: String? = null,
+        val serverToken: String? = null,
+        val lenient: Boolean = false,
+        val expectStatus: Int? = null,
+        val setup: (FakeLlmServer) -> Unit = {},
+        val assertBody: (String) -> Unit = {},
+    )
+
+    private companion object {
+        const val BASE = "https://fake-llm.invalid/openapi.json"
+        const val SCENARIO = "#/components/schemas/Scenario"
+        const val TOKEN = "spec-token"
+        const val MIN_SCENARIO_FILES = 12
+        val HTTP_METHODS = setOf("get", "put", "post", "delete", "options", "head", "patch", "trace")
+        val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Rule", "Match", "Step", "ErrorStep")
+
+        val json: JsonMapper = JsonMapper.builder().build()
+        val specFile = File("openapi/fake-llm.yaml")
+        val spec: JsonNode = YAMLMapper.builder().build().readTree(specFile.readText())
+
+        /** JSON pointers of the object schemas made strict for response checking. */
+        val strictSchemas = mutableSetOf<String>()
+        val strictSpec: JsonNode = spec.deepCopy().also { tree -> injectStrictness(tree) }
+        val registry: SchemaRegistry =
+            SchemaRegistry.withDefaultDialect(Dialects.getOpenApi31()) { it.schemas(mapOf(BASE to strictSpec.toString())) }
+
+        fun validate(
+            pointer: String,
+            body: String,
+        ): List<String> =
+            registry.getSchema(SchemaLocation.of("$BASE$pointer")).validate(json.readTree(body)).map {
+                "${it.instanceLocation} ${it.message}"
+            }
+
+        fun escape(token: String): String = token.replace("~", "~0").replace("/", "~1")
+
+        fun operationPointer(
+            path: String,
+            method: String,
+        ): String = "#/paths/${escape(path)}/${method.lowercase()}"
+
+        fun pointerOf(node: JsonNode): String? = node.path("\$ref").takeIf { it.isString }?.asString()
+
+        /** Follows a chain of `$ref`s from [pointer] to the node it finally names. */
+        fun resolve(pointer: String): String {
+            var current = pointer
+            while (true) current = pointerOf(spec.atRef(current)) ?: return current
+        }
+
+        fun JsonNode.atRef(pointer: String): JsonNode = this.at(pointer.removePrefix("#"))
+
+        /**
+         * Adds `unevaluatedProperties: false` to every schema with `properties` reachable from a documented
+         * response, following `$ref`s. Request schemas are never reachable from a response, which
+         * [strictSchemas] lets a test assert.
+         */
+        fun injectStrictness(tree: JsonNode) {
+            val roots = mutableListOf<String>()
+            tree.path("paths").properties().forEach { (path, item) ->
+                item.properties().filter { (method, _) -> method in HTTP_METHODS }.forEach { (method, operation) ->
+                    operation.path("responses").propertyNames().forEach { status ->
+                        roots += "#/paths/${escape(path)}/$method/responses/$status"
+                    }
+                }
+            }
+            tree
+                .path("components")
+                .path("responses")
+                .propertyNames()
+                .forEach { roots += "#/components/responses/$it" }
+            val visited = mutableSetOf<String>()
+            roots.forEach { root ->
+                val response = resolveIn(tree, root)
+                tree.atRef(response).path("content").propertyNames().forEach { media ->
+                    walk(tree, "$response/content/${escape(media)}/schema", visited)
+                }
+            }
+        }
+
+        fun resolveIn(
+            tree: JsonNode,
+            pointer: String,
+        ): String {
+            var current = pointer
+            while (true) current = pointerOf(tree.atRef(current)) ?: return current
+        }
+
+        fun walk(
+            tree: JsonNode,
+            pointer: String,
+            visited: MutableSet<String>,
+        ) {
+            val target = resolveIn(tree, pointer)
+            if (!visited.add(target)) return
+            val node = tree.atRef(target) as? ObjectNode ?: return
+            // Only schemas that document their properties: a bare `type: object` (a vendor body that
+            // follows the provider's API) stays free-form.
+            if (node.has("properties") && !node.has("unevaluatedProperties")) {
+                node.put("unevaluatedProperties", false)
+                strictSchemas += target
+            }
+            node.path("properties").propertyNames().forEach { walk(tree, "$target/properties/${escape(it)}", visited) }
+            if (node.has("items")) walk(tree, "$target/items", visited)
+            listOf("oneOf", "anyOf", "allOf").forEach { key ->
+                node.path(key).values().forEachIndexed { i, _ -> walk(tree, "$target/$key/$i", visited) }
+            }
+        }
+
+        val http: HttpClient =
+            HttpClient
+                .newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(5))
+                .build()
+
+        fun send(
+            server: FakeLlmServer,
+            method: String,
+            path: String,
+            body: String?,
+            authorization: String?,
+        ): HttpResponse<String> {
+            val publisher = body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody()
+            val request = HttpRequest.newBuilder(URI("${server.baseUrl}$path")).method(method, publisher).timeout(Duration.ofSeconds(15))
+            if (body != null) request.header("content-type", "application/json")
+            authorization?.let { request.header("authorization", it) }
+            return http.send(request.build(), HttpResponse.BodyHandlers.ofString())
+        }
+
+        fun anthropic(
+            prompt: String = "hi",
+            system: String = "",
+        ) = """{"model":"example-model","max_tokens":16$system,"messages":[{"role":"user","content":"$prompt"}]}"""
+
+        const val OPEN_AI = """{"model":"example-model","messages":[{"role":"user","content":"hi"}]}"""
+        const val GEMINI = """{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}"""
+        const val INLINE = """{"name":"inline","rules":[{"role":"r","respond":[{"text":"t"}]}]}"""
+
+        fun callVendors(server: FakeLlmServer) {
+            send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
+            send(server, "POST", "/anthropic/v1/messages", anthropic(system = ""","system":{"type":"text"}"""), null)
+            send(server, "POST", "/openai/v1/chat/completions", OPEN_AI, null)
+            send(server, "POST", "/gemini/v1beta/models/example-model:generateContent", GEMINI, null)
+        }
+
+        val control = Target.Operation("/control/scenario")
+        val unauthorized = Target.Response("Unauthorized", "401")
+        val noRoute = Target.Response("NoRoute", "404")
+
+        val exchanges =
+            listOf(
+                Exchange("health, nothing loaded", "GET", "/health", Target.Operation("/health")),
+                Exchange("health, lenient, with a scenario", "GET", "/health", Target.Operation("/health"), lenient = true, setup = {
+                    it.engine.load("hello")
+                }),
+                Exchange("health with a token configured", "GET", "/health", Target.Operation("/health"), serverToken = TOKEN),
+                Exchange(
+                    "openapi",
+                    "GET",
+                    "/openapi",
+                    Target.Operation("/openapi"),
+                    serverToken = TOKEN,
+                    assertBody = { assertEquals(specFile.readText(), it) },
+                ),
+                Exchange("load by name", "POST", "/control/scenario", control, """{"name":"hello"}""", expectStatus = 200),
+                Exchange("load inline", "POST", "/control/scenario", control, """{"scenario":$INLINE}""", expectStatus = 200),
+                Exchange(
+                    "load with the token",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"name":"hello"}""",
+                    authorization = "Bearer $TOKEN",
+                    serverToken = TOKEN,
+                    expectStatus = 200,
+                ),
+                Exchange(
+                    "load an unknown name",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"name":"no-such-scenario"}""",
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "load both",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"name":"hello","scenario":$INLINE}""",
+                    requestValid = false,
+                    expectStatus = 400,
+                ),
+                Exchange("load neither", "POST", "/control/scenario", control, "{}", requestValid = false, expectStatus = 400),
+                Exchange(
+                    "load an extra field",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"name":"hello","extra":1}""",
+                    requestValid = false,
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "load a non-string name",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"name":5}""",
+                    requestValid = false,
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "load a blank name",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"name":" "}""",
+                    requestValid = false,
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "load an illegal name",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"name":"../x"}""",
+                    requestValid = false,
+                    expectStatus = 400,
+                ),
+                Exchange("load a non-object", "POST", "/control/scenario", control, "[1]", requestValid = false, expectStatus = 400),
+                Exchange("load malformed JSON", "POST", "/control/scenario", control, "{", requestValid = false, expectStatus = 400),
+                Exchange("load an empty body", "POST", "/control/scenario", control, "", requestValid = false, expectStatus = 400),
+                Exchange(
+                    "load an inline scenario with no rules",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"scenario":{"name":"s","rules":[]}}""",
+                    requestValid = false,
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "load an inline scenario with an unknown field",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"scenario":{"name":"s","rules":[{"role":"r","respond":[{"text":"t"}]}],"extra":1}}""",
+                    requestValid = false,
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "load an inline scenario with a bad error status",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"scenario":{"name":"s","rules":[{"role":"r","respond":[{"error":{"status":42}}]}]}}""",
+                    requestValid = false,
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "load without the token",
+                    "POST",
+                    "/control/scenario",
+                    control,
+                    """{"name":"hello"}""",
+                    serverToken = TOKEN,
+                    expectStatus = 401,
+                ),
+                Exchange("scenarios", "GET", "/control/scenarios", Target.Operation("/control/scenarios"), expectStatus = 200),
+                Exchange(
+                    "scenarios without the token",
+                    "GET",
+                    "/control/scenarios",
+                    Target.Operation("/control/scenarios"),
+                    serverToken = TOKEN,
+                    expectStatus = 401,
+                ),
+                Exchange("reset", "POST", "/control/reset", Target.Operation("/control/reset"), expectStatus = 200),
+                Exchange(
+                    "reset with a wrong token",
+                    "POST",
+                    "/control/reset",
+                    Target.Operation("/control/reset"),
+                    authorization = "Bearer wrong",
+                    serverToken = TOKEN,
+                    expectStatus = 401,
+                ),
+                Exchange("calls, empty", "GET", "/control/calls", Target.Operation("/control/calls"), expectStatus = 200),
+                Exchange(
+                    "calls after strict unmatched calls on every vendor",
+                    "GET",
+                    "/control/calls",
+                    Target.Operation("/control/calls"),
+                    expectStatus = 200,
+                    setup = ::callVendors,
+                    assertBody = { assertTrue(it.contains("\"UNMATCHED\"") && it.contains("\"unknown\""), it) },
+                ),
+                Exchange(
+                    "calls after matched and lenient calls",
+                    "GET",
+                    "/control/calls",
+                    Target.Operation("/control/calls"),
+                    lenient = true,
+                    expectStatus = 200,
+                    setup = { server ->
+                        callVendors(server)
+                        server.engine.load("fail-then-retry")
+                        callVendors(server)
+                    },
+                ),
+                Exchange(
+                    "calls without the token",
+                    "GET",
+                    "/control/calls",
+                    Target.Operation("/control/calls"),
+                    serverToken = TOKEN,
+                    expectStatus = 401,
+                ),
+                Exchange("an unknown control path without the token", "GET", "/control/nope", unauthorized, serverToken = TOKEN),
+                Exchange("an unknown path", "GET", "/nope", noRoute),
+                Exchange("a known path with the wrong method", "GET", "/control/scenario", noRoute),
+                Exchange("a trailing slash", "GET", "/health/", noRoute),
+                Exchange(
+                    "an unknown control path with the token",
+                    "GET",
+                    "/control/nope",
+                    noRoute,
+                    authorization = "Bearer $TOKEN",
+                    serverToken = TOKEN,
+                ),
+                Exchange(
+                    "anthropic, matched",
+                    "POST",
+                    "/anthropic/v1/messages",
+                    Target.Operation(
+                        "/anthropic/v1/messages",
+                    ),
+                    anthropic(),
+                    expectStatus = 200,
+                    setup = {
+                        it.engine.load("hello")
+                    },
+                ),
+                Exchange(
+                    "anthropic, unmatched",
+                    "POST",
+                    "/anthropic/v1/messages",
+                    Target.Operation("/anthropic/v1/messages"),
+                    anthropic(),
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "anthropic, unparseable",
+                    "POST",
+                    "/anthropic/v1/messages",
+                    Target.Operation("/anthropic/v1/messages"),
+                    "{",
+                    requestValid = false,
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "openai, unmatched",
+                    "POST",
+                    "/openai/v1/chat/completions",
+                    Target.Operation("/openai/v1/chat/completions"),
+                    OPEN_AI,
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "openai, matched",
+                    "POST",
+                    "/openai/v1/chat/completions",
+                    Target.Operation(
+                        "/openai/v1/chat/completions",
+                    ),
+                    OPEN_AI,
+                    expectStatus = 200,
+                    setup = {
+                        it.engine.load("hello")
+                    },
+                ),
+                Exchange(
+                    "gemini, unmatched",
+                    "POST",
+                    "/gemini/v1beta/models/example-model:generateContent",
+                    Target.Operation("/gemini/{version}/models/{model}:generateContent"),
+                    GEMINI,
+                    expectStatus = 400,
+                ),
+                Exchange(
+                    "gemini, matched",
+                    "POST",
+                    "/gemini/v1beta/models/example-model:generateContent",
+                    Target.Operation("/gemini/{version}/models/{model}:generateContent"),
+                    GEMINI,
+                    expectStatus = 200,
+                    setup = { it.engine.load("hello") },
+                ),
+                Exchange(
+                    "batches, list",
+                    "GET",
+                    "/anthropic/v1/messages/batches",
+                    Target.Operation("/anthropic/v1/messages/batches"),
+                    expectStatus = 501,
+                ),
+                Exchange(
+                    "batches, create",
+                    "POST",
+                    "/anthropic/v1/messages/batches",
+                    Target.Operation("/anthropic/v1/messages/batches"),
+                    "{}",
+                    expectStatus = 501,
+                ),
+                Exchange(
+                    "batches, get one",
+                    "GET",
+                    "/anthropic/v1/messages/batches/abc",
+                    Target.Operation("/anthropic/v1/messages/batches/{batchId}"),
+                    expectStatus = 501,
+                ),
+            )
+
+        /** Each must be rejected by both the Scenario schema and ScenarioLoader.decode. */
+        val invalidScenarios =
+            listOf(
+                "no rules" to """{"name":"x","rules":[]}""",
+                "no name" to """{"rules":[{"role":"r","respond":[{"text":"t"}]}]}""",
+                "an unknown field" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t"}]}],"extra":1}""",
+                "a rule with no steps" to """{"name":"x","rules":[{"role":"r","respond":[]}]}""",
+                "a rule with no role" to """{"name":"x","rules":[{"respond":[{"text":"t"}]}]}""",
+                "a step with text and error" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","error":{"status":500}}]}]}""",
+                "a step with neither" to """{"name":"x","rules":[{"role":"r","respond":[{}]}]}""",
+                "a step with both null" to """{"name":"x","rules":[{"role":"r","respond":[{"text":null,"error":null}]}]}""",
+                "thinking on an error step" to
+                    """{"name":"x","rules":[{"role":"r","respond":[{"thinking":"h","error":{"status":500}}]}]}""",
+                "streamErrorAfterChunks on a text step" to
+                    """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamErrorAfterChunks":2}]}]}""",
+                "streamErrorAfterChunks of 0" to
+                    """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500},"streamErrorAfterChunks":0}]}]}""",
+                "streamChunkChars of 0" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamChunkChars":0}]}]}""",
+                "streamChunkChars past Int" to
+                    """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamChunkChars":3000000000}]}]}""",
+                "a negative delay" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamInterChunkDelayMs":-1}]}]}""",
+                "an unknown field in a step" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","extra":1}]}]}""",
+                "an unknown field in a match" to """{"name":"x","rules":[{"role":"r","match":{"extra":1},"respond":[{"text":"t"}]}]}""",
+                "a null prompt list" to
+                    """{"name":"x","rules":[{"role":"r","match":{"promptContainsAll":null},"respond":[{"text":"t"}]}]}""",
+                "systemShape unknown" to
+                    """{"name":"x","rules":[{"role":"r","match":{"systemShape":"unknown"},"respond":[{"text":"t"}]}]}""",
+                "an error status of 42" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":42}}]}]}""",
+                "an error status of 600" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":600}}]}]}""",
+                "an error with no status" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"body":"b"}}]}]}""",
+                "a non-string error header" to
+                    """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500,"headers":{"a":1}}}]}]}""",
+            )
+    }
+}
