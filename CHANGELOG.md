@@ -40,7 +40,9 @@ change the public API.
 - Strict input checks matching the spec: `POST /control/scenario` rejects unknown fields, a
   `Match` rejects a `systemShape` other than `blocks`, `string` or `absent`, and an `ErrorStep`
   rejects a status outside 100 to 599. The control routes' 401 carries `WWW-Authenticate: Bearer`,
-  and a scripted `content-type` header replaces the default instead of adding a second one.
+  and a scripted `content-type` header replaces the default instead of adding a second one. The
+  Gemini route matches only `/gemini/{version}/models/{model}:generateContent`, and the Batches
+  stand-in only `/anthropic/v1/messages/batches` and paths under it, as the spec documents.
 - `examples/`, a separate build that tests a small client against the published artifact.
 - Public API checks: Kotlin explicit API mode, and `api/fake-llm.api`, which `./gradlew check`
   compares with the compiled API.

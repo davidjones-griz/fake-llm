@@ -117,7 +117,7 @@ private fun vendorRoute(
             handleMessages(ex, engine)
         }
 
-        path.startsWith("/anthropic/v1/messages/batches") -> {
+        path == BATCHES_PATH || path.startsWith("$BATCHES_PATH/") -> {
             respond(
                 ex,
                 HTTP_NOT_IMPLEMENTED,
@@ -129,7 +129,7 @@ private fun vendorRoute(
             handleOpenAi(ex, engine)
         }
 
-        ex.requestMethod == "POST" && path.startsWith("/gemini/") && path.contains(":generateContent") -> {
+        ex.requestMethod == "POST" && GEMINI_GENERATE_CONTENT.matches(path) -> {
             handleGemini(ex, engine, path)
         }
 
@@ -185,8 +185,9 @@ private fun scenariosJson(engine: ScenarioEngine): String {
 }
 
 /**
- * Sends [body] with [status]. [headers] are set after the content type, so a scripted
- * `content-type` (from an error step) replaces it rather than adding a second one.
+ * Sends [body] with [status] and [contentType]. A `content-type` among [headers] (a scripted
+ * error step's) replaces [contentType] rather than adding a second one; other headers are added
+ * as given.
  */
 internal fun respond(
     ex: HttpExchange,
@@ -197,7 +198,9 @@ internal fun respond(
 ) {
     val bytes = body.toByteArray(StandardCharsets.UTF_8)
     ex.responseHeaders.set("Content-Type", contentType)
-    headers.forEach { (k, v) -> ex.responseHeaders.set(k, v) }
+    headers.forEach { (k, v) ->
+        if (k.equals("Content-Type", ignoreCase = true)) ex.responseHeaders.set(k, v) else ex.responseHeaders.add(k, v)
+    }
     ex.sendResponseHeaders(status, bytes.size.toLong())
     ex.responseBody.use { it.write(bytes) }
 }
@@ -222,5 +225,10 @@ internal fun openApiResponse(spec: String?): Triple<Int, String, String> =
 private const val HTTP_BAD_REQUEST = 400
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_NOT_FOUND = 404
+private const val BATCHES_PATH = "/anthropic/v1/messages/batches"
+
+/** `/gemini/{version}/models/{model}:generateContent`, matching the OpenAPI path exactly. */
+private val GEMINI_GENERATE_CONTENT = Regex("/gemini/[^/]+/models/[^/:]+:generateContent")
+
 private const val HTTP_INTERNAL_ERROR = 500
 private const val HTTP_NOT_IMPLEMENTED = 501

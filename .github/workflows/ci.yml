@@ -140,7 +140,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the image
         run: docker build -t fake-llm:ci .
-      - name: Run, check /health, stop
+      - name: Run, check /health and /openapi, stop
         run: |
           set -eu
           docker run -d --name fake-llm-ci -p 8080:8080 fake-llm:ci
@@ -158,4 +158,5 @@ jobs:
             exit 1
           fi
           # The image serves the OpenAPI document bundled in the jar.
-          curl -fsS http://127.0.0.1:8080/openapi | grep -q '^openapi: 3\.1\.'
+          curl -fsS -o "$RUNNER_TEMP/openapi.yaml" http://127.0.0.1:8080/openapi
+          grep -q '^openapi: 3\.1\.' "$RUNNER_TEMP/openapi.yaml"

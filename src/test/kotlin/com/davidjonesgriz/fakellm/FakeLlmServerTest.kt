@@ -696,6 +696,32 @@ class FakeLlmServerTest {
     }
 
     @Test
+    fun `scripted headers other than content-type are added as given`() {
+        withServer { client, engine ->
+            val headers = mapOf("X-Retry-Hint" to "1", "x-retry-hint" to "2")
+            engine.loadInline(
+                Scenario(name = "h", rules = listOf(Rule(role = "r", respond = listOf(Step(error = ErrorStep(429, "{}", headers)))))),
+            )
+            val resp = client.post("/anthropic/v1/messages", anthropicBody("hi"))
+            assertEquals(listOf("1", "2"), resp.headers().allValues("x-retry-hint").sorted())
+            assertEquals(listOf("application/json"), resp.headers().allValues("content-type"))
+        }
+    }
+
+    @Test
+    fun `the gemini and batches routes match their documented paths exactly`() {
+        withServer { client, _ ->
+            val body = """{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}"""
+            assertEquals(400, client.post("/gemini/v1beta/models/m:generateContent", body).statusCode(), "the documented path, unmatched")
+            assertEquals(404, client.post("/gemini/m:generateContent", body).statusCode())
+            assertEquals(404, client.post("/gemini/v1beta/models/m:generateContentXYZ", body).statusCode())
+            assertEquals(404, client.post("/gemini/v1beta/models/m/extra:generateContent", body).statusCode())
+            assertEquals(501, client.get("/anthropic/v1/messages/batches/abc/results").statusCode())
+            assertEquals(404, client.get("/anthropic/v1/messages/batchesXYZ").statusCode())
+        }
+    }
+
+    @Test
     fun `the OpenAPI document is served as YAML, byte for byte`() {
         withServer { client, _ ->
             val resp = client.get("/openapi")

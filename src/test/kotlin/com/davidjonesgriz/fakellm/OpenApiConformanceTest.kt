@@ -14,6 +14,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertTrue
@@ -44,7 +45,7 @@ class OpenApiConformanceTest {
                 }
             }
         val mustCover = documented.filter { (path) -> path == "/health" || path == "/openapi" || path.startsWith("/control/") }
-        assertEquals(emptyList(), mustCover - exercised, "documented but never exercised")
+        assertEquals(emptyList(), mustCover - exercised - NOT_REACHABLE_OVER_HTTP, "documented but never exercised")
     }
 
     @Test
@@ -109,6 +110,20 @@ class OpenApiConformanceTest {
     }
 
     @Test
+    fun `integers are written without a fraction, as the spec says`() {
+        // JSON Schema treats 24.0 as an integer, so the rule is stated in the spec's description;
+        // the server's decoder enforces it.
+        val integralFloat = """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamChunkChars":24.0}]}]}"""
+        assertContains(spec.path("info").path("description").asString(), "without a fraction or exponent")
+        assertFails {
+            ScenarioLoader.decode(
+                kotlinx.serialization.json.Json
+                    .parseToJsonElement(integralFloat),
+            )
+        }
+    }
+
+    @Test
     fun `the spec's version is the build's version`() {
         val version = File("gradle.properties").readLines().first { it.startsWith("version=") }.removePrefix("version=")
         assertEquals(version, spec.path("info").path("version").asString())
@@ -139,6 +154,12 @@ class OpenApiConformanceTest {
                         "#/components/responses/${target.name}"
                     }
                 }
+            if (status == "401") {
+                assertTrue(
+                    spec.atRef(resolve(responsePointer)).path("headers").has("WWW-Authenticate"),
+                    "the 401 response documents WWW-Authenticate",
+                )
+            }
             checkResponse(resolve(responsePointer), response)
             exchange.expectStatus?.let { assertEquals(it, response.statusCode(), response.body()) }
             exchange.assertBody(response.body())
@@ -153,7 +174,9 @@ class OpenApiConformanceTest {
     ) {
         val schema = "$operation/requestBody/content/application~1json/schema"
         if (exchange.body == null || spec.atRef(schema).isMissingNode) return
-        val valid = runCatching { validate(schema, exchange.body) }.getOrNull()?.isEmpty() ?: false
+        // A body that isn't JSON at all is invalid; any other exception (a broken $ref, say) fails the test.
+        val parsed = runCatching { json.readTree(exchange.body) }.getOrNull()?.takeUnless { it.isMissingNode }
+        val valid = parsed != null && validate(schema, exchange.body).isEmpty()
         assertEquals(exchange.requestValid, valid, "request body validity against the spec: ${exchange.body}")
     }
 
@@ -215,6 +238,9 @@ class OpenApiConformanceTest {
         const val MIN_SCENARIO_FILES = 12
         val HTTP_METHODS = setOf("get", "put", "post", "delete", "options", "head", "patch", "trace")
         val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Rule", "Match", "Step", "ErrorStep")
+
+        /** Documented, but reachable only from a broken build; FakeLlmServerTest covers openApiResponse(null). */
+        val NOT_REACHABLE_OVER_HTTP = setOf(Triple("/openapi", "get", "500"))
 
         val json: JsonMapper = JsonMapper.builder().build()
         val specFile = File("openapi/fake-llm.yaml")
@@ -653,6 +679,16 @@ class OpenApiConformanceTest {
                 "an error status of 42" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":42}}]}]}""",
                 "an error status of 600" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":600}}]}]}""",
                 "an error with no status" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"body":"b"}}]}]}""",
+                "an unknown field in a rule" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t"}],"extra":1}]}""",
+                "an unknown field in an error" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500,"extra":1}}]}]}""",
+                "a null description" to """{"name":"x","description":null,"rules":[{"role":"r","respond":[{"text":"t"}]}]}""",
+                "a null match" to """{"name":"x","rules":[{"role":"r","match":null,"respond":[{"text":"t"}]}]}""",
+                "a null stopReason" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","stopReason":null}]}]}""",
+                "a null promptContainsAny" to
+                    """{"name":"x","rules":[{"role":"r","match":{"promptContainsAny":null},"respond":[{"text":"t"}]}]}""",
+                "a null delay" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamInterChunkDelayMs":null}]}]}""",
+                "a null error body" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500,"body":null}}]}]}""",
+                "null error headers" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500,"headers":null}}]}]}""",
                 "a non-string error header" to
                     """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500,"headers":{"a":1}}}]}]}""",
             )
