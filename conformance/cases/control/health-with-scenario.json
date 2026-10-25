@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "health-with-scenario",
+  "description": "GET /health names the loaded scenario and reports strict mode.",
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": { "method": "GET", "path": "/health" },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": { "status": "ok", "scenario": "hello", "lenient": false }
+      }
+    }
+  ]
+}

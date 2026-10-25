@@ -62,6 +62,11 @@ tasks.processResources {
     from("openapi") { into("com/davidjonesgriz/fakellm/openapi") }
 }
 
+apiValidation {
+    // The conformance runner is not published, so it has no public API to track.
+    ignoredProjects.add("fake-llm-conformance")
+}
+
 ktlint {
     version.set(providers.gradleProperty("ktlintVersion"))
 }
