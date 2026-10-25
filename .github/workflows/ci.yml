@@ -73,6 +73,7 @@ jobs:
           path: |
             build/reports/kover/html
             junit-jupiter/build/reports/kover/html
+            conformance/runner/build/reports/kover/html
           if-no-files-found: warn
           retention-days: 14
       - name: Publish to the build-local repository
@@ -160,3 +161,50 @@ jobs:
           # The image serves the OpenAPI document bundled in the jar.
           curl -fsS -o "$RUNNER_TEMP/openapi.yaml" http://127.0.0.1:8080/openapi
           grep -q '^openapi: 3\.1\.' "$RUNNER_TEMP/openapi.yaml"
+
+  # Runs the HTTP conformance suite (conformance/cases) against the fat jar and the Docker image,
+  # both built from this commit. Nothing should be skipped with a command target, so a skip fails.
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+      - name: Build the fat jar and the image
+        run: |
+          ./gradlew shadowJar --no-daemon
+          docker build -t fake-llm:ci .
+      - name: Run the suite against the fat jar
+        run: >-
+          ./gradlew :fake-llm-conformance:test --no-daemon -Pfakellm.failOnSkip=true
+          -Pfakellm.command="java -jar build/libs/fake-llm-all.jar"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: conformance-fat-jar
+          path: conformance/runner/build/reports/tests/test
+          if-no-files-found: warn
+          retention-days: 14
+      # Runs even when the fat-jar run failed, so one run reports both.
+      - name: Run the suite against the Docker image
+        if: ${{ !cancelled() }}
+        env:
+          # $PORT is expanded by the runner's sh -c, once per server it starts.
+          CMD: docker run --rm -e PORT -e FAKE_LLM_LENIENT -e FAKE_LLM_CONTROL_TOKEN -p "$PORT:$PORT" fake-llm:ci
+        run: ./gradlew :fake-llm-conformance:test --no-daemon -Pfakellm.failOnSkip=true -Pfakellm.command="$CMD"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: conformance-docker
+          path: conformance/runner/build/reports/tests/test
+          if-no-files-found: warn
+          retention-days: 14
+      # A container is the docker CLI's child only through the daemon, so a killed run can leave one.
+      - name: Remove leftover containers
+        if: always()
+        run: docker ps -q --filter ancestor=fake-llm:ci | xargs -r docker rm -f
