@@ -38,6 +38,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.junit.platform:junit-platform-testkit")
     testImplementation(kotlin("test"))
+    // Only to throw JUnit 4's AssumptionViolatedException, which Jupiter treats as an abort.
+    testImplementation("junit:junit:4.13.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

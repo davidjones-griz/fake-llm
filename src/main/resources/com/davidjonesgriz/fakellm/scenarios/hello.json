@@ -1,15 +1,9 @@
 {
   "name": "hello",
-  "description": "Minimal scenario. One rule with an empty match returns a short greeting from a general assistant for weather, recipes, and everyday how-to questions.",
-  "rules": [
+  "description": "One step: a short greeting from a general assistant for weather, recipes, and everyday how-to questions.",
+  "steps": [
     {
-      "role": "assistant",
-      "match": {},
-      "respond": [
-        {
-          "text": "Hello. I can help with the weather, a simple recipe, or a short how-to."
-        }
-      ]
+      "text": "Hello. I can help with the weather, a simple recipe, or a short how-to."
     }
   ]
 }

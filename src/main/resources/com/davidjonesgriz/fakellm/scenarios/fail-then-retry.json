@@ -1,32 +1,15 @@
 {
   "name": "fail-then-retry",
-  "description": "The summarizer rule matches the X-Fake-LLM-Caller header value summarizer and returns a short summary. It is listed first so it wins over the catch-all. Every other caller hits the catch-all: the first call returns HTTP 500 with an api_error body, and the next call returns a normal text reply.",
-  "rules": [
+  "description": "Two steps. Call 1 returns HTTP 500 with an api_error body. Call 2 returns a normal text reply, so a client that retries once succeeds.",
+  "steps": [
     {
-      "role": "summarizer",
-      "match": {
-        "caller": "summarizer"
-      },
-      "respond": [
-        {
-          "text": "Summary: the week looks mild, and a pot of lentil soup takes about forty minutes."
-        }
-      ]
+      "error": {
+        "status": 500,
+        "body": "{\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"An internal error occurred. Please retry the request.\"}}"
+      }
     },
     {
-      "role": "assistant",
-      "match": {},
-      "respond": [
-        {
-          "error": {
-            "status": 500,
-            "body": "{\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"An internal error occurred. Please retry the request.\"}}"
-          }
-        },
-        {
-          "text": "Tomorrow looks mild and dry. A pot of lentil soup takes about forty minutes."
-        }
-      ]
+      "text": "Tomorrow looks mild and dry. A pot of lentil soup takes about forty minutes."
     }
   ]
 }

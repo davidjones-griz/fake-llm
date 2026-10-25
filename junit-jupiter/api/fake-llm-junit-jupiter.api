@@ -1,9 +1,13 @@
-public final class com/davidjonesgriz/fakellm/junit/FakeLlmExtension : org/junit/jupiter/api/extension/AfterEachCallback, org/junit/jupiter/api/extension/BeforeAllCallback, org/junit/jupiter/api/extension/BeforeEachCallback, org/junit/jupiter/api/extension/ParameterResolver {
+public abstract interface annotation class com/davidjonesgriz/fakellm/junit/FakeLlmAllowUnservedCalls : java/lang/annotation/Annotation {
+}
+
+public final class com/davidjonesgriz/fakellm/junit/FakeLlmExtension : org/junit/jupiter/api/extension/AfterEachCallback, org/junit/jupiter/api/extension/AfterTestExecutionCallback, org/junit/jupiter/api/extension/BeforeAllCallback, org/junit/jupiter/api/extension/BeforeEachCallback, org/junit/jupiter/api/extension/ParameterResolver {
 	public fun <init> ()V
 	public fun <init> (Ljava/nio/file/Path;)V
 	public fun <init> (Ljava/nio/file/Path;Z)V
 	public synthetic fun <init> (Ljava/nio/file/Path;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun afterEach (Lorg/junit/jupiter/api/extension/ExtensionContext;)V
+	public fun afterTestExecution (Lorg/junit/jupiter/api/extension/ExtensionContext;)V
 	public fun beforeAll (Lorg/junit/jupiter/api/extension/ExtensionContext;)V
 	public fun beforeEach (Lorg/junit/jupiter/api/extension/ExtensionContext;)V
 	public fun resolveParameter (Lorg/junit/jupiter/api/extension/ParameterContext;Lorg/junit/jupiter/api/extension/ExtensionContext;)Ljava/lang/Object;

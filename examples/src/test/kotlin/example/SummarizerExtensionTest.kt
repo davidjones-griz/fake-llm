@@ -22,13 +22,6 @@ class SummarizerExtensionTest {
         val summary = summarizer(server).summarize("Revenue for the quarter was ...")
 
         assertEquals("Quarterly revenue rose 12% on subscription growth.", summary.text)
-        assertEquals(
-            "summarize",
-            server.engine
-                .calls()
-                .single()
-                .role,
-        )
     }
 
     @Test

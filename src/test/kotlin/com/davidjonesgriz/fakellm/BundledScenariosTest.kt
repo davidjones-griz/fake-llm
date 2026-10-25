@@ -41,7 +41,26 @@ class BundledScenariosTest {
         names.forEach { name ->
             val scenario = ScenarioLoader.load(name, directory = null)
             assertEquals(name, scenario.name)
-            assertTrue(scenario.rules.isNotEmpty(), name)
+            assertTrue(scenario.steps.isNotEmpty(), name)
+        }
+    }
+
+    @Test
+    fun `every bundled scenario serves its steps in order, then the no-more-steps 400`() {
+        bundledNames.forEach { name ->
+            withServer { client, _ ->
+                client.load(name)
+                val steps = ScenarioLoader.load(name, directory = null).steps
+                steps.forEach { step ->
+                    val resp = client.post("/anthropic/v1/messages", anthropicBody("hi"))
+                    assertEquals(step.error?.status ?: 200, resp.statusCode(), "$name: ${resp.body()}")
+                }
+                val extra = client.post("/anthropic/v1/messages", anthropicBody("hi"))
+                assertEquals(400, extra.statusCode(), name)
+                assertContains(extra.body(), "\"no more steps\"", message = name)
+                val log = client.callLog()
+                assertEquals((1..steps.size).map { it.toString() } + "null", log.map { it.getValue("step").toString() }, name)
+            }
         }
     }
 
@@ -56,14 +75,6 @@ class BundledScenariosTest {
                 anthropicText(resp.body()),
             )
             assertEquals("end_turn", anthropicStopReason(resp.body()))
-            assertEquals(
-                "assistant",
-                client
-                    .callLog()
-                    .single()
-                    .getValue("role")
-                    .jsonPrimitive.content,
-            )
         }
     }
 
@@ -82,22 +93,8 @@ class BundledScenariosTest {
             assertEquals(200, recovered.statusCode())
             assertEquals(success, anthropicText(recovered.body()))
 
-            val repeated = client.post("/anthropic/v1/messages", anthropicBody("forecast"))
-            assertEquals(200, repeated.statusCode())
-            assertEquals(success, anthropicText(repeated.body()))
-
             val log = client.callLog()
-            assertEquals(listOf("error:429", "text", "text"), log.map { it.getValue("outcome").jsonPrimitive.content })
-            assertEquals(
-                listOf(1, 2, 3),
-                log.map {
-                    it
-                        .getValue("occurrence")
-                        .jsonPrimitive.content
-                        .toInt()
-                },
-            )
-            assertTrue(log.all { it.getValue("role").jsonPrimitive.content == "weather" })
+            assertEquals(listOf("error:429", "text"), log.map { it.getValue("outcome").jsonPrimitive.content })
         }
     }
 
@@ -120,12 +117,9 @@ class BundledScenariosTest {
             val recovered = client.post("/anthropic/v1/messages", anthropicBody("help"))
             assertEquals(200, recovered.statusCode())
             assertEquals(success, anthropicText(recovered.body()))
-            val repeated = client.post("/anthropic/v1/messages", anthropicBody("help"))
-            assertEquals(success, anthropicText(repeated.body()))
 
             val log = client.callLog()
-            assertEquals(listOf("error:529", "text", "text"), log.map { it.getValue("outcome").jsonPrimitive.content })
-            assertTrue(log.all { it.getValue("role").jsonPrimitive.content == "support" })
+            assertEquals(listOf("error:529", "text"), log.map { it.getValue("outcome").jsonPrimitive.content })
         }
     }
 
@@ -155,14 +149,6 @@ class BundledScenariosTest {
             assertEquals(200, resp.statusCode())
             assertEquals("I can't help with that request.", anthropicText(resp.body()))
             assertEquals("refusal", anthropicStopReason(resp.body()))
-            assertEquals(
-                "assistant",
-                client
-                    .callLog()
-                    .single()
-                    .getValue("role")
-                    .jsonPrimitive.content,
-            )
         }
     }
 
@@ -176,14 +162,6 @@ class BundledScenariosTest {
             assertEquals(truncated, anthropicText(resp.body()))
             assertEquals("max_tokens", anthropicStopReason(resp.body()))
             assertFailsWith<SerializationException> { Json.parseToJsonElement(anthropicText(resp.body())) }
-            assertEquals(
-                "recipe",
-                client
-                    .callLog()
-                    .single()
-                    .getValue("role")
-                    .jsonPrimitive.content,
-            )
         }
     }
 
@@ -212,18 +190,7 @@ class BundledScenariosTest {
                     .toInt(),
             )
 
-            val log = client.callLog()
-            assertEquals(listOf("json-reply", "json-reply"), log.map { it.getValue("role").jsonPrimitive.content })
-            assertEquals(listOf("text", "text"), log.map { it.getValue("outcome").jsonPrimitive.content })
-            assertEquals(
-                listOf(1, 2),
-                log.map {
-                    it
-                        .getValue("occurrence")
-                        .jsonPrimitive.content
-                        .toInt()
-                },
-            )
+            assertEquals(listOf("text", "text"), client.callLog().map { it.getValue("outcome").jsonPrimitive.content })
         }
     }
 
@@ -284,14 +251,6 @@ class BundledScenariosTest {
                     .callLog()
                     .single()
                     .getValue("outcome")
-                    .jsonPrimitive.content,
-            )
-            assertEquals(
-                "assistant",
-                client
-                    .callLog()
-                    .single()
-                    .getValue("role")
                     .jsonPrimitive.content,
             )
         }
@@ -415,62 +374,29 @@ class BundledScenariosTest {
             assertEquals("message_stop", events[i].first)
             assertEquals(events.lastIndex, i)
 
-            val call = client.callLog().single()
-            assertEquals("assistant", call.getValue("role").jsonPrimitive.content)
-            assertEquals("text", call.getValue("outcome").jsonPrimitive.content)
+            assertEquals(
+                "text",
+                client
+                    .callLog()
+                    .single()
+                    .getValue("outcome")
+                    .jsonPrimitive.content,
+            )
         }
     }
 
     @Test
-    fun `fail-then-retry serves the summarizer caller and then recovers other callers`() {
-        val summary = "Summary: the week looks mild, and a pot of lentil soup takes about forty minutes."
-        val recovered = "Tomorrow looks mild and dry. A pot of lentil soup takes about forty minutes."
+    fun `fail-then-retry returns 500 and then a normal reply`() {
         withServer { client, _ ->
             client.load("fail-then-retry")
-
             val failed = client.post("/anthropic/v1/messages", anthropicBody("What does the week look like?"))
             assertEquals(500, failed.statusCode())
             assertContains(failed.body(), "api_error")
 
-            val summarized =
-                client.post(
-                    "/anthropic/v1/messages",
-                    anthropicBody("What does the week look like?"),
-                    caller = "summarizer",
-                )
-            assertEquals(200, summarized.statusCode())
-            assertEquals(summary, anthropicText(summarized.body()))
-
             val success = client.post("/anthropic/v1/messages", anthropicBody("What does the week look like?"))
             assertEquals(200, success.statusCode())
-            assertEquals(recovered, anthropicText(success.body()))
-
-            val summarizedAgain =
-                client.post(
-                    "/anthropic/v1/messages",
-                    anthropicBody("What does the week look like?"),
-                    caller = "summarizer",
-                )
-            assertEquals(summary, anthropicText(summarizedAgain.body()))
-
-            val log = client.callLog()
-            assertEquals(
-                listOf("assistant", "summarizer", "assistant", "summarizer"),
-                log.map { it.getValue("role").jsonPrimitive.content },
-            )
-            assertEquals(
-                listOf("error:500", "text", "text", "text"),
-                log.map { it.getValue("outcome").jsonPrimitive.content },
-            )
-            assertEquals(
-                listOf(1, 1, 2, 2),
-                log.map {
-                    it
-                        .getValue("occurrence")
-                        .jsonPrimitive.content
-                        .toInt()
-                },
-            )
+            assertEquals("Tomorrow looks mild and dry. A pot of lentil soup takes about forty minutes.", anthropicText(success.body()))
+            assertEquals(listOf("error:500", "text"), client.callLog().map { it.getValue("outcome").jsonPrimitive.content })
         }
     }
 

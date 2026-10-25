@@ -12,10 +12,7 @@ import kotlinx.serialization.json.put
 
 private val openAiLenientJson = Json { ignoreUnknownKeys = true }
 
-internal fun parseOpenAiRequest(
-    body: String,
-    caller: String? = null,
-): ParsedRequest {
+internal fun parseOpenAiRequest(body: String): ParsedRequest {
     val obj = openAiLenientJson.parseToJsonElement(body).jsonObject
     val model = (obj["model"] as? JsonPrimitive)?.content ?: ""
     val messages = obj["messages"] as? JsonArray ?: error("request has no messages array")
@@ -42,7 +39,6 @@ internal fun parseOpenAiRequest(
         promptText = text,
         messageCount = messages.size,
         stream = stream,
-        caller = caller,
     )
 }
 

@@ -1,15 +1,18 @@
 package com.davidjonesgriz.fakellm.junit
 
+import com.davidjonesgriz.fakellm.CallRecord
 import com.davidjonesgriz.fakellm.FakeLlmServer
 import com.davidjonesgriz.fakellm.ScenarioEngine
 import com.davidjonesgriz.fakellm.startFakeLlmServer
 import org.junit.jupiter.api.extension.AfterEachCallback
+import org.junit.jupiter.api.extension.AfterTestExecutionCallback
 import org.junit.jupiter.api.extension.BeforeAllCallback
 import org.junit.jupiter.api.extension.BeforeEachCallback
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.api.extension.ParameterContext
 import org.junit.jupiter.api.extension.ParameterResolver
 import org.junit.platform.commons.support.AnnotationSupport
+import org.opentest4j.TestAbortedException
 import java.lang.reflect.AnnotatedElement
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
@@ -19,6 +22,8 @@ private val NAMESPACE: ExtensionContext.Namespace = ExtensionContext.Namespace.c
 private const val SERVER = "server"
 private const val HANDLED = "handled:"
 private const val ENTERED = "entered:"
+private const val CHECK = "check:"
+private val UNSERVED = setOf("no-more-steps", "no-scenario")
 private val INJECTABLE = setOf(FakeLlmServer::class.java, ScenarioEngine::class.java)
 private const val CONCURRENT_TESTS =
     "Tests in one class share one fake-llm server, so they must not run concurrently. With JUnit's " +
@@ -34,8 +39,15 @@ private const val CONCURRENT_TESTS =
  *
  * One server serves the whole class and its `@Nested` classes. It starts on first use and stops
  * when the class finishes. Before each test the [FakeLlmScenario] that applies is loaded, which
- * also clears the call log and counters; a test with none runs after [ScenarioEngine.unload].
- * `FakeLlmServer` and `ScenarioEngine` parameters are injected anywhere JUnit resolves parameters.
+ * starts it over (empty call log, the next call gets step 1); a test with none runs after
+ * [ScenarioEngine.unload]. `FakeLlmServer` and `ScenarioEngine` parameters are injected anywhere
+ * JUnit resolves parameters.
+ *
+ * Right after the test method, before any `@AfterEach`, the test fails if a call during
+ * `@BeforeEach` or the test got no step: a call after the scenario's last step, or a call with no
+ * scenario loaded in strict mode. An app that catches those 400s and carries on cannot pass that
+ * way. [FakeLlmAllowUnservedCalls] turns the check off for a test that makes such a call on purpose.
+ * An aborted test (a failed assumption) is not checked.
  *
  * Test classes may run in parallel; each has its own server and port. The tests of one class share
  * one engine, so they must not run concurrently: a second concurrent test fails at once with an
@@ -50,6 +62,7 @@ public class FakeLlmExtension
         private val lenient: Boolean = false,
     ) : BeforeAllCallback,
         BeforeEachCallback,
+        AfterTestExecutionCallback,
         AfterEachCallback,
         ParameterResolver {
         override fun beforeAll(context: ExtensionContext) {
@@ -73,6 +86,21 @@ public class FakeLlmExtension
             val engine = holder.server.engine
             val scenario = scenarioFor(context)
             if (scenario != null) engine.load(scenario) else engine.unload()
+            // Only a test that got this far is checked. JUnit already skips afterTestExecution when a
+            // beforeEach fails (the guard above, or a scenario that does not load); the marker keeps
+            // such a test from reading another test's log even if that ever changes, and lets only
+            // one of two registrations run the check.
+            store.put(CHECK + id, true)
+        }
+
+        override fun afterTestExecution(context: ExtensionContext) {
+            // remove is atomic, so with two registrations only one instance checks. The log is read
+            // here, while this test still holds the in-flight guard that afterEach releases.
+            if (context.getStore(NAMESPACE).remove(CHECK + context.uniqueId) == null) return
+            if (context.executionException.orElse(null).isAbort() || allowsUnservedCalls(context)) return
+            val engine = serverFor(context).server.engine
+            val unserved = engine.calls().filter { it.outcome in UNSERVED }
+            if (unserved.isNotEmpty()) throw AssertionError(unservedMessage(engine.currentScenarioName(), unserved))
         }
 
         override fun afterEach(context: ExtensionContext) {
@@ -126,6 +154,33 @@ private fun classContext(context: ExtensionContext): ExtensionContext {
     }
     return current
 }
+
+/**
+ * True for what Jupiter reports as an abort: opentest4j's [TestAbortedException], or JUnit 4's
+ * `org.junit.internal.AssumptionViolatedException` and its subclasses, matched by name because
+ * JUnit 4 is not a dependency.
+ */
+private fun Throwable?.isAbort(): Boolean =
+    this is TestAbortedException ||
+        generateSequence<Class<*>>(this?.javaClass) { it.superclass }.any { it.name == JUNIT4_ASSUMPTION }
+
+private const val JUNIT4_ASSUMPTION = "org.junit.internal.AssumptionViolatedException"
+
+/** [FakeLlmAllowUnservedCalls] on the method, then the class, then each enclosing class. */
+private fun allowsUnservedCalls(context: ExtensionContext): Boolean =
+    context.testMethod.orElse(null)?.find<FakeLlmAllowUnservedCalls>() != null ||
+        findOnClassOrEnclosing(context.requiredTestClass) { it.find<FakeLlmAllowUnservedCalls>() } != null
+
+private fun unservedMessage(
+    scenario: String?,
+    calls: List<CallRecord>,
+): String =
+    buildString {
+        val loaded = if (scenario != null) "scenario '$scenario'" else "no scenario loaded"
+        append("${calls.size} fake-llm call(s) got no step ($loaded):")
+        calls.forEach { append("\n  call ${it.seq}: ${it.vendor} model '${it.model}', ${it.outcome}") }
+        append("\nAdd the steps the test needs, or annotate a test that makes such calls on purpose with @FakeLlmAllowUnservedCalls.")
+    }
 
 /** The scenario for this test: the method's [FakeLlmScenario], then the class's, then each enclosing class's. */
 private fun scenarioFor(context: ExtensionContext): String? =

@@ -64,8 +64,8 @@ public class FakeLlmClient
         public fun scenarioNames(): List<String> = get("/control/scenarios", ScenarioNames.serializer()).scenarios
 
         /**
-         * `POST /control/scenario` with a name: loads that scenario on the server and clears its call
-         * log and counters, as [ScenarioEngine.load] does.
+         * `POST /control/scenario` with a name: loads that scenario on the server and starts it over
+         * (empty call log, next call is call 1), as [ScenarioEngine.load] does.
          */
         public fun load(name: String) {
             send("POST", "/control/scenario", buildJsonObject { put("name", name) }.toString())
@@ -73,13 +73,13 @@ public class FakeLlmClient
 
         /**
          * `POST /control/scenario` with an inline scenario: installs [scenario] on the server and
-         * clears its call log and counters, as [ScenarioEngine.loadInline] does.
+         * starts it over, as [ScenarioEngine.loadInline] does.
          */
         public fun loadInline(scenario: Scenario) {
             send("POST", "/control/scenario", encodeLoadInline(scenario))
         }
 
-        /** `POST /control/reset`: clears the server's call log and counters and keeps its scenario. */
+        /** `POST /control/reset`: starts the server's scenario over (empty call log, next call is call 1). */
         public fun reset() {
             send("POST", "/control/reset")
         }
@@ -159,7 +159,7 @@ public class FakeLlmClientException internal constructor(
 
 /**
  * The server's `GET /health` response: the loaded scenario's name, or null when none is loaded, and
- * whether unmatched requests get the canned reply. Read-only: the constructor and `copy` are
+ * whether a call with no scenario loaded gets the canned reply. Read-only: the constructor and `copy` are
  * internal, so fields added with default values do not break callers.
  */
 @ConsistentCopyVisibility

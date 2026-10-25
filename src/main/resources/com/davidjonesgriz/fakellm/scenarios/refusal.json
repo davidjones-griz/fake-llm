@@ -1,16 +1,10 @@
 {
   "name": "refusal",
-  "description": "A single text reply with stop reason refusal and a short message that declines the request.",
-  "rules": [
+  "description": "One step: a text reply with stop reason refusal and a short message that declines the request.",
+  "steps": [
     {
-      "role": "assistant",
-      "match": {},
-      "respond": [
-        {
-          "text": "I can't help with that request.",
-          "stopReason": "refusal"
-        }
-      ]
+      "text": "I can't help with that request.",
+      "stopReason": "refusal"
     }
   ]
 }

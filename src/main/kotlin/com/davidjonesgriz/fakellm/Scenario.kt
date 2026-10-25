@@ -2,101 +2,42 @@ package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.File
 import java.nio.file.Path
 
 /**
- * One named behavior of the fake: an ordered list of [Rule]s. The first rule whose [Match]
- * accepts the request wins. Each match consumes the next [Rule.respond] step on a counter scoped
- * to that rule; once the list is exhausted, the last step repeats.
- *
- * A rule that concurrent requests can hit together should have a single step. The occurrence
- * counter is then only a count. A sequence of different steps (for example, fail once, then
- * succeed) is well-defined when the caller sends those requests one at a time: overlapping calls
- * share one counter and take successive steps in arrival order.
+ * One named behavior of the fake: an ordered list of [steps]. After [ScenarioEngine.load] or
+ * [ScenarioEngine.reset], call N on any vendor route gets step N, in arrival order. A call after the
+ * last step gets HTTP 400 (`"no more steps"`); the last step does not repeat.
  *
  * Scenario files are JSON in this shape. [ScenarioEngine.load] reads one by name from the engine's
  * [ScenarioEngine.scenarioDirectory], the project's classpath resource `/scenarios/<name>.json`, or
  * the bundled scenarios, in that order, and [ScenarioEngine.loadInline] takes one built in code.
  *
- * @throws IllegalArgumentException when [rules] is empty. The message text is diagnostic, not part
+ * @throws IllegalArgumentException when [steps] is empty. The message text is diagnostic, not part
  *   of the API.
  */
 @Serializable
 public data class Scenario(
     val name: String,
     val description: String = "",
-    val rules: List<Rule>,
+    val steps: List<Step>,
 ) {
     init {
-        require(rules.isNotEmpty()) { "scenario '$name' has no rules" }
+        require(steps.isNotEmpty()) { "scenario '$name' has no steps" }
     }
 }
 
 /**
- * One rule of a [Scenario]: the [match] a request must pass, and the [respond] steps it serves.
- * Call `n` to match this rule gets `respond[n - 1]`, and the last step repeats once the list runs
- * out.
+ * One step of a [Scenario]: assistant [text], optionally with [thinking], or a scripted [error].
+ * Exactly one of [text] and [error] must be set.
  *
- * @throws IllegalArgumentException when [respond] is empty, or a step sets both or neither of
- *   [Step.text] and [Step.error]. The message text is diagnostic, not part of the API.
- */
-@Serializable
-public data class Rule(
-    /** Free-form label recorded in the call log for each request this rule serves. */
-    val role: String,
-    val match: Match = Match(),
-    val respond: List<Step>,
-) {
-    init {
-        require(respond.isNotEmpty()) { "rule '$role' has no respond steps" }
-        respond.forEachIndexed { i, s ->
-            require((s.text != null) xor (s.error != null)) {
-                "rule '$role' step $i must set exactly one of text/error"
-            }
-        }
-    }
-}
-
-/**
- * All present predicates must hold (AND). An empty match matches everything — order rules accordingly.
- *
- * @throws IllegalArgumentException when [systemShape] is not one of the values below. The message
- *   text is diagnostic, not part of the API.
- */
-@Serializable
-public data class Match(
-    /** Substring of the request's `model` field. */
-    val modelContains: String? = null,
-    /** Every entry must appear in the request's combined prompt text (system + all message content). */
-    val promptContainsAll: List<String> = emptyList(),
-    /** At least one entry must appear in the combined prompt text (when non-empty). */
-    val promptContainsAny: List<String> = emptyList(),
-    /** The request's system-field shape: "blocks" | "string" | "absent". */
-    val systemShape: String? = null,
-    /**
-     * Exact match on the request's `X-Fake-LLM-Caller` header: a free-form tag naming which part
-     * of the client is calling. Null (the default) skips this predicate. ANDed with the others.
-     */
-    val caller: String? = null,
-) {
-    init {
-        require(systemShape == null || systemShape in MATCHABLE_SYSTEM_SHAPES) {
-            "systemShape must be one of $MATCHABLE_SYSTEM_SHAPES, got '$systemShape'"
-        }
-    }
-}
-
-private val MATCHABLE_SYSTEM_SHAPES = listOf("blocks", "string", "absent")
-
-/**
- * One scripted reply: assistant [text], optionally with [thinking], or a scripted [error]. A
- * [Rule] requires exactly one of [text] and [error] on each of its steps.
- *
- * @throws IllegalArgumentException when a value is invalid. The message text is diagnostic, not
- *   part of the API.
+ * @throws IllegalArgumentException when a value is invalid, including when both or neither of [text]
+ *   and [error] are set. The message text is diagnostic, not part of the API.
  */
 @Serializable
 public data class Step(
@@ -132,6 +73,7 @@ public data class Step(
     val streamErrorAfterChunks: Int? = null,
 ) {
     init {
+        require((text != null) xor (error != null)) { "a step must set exactly one of text and error" }
         require(streamChunkChars > 0) { "streamChunkChars must be positive, got $streamChunkChars" }
         require(streamInterChunkDelayMs >= 0) {
             "streamInterChunkDelayMs must be >= 0, got $streamInterChunkDelayMs"
@@ -182,6 +124,8 @@ private val HTTP_STATUS_RANGE = MIN_HTTP_STATUS..MAX_HTTP_STATUS
  *
  * [projectLoader] finds the project's resources; tests pass their own. The bundled files are always
  * read through this class.
+ *
+ * Both [load] and [decode] name the 1-based number of a step that fails to decode (`step 2: …`).
  */
 internal object ScenarioLoader {
     private val json = Json { ignoreUnknownKeys = false }
@@ -193,15 +137,27 @@ internal object ScenarioLoader {
     ): Scenario {
         require(name.matches(SCENARIO_NAME)) { "illegal scenario name '$name'" }
         val text = readScenarioText(name, directory?.toFile(), projectLoader)
-        val scenario = json.decodeFromString<Scenario>(text)
+        val scenario = decode(json.parseToJsonElement(text))
         check(scenario.name == name) {
             "scenario file $name.json declares name '${scenario.name}' — file name and declared name must match"
         }
         return scenario
     }
 
-    /** Parses one scenario value with the same strict settings as [load] (`ignoreUnknownKeys` is false). */
-    internal fun decode(element: JsonElement): Scenario = json.decodeFromJsonElement(element)
+    /**
+     * Parses one scenario value with the same strict settings as [load] (`ignoreUnknownKeys` is
+     * false). Each step is decoded on its own first, so an invalid one is reported by its number.
+     */
+    internal fun decode(element: JsonElement): Scenario {
+        ((element as? JsonObject)?.get("steps") as? JsonArray)?.forEachIndexed { i, step ->
+            try {
+                json.decodeFromJsonElement<Step>(step)
+            } catch (e: IllegalArgumentException) {
+                throw IllegalArgumentException("step ${i + 1}: ${e.message}", e)
+            }
+        }
+        return json.decodeFromJsonElement(element)
+    }
 
     /**
      * The names [load] can find: `*.json` files in [directory] (none when it is null or missing),

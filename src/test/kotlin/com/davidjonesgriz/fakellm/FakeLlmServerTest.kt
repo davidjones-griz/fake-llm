@@ -2,11 +2,22 @@ package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import java.net.http.HttpResponse
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -14,189 +25,106 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FakeLlmServerTest {
-    private val inlineMatch =
-        """
-        {
-          "scenario": {
-            "name": "inline-match",
-            "rules": [
-              {
-                "role": "summarizer",
-                "match": { "caller": "summarizer" },
-                "respond": [ { "text": "Summary ready." } ]
-              },
-              {
-                "role": "weather",
-                "match": { "modelContains": "weather", "promptContainsAll": ["forecast"] },
-                "respond": [ { "text": "Sunny." } ]
-              }
-            ]
-          }
-        }
-        """.trimIndent()
-
     private fun calls(client: TestClient) = Json.parseToJsonElement(client.get("/control/calls").body()).jsonArray.map { it.jsonObject }
 
-    private fun assertUnmatched(
+    private fun List<JsonObject>.longs(key: String): List<Long?> = map { (it.getValue(key) as? JsonPrimitive)?.longOrNull }
+
+    private fun List<JsonObject>.strings(key: String): List<String> = map { it.getValue(key).jsonPrimitive.content }
+
+    private fun inline(vararg texts: String): String =
+        buildJsonObject {
+            put(
+                "scenario",
+                buildJsonObject {
+                    put("name", "inline-steps")
+                    put("steps", buildJsonArray { texts.forEach { add(buildJsonObject { put("text", it) }) } })
+                },
+            )
+        }.toString()
+
+    /** Checks one of fake-llm's own 400s: JSON, never SSE, with the fields both bodies share. */
+    @Suppress("LongParameterList") // one parameter per checked field
+    private fun assertCallError(
         response: HttpResponse<String>,
+        error: String,
+        seq: Long,
         vendor: String,
-        why: String,
         model: String,
         systemShape: String,
         messageCount: Int,
-        caller: String?,
         promptPreview: String,
-    ) {
+    ): JsonObject {
         assertEquals(400, response.statusCode(), response.body())
-        assertTrue(
-            response
-                .headers()
-                .firstValue("content-type")
-                .orElse("")
-                .startsWith("application/json"),
-        )
+        assertEquals(listOf("application/json"), response.headers().allValues("content-type"))
+        assertFalse(response.body().contains("event:"))
         val obj = Json.parseToJsonElement(response.body()).jsonObject
-        assertEquals("unmatched request", obj.getValue("fake_llm_error").jsonPrimitive.content)
-        assertEquals(why, obj.getValue("why").jsonPrimitive.content)
+        assertEquals(error, obj.getValue("fake_llm_error").jsonPrimitive.content)
+        assertEquals(seq, obj.getValue("seq").jsonPrimitive.long)
         assertEquals(vendor, obj.getValue("vendor").jsonPrimitive.content)
         assertEquals(model, obj.getValue("model").jsonPrimitive.content)
         assertEquals(systemShape, obj.getValue("system_shape").jsonPrimitive.content)
         assertFalse(obj.getValue("message_count").jsonPrimitive.isString)
-        assertEquals(
-            messageCount,
-            obj
-                .getValue("message_count")
-                .jsonPrimitive.content
-                .toInt(),
-        )
-        if (caller == null) {
-            assertEquals(JsonNull, obj.getValue("caller"))
-        } else {
-            assertTrue(obj.getValue("caller").jsonPrimitive.isString)
-            assertEquals(caller, obj.getValue("caller").jsonPrimitive.content)
-        }
+        assertEquals(messageCount, obj.getValue("message_count").jsonPrimitive.int)
         assertEquals(promptPreview, obj.getValue("prompt_preview").jsonPrimitive.content)
+        return obj
     }
 
     @Test
-    fun `an inline scenario matches the caller header prompt and model and records the call log`() {
-        withServer(engine = ScenarioEngine(lenient = true)) { client, _ ->
-            val loaded = client.post("/control/scenario", inlineMatch)
+    fun `an inline scenario's steps answer calls in order on any route, then the no-more-steps 400`() {
+        withServer { client, _ ->
+            val loaded = client.post("/control/scenario", inline("first", "second"))
             assertEquals(200, loaded.statusCode(), loaded.body())
-            val loadedJson = Json.parseToJsonElement(loaded.body()).jsonObject
-            assertEquals("inline-match", loadedJson.getValue("loaded").jsonPrimitive.content)
-            assertEquals(
-                2,
-                loadedJson
-                    .getValue("rules")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertContains(client.get("/health").body(), "inline-match")
+            assertEquals("""{"loaded":"inline-steps","steps":2}""", loaded.body())
+            assertContains(client.get("/health").body(), "inline-steps")
 
-            val summary =
-                client.post(
-                    "/anthropic/v1/messages",
-                    anthropicBody("weekly forecast", model = "weather-model"),
-                    caller = "summarizer",
-                )
-            assertEquals(200, summary.statusCode())
-            assertEquals("Summary ready.", anthropicText(summary.body()))
+            val first = client.post("/anthropic/v1/messages", anthropicBody("weekly forecast", model = "weather-model"))
+            assertEquals("first", anthropicText(first.body()))
+            val second =
+                client.post("/openai/v1/chat/completions", """{"model":"example-gpt","messages":[{"role":"user","content":"hi"}]}""")
+            assertEquals(200, second.statusCode(), second.body())
+            assertContains(second.body(), "\"second\"")
 
-            val weather =
-                client.post(
-                    "/anthropic/v1/messages",
-                    anthropicBody("weekly forecast", model = "weather-model"),
+            val third = client.post("/anthropic/v1/messages", anthropicBody("one more", stream = true))
+            val body =
+                assertCallError(
+                    third,
+                    error = "no more steps",
+                    seq = 3,
+                    vendor = "anthropic",
+                    model = "example-model",
+                    systemShape = "absent",
+                    messageCount = 1,
+                    promptPreview = "one more\n",
                 )
-            assertEquals("Sunny.", anthropicText(weather.body()))
-
-            val wrongModel =
-                client.post(
-                    "/anthropic/v1/messages",
-                    anthropicBody("weekly forecast", model = "other-model"),
-                )
-            assertEquals(CANNED_ASSISTANT_TEXT, anthropicText(wrongModel.body()))
-
-            val wrongPrompt =
-                client.post(
-                    "/anthropic/v1/messages",
-                    anthropicBody("hello there", model = "weather-model"),
-                )
-            assertEquals(CANNED_ASSISTANT_TEXT, anthropicText(wrongPrompt.body()))
+            assertEquals("inline-steps", body.getValue("scenario").jsonPrimitive.content)
+            assertEquals(2, body.getValue("steps").jsonPrimitive.int)
 
             val log = calls(client)
-            assertEquals(listOf("summarizer", "weather", "DEFAULT", "DEFAULT"), log.map { it.getValue("role").jsonPrimitive.content })
-            assertEquals(listOf("text", "text", "default", "default"), log.map { it.getValue("outcome").jsonPrimitive.content })
-            assertEquals(
-                listOf(1, 1, 1, 2),
-                log.map {
-                    it
-                        .getValue("occurrence")
-                        .jsonPrimitive.content
-                        .toInt()
-                },
-            )
-            assertEquals(
-                listOf(1L, 2L, 3L, 4L),
-                log.map {
-                    it
-                        .getValue("seq")
-                        .jsonPrimitive.content
-                        .toLong()
-                },
-            )
-            assertTrue(log.all { it.getValue("vendor").jsonPrimitive.content == "anthropic" })
+            assertEquals(listOf(1L, 2L, 3L), log.longs("seq"))
+            assertEquals(listOf(1L, 2L, null), log.longs("step"))
+            assertEquals(listOf("text", "text", "no-more-steps"), log.strings("outcome"))
+            assertEquals(listOf("anthropic", "openai", "anthropic"), log.strings("vendor"))
             assertEquals("weather-model", log[0].getValue("model").jsonPrimitive.content)
             assertEquals("absent", log[0].getValue("systemShape").jsonPrimitive.content)
-            assertEquals(
-                1,
-                log[0]
-                    .getValue("messageCount")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertContains(log[0].getValue("promptSample").jsonPrimitive.content, "weekly forecast")
-            assertContains(log[3].getValue("promptSample").jsonPrimitive.content, "hello there")
+            assertEquals(1, log[0].getValue("messageCount").jsonPrimitive.int)
+            assertEquals("weekly forecast\n", log[0].getValue("promptSample").jsonPrimitive.content)
 
             val reloaded = client.post("/control/scenario", """{"name":"hello"}""")
-            assertEquals(200, reloaded.statusCode(), reloaded.body())
+            assertEquals("""{"loaded":"hello","steps":1}""", reloaded.body())
             assertEquals("[]", client.get("/control/calls").body())
-            assertContains(client.get("/health").body(), "hello")
-            val hello = client.post("/anthropic/v1/messages", anthropicBody("hi"))
             assertEquals(
                 "Hello. I can help with the weather, a simple recipe, or a short how-to.",
-                anthropicText(hello.body()),
+                anthropicText(client.post("/anthropic/v1/messages", anthropicBody("hi")).body()),
             )
         }
     }
 
     @Test
-    fun `reset clears the call log and occurrence counters and keeps the scenario`() {
-        val inlineSteps =
-            """
-            {
-              "scenario": {
-                "name": "inline-steps",
-                "rules": [
-                  { "role": "counter", "respond": [ { "text": "one" }, { "text": "two" } ] }
-                ]
-              }
-            }
-            """.trimIndent()
+    fun `reset starts the scenario over, numbering and response ids included`() {
         withServer { client, _ ->
-            assertEquals(200, client.post("/control/scenario", inlineSteps).statusCode())
+            assertEquals(200, client.post("/control/scenario", inline("one", "two")).statusCode())
             assertEquals("one", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("a")).body()))
             assertEquals("two", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("b")).body()))
-            assertEquals("two", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("c")).body()))
-            assertEquals(
-                listOf(1, 2, 3),
-                calls(client).map {
-                    it
-                        .getValue("occurrence")
-                        .jsonPrimitive.content
-                        .toInt()
-                },
-            )
 
             val reset = client.post("/control/reset", "")
             assertEquals(200, reset.statusCode())
@@ -205,19 +133,21 @@ class FakeLlmServerTest {
             val health = Json.parseToJsonElement(client.get("/health").body()).jsonObject
             assertEquals("ok", health.getValue("status").jsonPrimitive.content)
             assertEquals("inline-steps", health.getValue("scenario").jsonPrimitive.content)
-            assertFalse(health.getValue("lenient").jsonPrimitive.isString)
             assertEquals("false", health.getValue("lenient").jsonPrimitive.content)
 
-            val again = client.post("/anthropic/v1/messages", anthropicBody("d"))
+            val again = client.post("/anthropic/v1/messages", anthropicBody("c"))
             assertEquals("one", anthropicText(again.body()))
             assertEquals(
-                1,
-                calls(client)
-                    .single()
-                    .getValue("occurrence")
-                    .jsonPrimitive.content
-                    .toInt(),
+                "fake-msg-1",
+                Json
+                    .parseToJsonElement(again.body())
+                    .jsonObject
+                    .getValue("id")
+                    .jsonPrimitive.content,
             )
+            val log = calls(client)
+            assertEquals(listOf(1L), log.longs("seq"))
+            assertEquals(listOf(1L), log.longs("step"))
         }
     }
 
@@ -225,8 +155,6 @@ class FakeLlmServerTest {
     fun `lenient mode with no scenario loaded returns the canned assistant text`() {
         withServer(engine = ScenarioEngine(lenient = true)) { client, _ ->
             val health = Json.parseToJsonElement(client.get("/health").body()).jsonObject
-            assertEquals(200, client.get("/health").statusCode())
-            assertEquals("ok", health.getValue("status").jsonPrimitive.content)
             assertEquals(JsonNull, health.getValue("scenario"))
             assertFalse(health.getValue("lenient").jsonPrimitive.isString)
             assertEquals("true", health.getValue("lenient").jsonPrimitive.content)
@@ -235,15 +163,8 @@ class FakeLlmServerTest {
             assertEquals(200, resp.statusCode())
             assertEquals(CANNED_ASSISTANT_TEXT, anthropicText(resp.body()))
             val call = calls(client).single()
-            assertEquals("DEFAULT", call.getValue("role").jsonPrimitive.content)
             assertEquals("default", call.getValue("outcome").jsonPrimitive.content)
-            assertEquals(
-                1,
-                call
-                    .getValue("occurrence")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
+            assertEquals(JsonNull, call.getValue("step"))
         }
     }
 
@@ -258,20 +179,13 @@ class FakeLlmServerTest {
         }
         withServer(engine = ScenarioEngine(lenient = true)) { client, _ ->
             val health = Json.parseToJsonElement(client.get("/health").body()).jsonObject
-            assertFalse(health.getValue("lenient").jsonPrimitive.isString)
             assertEquals("true", health.getValue("lenient").jsonPrimitive.content)
         }
     }
 
     @Test
-    fun `strict mode returns 400 for an unmatched request on every vendor including an anthropic stream`() {
-        val noScenario = "no scenario loaded; POST /control/scenario first (or start with --lenient)"
+    fun `strict mode with no scenario loaded answers the no-scenario 400 on every vendor, including a stream`() {
         withServer { client, _ ->
-            val health = Json.parseToJsonElement(client.get("/health").body()).jsonObject
-            assertFalse(health.getValue("lenient").jsonPrimitive.isString)
-            assertEquals("false", health.getValue("lenient").jsonPrimitive.content)
-            assertEquals(JsonNull, health.getValue("scenario"))
-
             val quoted = "Hello \"there\""
             val buffered =
                 client.post(
@@ -279,148 +193,44 @@ class FakeLlmServerTest {
                     """{"model":"example-model","max_tokens":32,"system":"sys","messages":[{"role":"user","content":${JsonPrimitive(
                         quoted,
                     )}}]}""",
-                    caller = "planner",
                 )
-            assertUnmatched(
-                buffered,
-                vendor = "anthropic",
-                why = noScenario,
-                model = "example-model",
-                systemShape = "string",
-                messageCount = 1,
-                caller = "planner",
-                promptPreview = "sys\nHello \"there\"\n",
+            val bufferedBody =
+                assertCallError(
+                    buffered,
+                    error = "no scenario loaded",
+                    seq = 1,
+                    vendor = "anthropic",
+                    model = "example-model",
+                    systemShape = "string",
+                    messageCount = 1,
+                    promptPreview = "sys\nHello \"there\"\n",
+                )
+            assertEquals(
+                setOf("fake_llm_error", "seq", "vendor", "model", "system_shape", "message_count", "prompt_preview"),
+                bufferedBody.keys,
             )
 
             val streamed = client.post("/anthropic/v1/messages", anthropicBody("stream me", stream = true))
-            assertUnmatched(
-                streamed,
-                vendor = "anthropic",
-                why = noScenario,
-                model = "example-model",
-                systemShape = "absent",
-                messageCount = 1,
-                caller = null,
-                promptPreview = "stream me\n",
-            )
-            assertTrue(
-                streamed
-                    .headers()
-                    .firstValue("content-type")
-                    .orElse("")
-                    .startsWith("application/json"),
-            )
-            assertFalse(
-                streamed
-                    .headers()
-                    .firstValue("content-type")
-                    .orElse("")
-                    .contains("event-stream"),
-            )
-            assertTrue(streamed.body().trimStart().startsWith("{"))
+            assertCallError(streamed, "no scenario loaded", 2, "anthropic", "example-model", "absent", 1, "stream me\n")
             assertFalse(streamed.body().contains("message_start"))
-            assertFalse(streamed.body().contains("event:"))
 
             val openai =
                 client.post(
                     "/openai/v1/chat/completions",
                     """{"model":"example-gpt","stream":true,"messages":[{"role":"system","content":"sys"},{"role":"user","content":"hi"}]}""",
-                    caller = "summarizer",
                 )
-            assertUnmatched(
-                openai,
-                vendor = "openai",
-                why = noScenario,
-                model = "example-gpt",
-                systemShape = "blocks",
-                messageCount = 2,
-                caller = "summarizer",
-                promptPreview = "sys\nhi\n",
-            )
-            assertFalse(openai.body().contains("chat.completion"))
+            assertCallError(openai, "no scenario loaded", 3, "openai", "example-gpt", "blocks", 2, "sys\nhi\n")
 
             val gemini =
-                client.post(
-                    "/gemini/v1beta/models/gemini-2.0-flash:generateContent",
-                    """{"contents":[{"parts":[{"text":"Hello"}]}]}""",
-                )
-            assertUnmatched(
-                gemini,
-                vendor = "gemini",
-                why = noScenario,
-                model = "gemini-2.0-flash",
-                systemShape = "absent",
-                messageCount = 1,
-                caller = null,
-                promptPreview = "Hello\n",
-            )
-            assertFalse(gemini.body().contains("candidates"))
+                client.post("/gemini/v1beta/models/gemini-2.0-flash:generateContent", """{"contents":[{"parts":[{"text":"Hello"}]}]}""")
+            assertCallError(gemini, "no scenario loaded", 4, "gemini", "gemini-2.0-flash", "absent", 1, "Hello\n")
 
             val log = calls(client)
-            assertEquals(listOf("anthropic", "anthropic", "openai", "gemini"), log.map { it.getValue("vendor").jsonPrimitive.content })
-            assertTrue(log.all { it.getValue("role").jsonPrimitive.content == "UNMATCHED" })
-            assertTrue(log.all { it.getValue("outcome").jsonPrimitive.content == "unmatched" })
-            assertTrue(log.all { it.getValue("occurrence").jsonPrimitive.content == "0" })
-            assertEquals(
-                listOf(1L, 2L, 3L, 4L),
-                log.map {
-                    it
-                        .getValue("seq")
-                        .jsonPrimitive.content
-                        .toLong()
-                },
-            )
+            assertEquals(listOf("anthropic", "anthropic", "openai", "gemini"), log.strings("vendor"))
+            assertTrue(log.all { it.getValue("outcome").jsonPrimitive.content == "no-scenario" })
+            assertTrue(log.all { it.getValue("step") == JsonNull })
+            assertEquals(listOf(1L, 2L, 3L, 4L), log.longs("seq"))
             assertEquals("sys\nHello \"there\"\n", log[0].getValue("promptSample").jsonPrimitive.content)
-
-            val loaded =
-                client.post(
-                    "/control/scenario",
-                    """{"scenario":{"name":"only-summarizer","rules":[{"role":"summarizer","match":{"caller":"summarizer"},"respond":[{"text":"ok"}]}]}}""",
-                )
-            assertEquals(200, loaded.statusCode(), loaded.body())
-            assertEquals("[]", client.get("/control/calls").body())
-
-            val missed = client.post("/anthropic/v1/messages", anthropicBody("nope"))
-            assertUnmatched(
-                missed,
-                vendor = "anthropic",
-                why = "no rule in scenario 'only-summarizer' matches this request",
-                model = "example-model",
-                systemShape = "absent",
-                messageCount = 1,
-                caller = null,
-                promptPreview = "nope\n",
-            )
-            val missedCall = calls(client).single()
-            assertEquals("UNMATCHED", missedCall.getValue("role").jsonPrimitive.content)
-            assertEquals("unmatched", missedCall.getValue("outcome").jsonPrimitive.content)
-            assertEquals(
-                0,
-                missedCall
-                    .getValue("occurrence")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertEquals(
-                5L,
-                missedCall
-                    .getValue("seq")
-                    .jsonPrimitive.content
-                    .toLong(),
-            )
-
-            val hit = client.post("/anthropic/v1/messages", anthropicBody("hi"), caller = "summarizer")
-            assertEquals(200, hit.statusCode(), hit.body())
-            assertEquals("ok", anthropicText(hit.body()))
-            assertEquals("summarizer", calls(client)[1].getValue("role").jsonPrimitive.content)
-            assertEquals(
-                1,
-                calls(client)[1]
-                    .getValue("occurrence")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertEquals("text", calls(client)[1].getValue("outcome").jsonPrimitive.content)
         }
     }
 
@@ -436,33 +246,102 @@ class FakeLlmServerTest {
                     .orElse("")
                     .startsWith("text/event-stream"),
             )
-            val text =
-                resp.body().split("\n\n").filter { it.isNotBlank() }.mapNotNull { frame ->
-                    val lines = frame.lines()
-                    val event = lines.first { it.startsWith("event: ") }.removePrefix("event: ")
-                    if (event != "content_block_delta") return@mapNotNull null
-                    val data = lines.first { it.startsWith("data: ") }.removePrefix("data: ")
-                    Json
-                        .parseToJsonElement(data)
-                        .jsonObject
-                        .getValue("delta")
-                        .jsonObject
-                        .getValue("text")
-                        .jsonPrimitive.content
-                }
-            assertEquals(CANNED_ASSISTANT_TEXT, text.joinToString(""))
-            val call = calls(client).single()
-            assertEquals("DEFAULT", call.getValue("role").jsonPrimitive.content)
-            assertEquals("default", call.getValue("outcome").jsonPrimitive.content)
+            assertEquals(CANNED_ASSISTANT_TEXT, streamedText(resp.body()))
             assertEquals(
-                1,
-                call
-                    .getValue("occurrence")
-                    .jsonPrimitive.content
-                    .toInt(),
+                "default",
+                calls(client)
+                    .single()
+                    .getValue("outcome")
+                    .jsonPrimitive.content,
             )
         }
     }
+
+    @Test
+    fun `a streamed call takes its step like a buffered one`() {
+        withServer { client, _ ->
+            client.post("/control/scenario", inline("streamed", "buffered"))
+            val streamed = client.post("/anthropic/v1/messages", anthropicBody("a", stream = true))
+            assertEquals("streamed", streamedText(streamed.body()))
+            assertEquals("buffered", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("b")).body()))
+            assertEquals(listOf(1L, 2L), calls(client).longs("step"))
+        }
+    }
+
+    @Test
+    fun `requests that fail to parse, miss every route, or hit the batches route are not calls`() {
+        withServer { client, _ ->
+            client.post("/control/scenario", inline("one"))
+            assertEquals(400, client.post("/anthropic/v1/messages", "{").statusCode())
+            assertEquals(400, client.post("/anthropic/v1/messages", """{"model":"m"}""").statusCode())
+            assertEquals(404, client.post("/nope", "{}").statusCode())
+            assertEquals(501, client.post("/anthropic/v1/messages/batches", "{}").statusCode())
+            assertEquals("[]", client.get("/control/calls").body())
+
+            assertEquals("one", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("hi")).body()))
+            assertEquals(listOf(1L), calls(client).longs("seq"))
+        }
+    }
+
+    @Test
+    fun `calls that arrive together each get the step matching their own number`() {
+        val size = 20
+        withServer { client, _ ->
+            client.post("/control/scenario", inline(*Array(size) { "step-${it + 1}" }))
+            val pool = Executors.newFixedThreadPool(size)
+            val start = CountDownLatch(1)
+            val bodies =
+                try {
+                    (1..size)
+                        .map {
+                            pool.submit<String> {
+                                start.await()
+                                client.post("/anthropic/v1/messages", anthropicBody("go")).body()
+                            }
+                        }.also { start.countDown() }
+                        .map { it.get(15, TimeUnit.SECONDS) }
+                } finally {
+                    pool.shutdownNow()
+                }
+            // Each response's id carries its call number, and its text is that number's step.
+            bodies.forEach { body ->
+                val n =
+                    Json
+                        .parseToJsonElement(body)
+                        .jsonObject
+                        .getValue("id")
+                        .jsonPrimitive.content
+                        .removePrefix("fake-msg-")
+                assertEquals("step-$n", anthropicText(body))
+            }
+            assertEquals((1..size).map { "step-$it" }.toSet(), bodies.map { anthropicText(it) }.toSet())
+
+            val log = calls(client)
+            assertEquals((1L..size).toList(), log.longs("seq"))
+            assertEquals((1L..size).toList(), log.longs("step"))
+            val extra = client.post("/anthropic/v1/messages", anthropicBody("one too many"))
+            assertEquals(400, extra.statusCode())
+            assertContains(extra.body(), "no more steps")
+        }
+    }
+
+    private fun streamedText(body: String): String =
+        body
+            .split("\n\n")
+            .filter { it.isNotBlank() }
+            .mapNotNull { frame ->
+                val lines = frame.lines()
+                val event = lines.first { it.startsWith("event: ") }.removePrefix("event: ")
+                if (event != "content_block_delta") return@mapNotNull null
+                val data = lines.first { it.startsWith("data: ") }.removePrefix("data: ")
+                Json
+                    .parseToJsonElement(data)
+                    .jsonObject
+                    .getValue("delta")
+                    .jsonObject
+                    .getValue("text")
+                    .jsonPrimitive.content
+            }.joinToString("")
 
     @Test
     fun `cache tokens follow the request cache breakpoint`() {
@@ -619,7 +498,7 @@ class FakeLlmServerTest {
 
     @Test
     fun `loading a scenario requires exactly one of name or scenario`() {
-        val inline = """{"name":"inline","rules":[{"role":"r","respond":[{"text":"t"}]}]}"""
+        val inline = """{"name":"inline","steps":[{"text":"t"}]}"""
         withServer { client, engine ->
             val both = client.post("/control/scenario", """{"name":"hello","scenario":$inline}""")
             assertEquals(400, both.statusCode())
@@ -649,17 +528,20 @@ class FakeLlmServerTest {
     }
 
     @Test
-    fun `an inline scenario with an invalid systemShape or error status is rejected`() {
+    fun `an inline scenario with an invalid step, no steps, or rules is rejected`() {
         withServer { client, engine ->
-            val badShape = """{"scenario":{"name":"s","rules":[{"role":"r","match":{"systemShape":"Blocks"},"respond":[{"text":"t"}]}]}}"""
-            val shape = client.post("/control/scenario", badShape)
-            assertEquals(400, shape.statusCode(), shape.body())
-            assertContains(errorDetail(shape.body()), "systemShape")
-
-            val badStatus = """{"scenario":{"name":"s","rules":[{"role":"r","respond":[{"error":{"status":42}}]}]}}"""
+            val badStatus = """{"scenario":{"name":"s","steps":[{"text":"ok"},{"error":{"status":42}}]}}"""
             val status = client.post("/control/scenario", badStatus)
             assertEquals(400, status.statusCode(), status.body())
+            assertContains(errorDetail(status.body()), "step 2: ")
             assertContains(errorDetail(status.body()), "HTTP status")
+
+            val noSteps = client.post("/control/scenario", """{"scenario":{"name":"s","steps":[]}}""")
+            assertEquals(400, noSteps.statusCode(), noSteps.body())
+
+            val rules = client.post("/control/scenario", """{"scenario":{"name":"s","rules":[{"role":"r","respond":[{"text":"t"}]}]}}""")
+            assertEquals(400, rules.statusCode(), rules.body())
+            assertContains(errorDetail(rules.body()), "rules")
             assertEquals(null, engine.currentScenarioName())
         }
     }
@@ -670,23 +552,7 @@ class FakeLlmServerTest {
             engine.loadInline(
                 Scenario(
                     name = "html-error",
-                    rules =
-                        listOf(
-                            Rule(
-                                role = "r",
-                                respond =
-                                    listOf(
-                                        Step(
-                                            error =
-                                                ErrorStep(
-                                                    503,
-                                                    "<p>down</p>",
-                                                    mapOf("content-type" to "text/html"),
-                                                ),
-                                        ),
-                                    ),
-                            ),
-                        ),
+                    steps = listOf(Step(error = ErrorStep(503, "<p>down</p>", mapOf("content-type" to "text/html")))),
                 ),
             )
             val resp = client.post("/anthropic/v1/messages", anthropicBody("hi"))
@@ -700,7 +566,7 @@ class FakeLlmServerTest {
         withServer { client, engine ->
             val headers = mapOf("X-Retry-Hint" to "1", "x-retry-hint" to "2")
             engine.loadInline(
-                Scenario(name = "h", rules = listOf(Rule(role = "r", respond = listOf(Step(error = ErrorStep(429, "{}", headers)))))),
+                Scenario(name = "h", steps = listOf(Step(error = ErrorStep(429, "{}", headers)))),
             )
             val resp = client.post("/anthropic/v1/messages", anthropicBody("hi"))
             assertEquals(listOf("1", "2"), resp.headers().allValues("x-retry-hint").sorted())
@@ -712,7 +578,7 @@ class FakeLlmServerTest {
     fun `the gemini and batches routes match their documented paths exactly`() {
         withServer { client, _ ->
             val body = """{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}"""
-            assertEquals(400, client.post("/gemini/v1beta/models/m:generateContent", body).statusCode(), "the documented path, unmatched")
+            assertEquals(400, client.post("/gemini/v1beta/models/m:generateContent", body).statusCode(), "the documented path, no scenario")
             assertEquals(404, client.post("/gemini/m:generateContent", body).statusCode())
             assertEquals(404, client.post("/gemini/v1beta/models/m:generateContentXYZ", body).statusCode())
             assertEquals(404, client.post("/gemini/v1beta/models/m/extra:generateContent", body).statusCode())

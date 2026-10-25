@@ -17,8 +17,6 @@ internal data class ParsedRequest(
     val promptText: String,
     val messageCount: Int,
     val stream: Boolean = false,
-    /** Value of the `X-Fake-LLM-Caller` header when the client sent one. */
-    val caller: String? = null,
     val hasCacheBreakpoint: Boolean = false,
 )
 
@@ -54,10 +52,7 @@ private fun validateCacheControl(raw: JsonElement) {
 
 private val lenientJson = Json { ignoreUnknownKeys = true }
 
-internal fun parseAnthropicRequest(
-    body: String,
-    caller: String? = null,
-): ParsedRequest {
+internal fun parseAnthropicRequest(body: String): ParsedRequest {
     val obj = lenientJson.parseToJsonElement(body).jsonObject
     val model = (obj["model"] as? JsonPrimitive)?.content ?: ""
     val system = obj["system"]
@@ -85,7 +80,6 @@ internal fun parseAnthropicRequest(
         promptText = text,
         messageCount = messages.size,
         stream = stream,
-        caller = caller,
         hasCacheBreakpoint = hasCacheBreakpoint,
     )
 }

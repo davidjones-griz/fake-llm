@@ -15,7 +15,6 @@ private val geminiLenientJson = Json { ignoreUnknownKeys = true }
 internal fun parseGeminiRequest(
     body: String,
     modelFromPath: String,
-    caller: String? = null,
 ): ParsedRequest {
     val obj = geminiLenientJson.parseToJsonElement(body).jsonObject
     val contents = obj["contents"] as? JsonArray ?: error("request has no contents array")
@@ -35,7 +34,6 @@ internal fun parseGeminiRequest(
         promptText = text,
         messageCount = contents.size,
         stream = false,
-        caller = caller,
     )
 }
 

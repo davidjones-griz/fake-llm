@@ -169,7 +169,7 @@ private fun loadScenario(
                     ?: error("\"scenario\" must be a JSON object")
             engine.loadInline(ScenarioLoader.decode(inline))
         }
-    respond(ex, HTTP_OK, """{"loaded":${jsonString(scenario.name)},"rules":${scenario.rules.size}}""")
+    respond(ex, HTTP_OK, """{"loaded":${jsonString(scenario.name)},"steps":${scenario.steps.size}}""")
 }
 
 private fun scenariosJson(engine: ScenarioEngine): String {

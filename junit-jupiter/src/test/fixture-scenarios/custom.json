@@ -1,11 +1,5 @@
 {
   "name": "custom",
-  "description": "Found only in the fixtures' scenario directory, not on the classpath. Answers requests whose model contains \"custom\".",
-  "rules": [
-    {
-      "role": "custom",
-      "match": { "modelContains": "custom" },
-      "respond": [{ "text": "From the scenario directory." }]
-    }
-  ]
+  "description": "One step. Found only in the fixtures' scenario directory, not on the classpath.",
+  "steps": [{ "text": "From the scenario directory." }]
 }

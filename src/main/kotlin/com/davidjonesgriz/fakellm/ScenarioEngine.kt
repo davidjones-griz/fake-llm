@@ -1,13 +1,10 @@
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.nio.file.Path
-import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 
 /** What the HTTP layer sends back for one faked vendor call. */
 internal data class FakeResponse(
@@ -17,29 +14,20 @@ internal data class FakeResponse(
 )
 
 /**
- * One request the fake served. [ScenarioEngine.calls] and `GET /control/calls` return these.
- * Records are read-only for library users: the constructor and `copy` are internal, so fields
- * added with default values do not break callers.
+ * One call the fake received. [ScenarioEngine.calls] and `GET /control/calls` return these, in
+ * [seq] order. Records are read-only for library users: the constructor and `copy` are internal,
+ * so fields added with default values do not break callers.
  */
 @ConsistentCopyVisibility
 @Serializable
 public data class CallRecord internal constructor(
+    /** The call's number since the last load or reset, from 1. */
     val seq: Long,
     val vendor: String,
     val model: String,
     val systemShape: String,
     val messageCount: Int,
-    /**
-     * The matched rule's role label, `"DEFAULT"` when lenient mode served the canned reply, or
-     * `"UNMATCHED"` when strict mode rejected the request.
-     */
-    val role: String,
-    /**
-     * 1-based count of how many times this rule, or the lenient canned reply, has served a call.
-     * `0` for a strict-mode unmatched request, which does not advance a counter.
-     */
-    val occurrence: Int,
-    /** `"text"`, `"error:<status>"`, `"default"`, or `"unmatched"`. */
+    /** `"text"`, `"error:<status>"`, `"default"`, `"no-scenario"`, or `"no-more-steps"`. */
     val outcome: String,
     val timestampMs: Long,
     /**
@@ -47,32 +35,41 @@ public data class CallRecord internal constructor(
      * suffix of the prompt instead of the full text.
      */
     val promptSample: String,
+    /**
+     * The 1-based step that served the call, equal to [seq] whenever it is not null. Null when no
+     * step served it: [outcome] is `"default"`, `"no-scenario"` or `"no-more-steps"`.
+     */
+    val step: Int? = null,
 )
 
-/** One logged call and the [Step] that serves it. See [ScenarioEngine.resolve]. */
+/** One logged call and the [Step] that answers it. See [ScenarioEngine.resolve]. */
 internal data class Resolution(
     val seq: Long,
     val step: Step,
-    val role: String,
-    val occurrence: Int,
 )
 
 /**
- * Matches each request to a step and records it in the call log. Concurrent calls share only the
- * rule's occurrence counter: that counter orders steps when the caller sends requests one at a
- * time, and a single-step rule does not depend on which call wins the increment.
+ * Serves the loaded scenario's steps in call order and records each call in the call log.
  *
- * Resolution order: (a) the loaded scenario's rules, first match wins; (b) when [lenient] is
- * true, one generic canned assistant reply, logged with outcome `"default"` and role `"DEFAULT"`,
- * rendered in the dialect the caller requested; (c) otherwise HTTP 400, logged with outcome
- * `"unmatched"` and role `"UNMATCHED"`. Strict is the default, so a request the scenario does not
- * cover fails instead of returning a reply the caller can treat as success.
+ * After [load], [loadInline], [reset] or [unload], the next call is call 1. Call N gets step N of
+ * the loaded scenario. A call after the last step gets HTTP 400 (`"no more steps"`), in strict and
+ * lenient mode. With no scenario loaded, a call gets HTTP 400 (`"no scenario loaded"`), or the
+ * canned reply when [lenient] is true. Every call takes a number and one log entry, whatever it is
+ * answered with.
  *
- * Each engine has its own scenario, counters, call log and [scenarioDirectory], so engines in the
- * same JVM do not affect each other.
+ * One lock covers the scenario, the call counter and the log: a call reads the scenario, takes its
+ * number and appends its entry under it, and [load], [reset] and [unload] replace all three under
+ * it. So the log is always in call order, and a call that overlaps a reset belongs entirely to the
+ * run before it or the run after it.
+ *
+ * Each engine has its own scenario, call counter, call log and [scenarioDirectory], so engines in
+ * the same JVM do not affect each other.
  */
 public class ScenarioEngine(
-    /** Unmatched requests get the canned reply when true, and HTTP 400 when false. */
+    /**
+     * A call made while no scenario is loaded gets the canned reply when true, and HTTP 400 when
+     * false. It does not change what a call after the last step gets.
+     */
     public val lenient: Boolean = false,
     /**
      * Searched first when [load] reads a scenario by name, as `<scenarioDirectory>/<name>.json`,
@@ -85,59 +82,58 @@ public class ScenarioEngine(
     /** Creates an engine with no scenario directory; for Java, `new ScenarioEngine(lenient)`. */
     public constructor(lenient: Boolean) : this(lenient, null)
 
-    @Volatile private var scenario: Scenario? = null
-    private val occurrences = ConcurrentHashMap<Int, AtomicInteger>()
-
-    /**
-     * Occurrence counter for the canned reply in lenient mode. Separate from [occurrences], which
-     * is keyed by rule index. Strict unmatched requests do not use it. Cleared with the loaded
-     * scenario. The canned reply is one repeating step.
-     */
-    private val genericDefaultOccurrences = AtomicInteger(0)
-    private val log = Collections.synchronizedList(mutableListOf<CallRecord>())
-    private val seq = AtomicLong(0)
+    private val lock = Any()
+    private var scenario: Scenario? = null
+    private var callCount = 0L
+    private var log = mutableListOf<CallRecord>()
 
     /**
      * Loads the scenario [name] and installs it as [loadInline] does. Reads
      * `<scenarioDirectory>/<name>.json` when [scenarioDirectory] is set and that file exists, then
      * the project's classpath resource `/scenarios/<name>.json`, then the bundled scenario. Throws
      * when the name is not `[A-Za-z0-9_-]+`, no such scenario exists, the file does not decode, or
-     * its declared name differs from [name].
+     * its declared name differs from [name]; the engine is then unchanged.
      */
     public fun load(name: String): Scenario = loadInline(ScenarioLoader.load(name, scenarioDirectory))
 
     /**
-     * Installs [s] as the active scenario and resets counters and the call log.
+     * Installs [s] as the loaded scenario and starts it over, as [reset] does.
      * By-name [load] delegates here. `POST /control/scenario` with a `scenario` object does too.
      */
     public fun loadInline(s: Scenario): Scenario {
-        scenario = s
-        reset()
+        replace(s)
         return s
     }
 
     /**
-     * Removes the loaded scenario, then clears counters and the call log, so the engine is as if no
-     * scenario had been loaded: requests get the strict-mode 400, or the lenient canned reply.
-     * Unlike [reset], which keeps the scenario.
+     * Removes the loaded scenario and empties the call log; the next call is call 1. Calls then get
+     * the strict-mode 400 or the lenient canned reply.
      */
     public fun unload() {
-        scenario = null
-        reset()
+        replace(null)
     }
 
-    /** Clears counters and the call log. Keeps the loaded scenario. */
+    /**
+     * Starts the loaded scenario over: empties the call log, and the next call is call 1 and gets
+     * step 1. Keeps the loaded scenario.
+     */
     public fun reset() {
-        occurrences.clear()
-        genericDefaultOccurrences.set(0)
-        log.clear()
+        synchronized(lock) { replace(scenario) }
+    }
+
+    private fun replace(s: Scenario?) {
+        synchronized(lock) {
+            scenario = s
+            callCount = 0
+            log = mutableListOf()
+        }
     }
 
     /** The loaded scenario's name, or null when none is loaded. */
-    public fun currentScenarioName(): String? = scenario?.name
+    public fun currentScenarioName(): String? = synchronized(lock) { scenario?.name }
 
-    /** A snapshot of the call log, oldest first. */
-    public fun calls(): List<CallRecord> = synchronized(log) { log.toList() }
+    /** A snapshot of the call log, in call order. */
+    public fun calls(): List<CallRecord> = synchronized(lock) { log.toList() }
 
     /** Whole JSON response for one request. */
     internal fun handle(
@@ -157,105 +153,97 @@ public class ScenarioEngine(
     }
 
     /**
-     * Matches, advances the rule's (or the lenient canned reply's) occurrence counter, and records
-     * the one call-log entry for this request. A strict unmatched request is recorded with
-     * occurrence 0. Shared by the buffered [handle] and the SSE path in FakeLlmApp.kt, so a
-     * request is matched and logged once whichever transport renders it.
-     * See the class doc for the resolution order.
+     * Numbers the call, picks what answers it, and records its one call-log entry, all under the
+     * lock; the 400 bodies are built after it. Shared by the buffered [handle] and the SSE path in
+     * FakeLlmApp.kt, so a request is counted and logged once whichever transport renders it. The
+     * 400s are error steps with [Step.streamErrorAfterChunks] unset, so the Anthropic streaming path
+     * sends their JSON and writes no SSE bytes.
      */
     internal fun resolve(
         vendor: String,
         req: ParsedRequest,
-    ): Resolution = resolveScenarioRule(vendor, req) ?: resolveFallback(vendor, req)
-
-    /** The loaded scenario's rules, first match wins. Null when none matches or none is loaded. */
-    private fun resolveScenarioRule(
-        vendor: String,
-        req: ParsedRequest,
-    ): Resolution? {
-        val s = scenario
-        val idx = s?.rules?.indexOfFirst { it.match.matches(req) } ?: -1
-        if (s == null || idx < 0) return null
-        val rule = s.rules[idx]
-        val occurrence = occurrences.computeIfAbsent(idx) { AtomicInteger(0) }.incrementAndGet()
-        val step = rule.respond[(occurrence - 1).coerceAtMost(rule.respond.size - 1)]
-        val n = seq.incrementAndGet()
-        val outcome = if (step.error != null) "error:${step.error.status}" else "text"
-        recordCall(log, n, vendor, req, rule.role, occurrence, outcome)
-        return Resolution(seq = n, step = step, role = rule.role, occurrence = occurrence)
+    ): Resolution {
+        val (n, loaded, served) =
+            synchronized(lock) {
+                val n = ++callCount
+                val s = scenario
+                val step = s?.steps?.takeIf { n <= it.size }?.get((n - 1).toInt())
+                val outcome =
+                    when {
+                        step != null -> if (step.error != null) "error:${step.error.status}" else "text"
+                        s != null -> "no-more-steps"
+                        lenient -> "default"
+                        else -> "no-scenario"
+                    }
+                log.add(callRecord(n, vendor, req, outcome, if (step != null) n.toInt() else null))
+                Triple(n, s, step)
+            }
+        val step =
+            served ?: when {
+                loaded != null -> errorStep(noMoreStepsBody(loaded, n, vendor, req))
+                lenient -> Step(text = CANNED_ASSISTANT_TEXT)
+                else -> errorStep(noScenarioBody(n, vendor, req))
+            }
+        return Resolution(seq = n, step = step)
     }
-
-    /**
-     * No scenario rule matched. In lenient mode, one canned assistant reply, in whatever dialect
-     * [handle] renders, logged as role `"DEFAULT"`. Otherwise HTTP 400 with a JSON body, logged as
-     * [UNMATCHED_ROLE] with occurrence 0; that step is an error step with
-     * [Step.streamErrorAfterChunks] unset, so the Anthropic streaming path sends that JSON and
-     * writes no SSE bytes.
-     */
-    private fun resolveFallback(
-        vendor: String,
-        req: ParsedRequest,
-    ): Resolution =
-        if (lenient) {
-            val occurrence = genericDefaultOccurrences.incrementAndGet()
-            val step = Step(text = CANNED_ASSISTANT_TEXT)
-            val n = seq.incrementAndGet()
-            recordCall(log, n, vendor, req, role = "DEFAULT", occurrence = occurrence, outcome = "default")
-            Resolution(seq = n, step = step, role = "DEFAULT", occurrence = occurrence)
-        } else {
-            val loaded = scenario
-            val why = if (loaded == null) NO_SCENARIO_WHY else noRuleWhy(loaded.name)
-            val step = Step(error = ErrorStep(status = HTTP_BAD_REQUEST, body = unmatchedBody(vendor, req, why)))
-            val n = seq.incrementAndGet()
-            recordCall(log, n, vendor, req, role = UNMATCHED_ROLE, occurrence = 0, outcome = UNMATCHED_OUTCOME)
-            Resolution(seq = n, step = step, role = UNMATCHED_ROLE, occurrence = 0)
-        }
 }
 
-private fun unmatchedBody(
-    vendor: String,
-    req: ParsedRequest,
-    why: String,
-): String =
-    buildJsonObject {
-        put("fake_llm_error", "unmatched request")
-        put("why", why)
-        put("vendor", vendor)
-        put("model", req.model)
-        put("system_shape", req.systemShape)
-        put("message_count", req.messageCount)
-        put("caller", req.caller)
-        put("prompt_preview", req.promptText.take(PROMPT_PREVIEW_CHARS))
-    }.toString()
+private fun errorStep(body: String): Step = Step(error = ErrorStep(status = HTTP_BAD_REQUEST, body = body))
 
-private fun noRuleWhy(name: String): String = "no rule in scenario '$name' matches this request"
-
-/** Appends one [CallRecord] to [log]. */
-@Suppress("LongParameterList") // one flat log row; a wrapper type would only re-nest the same fields
-private fun recordCall(
-    log: MutableList<CallRecord>,
+private fun noScenarioBody(
     n: Long,
     vendor: String,
     req: ParsedRequest,
-    role: String,
-    occurrence: Int,
-    outcome: String,
+): String =
+    buildJsonObject {
+        put("fake_llm_error", "no scenario loaded")
+        putCallFields(n, vendor, req)
+    }.toString()
+
+private fun noMoreStepsBody(
+    s: Scenario,
+    n: Long,
+    vendor: String,
+    req: ParsedRequest,
+): String =
+    buildJsonObject {
+        put("fake_llm_error", "no more steps")
+        put("scenario", s.name)
+        put("steps", s.steps.size)
+        putCallFields(n, vendor, req)
+    }.toString()
+
+private fun JsonObjectBuilder.putCallFields(
+    n: Long,
+    vendor: String,
+    req: ParsedRequest,
 ) {
-    log.add(
-        CallRecord(
-            seq = n,
-            vendor = vendor,
-            model = req.model,
-            systemShape = req.systemShape,
-            messageCount = req.messageCount,
-            role = role,
-            occurrence = occurrence,
-            outcome = outcome,
-            timestampMs = System.currentTimeMillis(),
-            promptSample = req.promptText.takeLast(PROMPT_SAMPLE_CHARS),
-        ),
-    )
+    put("seq", n)
+    put("vendor", vendor)
+    put("model", req.model)
+    put("system_shape", req.systemShape)
+    put("message_count", req.messageCount)
+    put("prompt_preview", req.promptText.take(PROMPT_PREVIEW_CHARS))
 }
+
+private fun callRecord(
+    n: Long,
+    vendor: String,
+    req: ParsedRequest,
+    outcome: String,
+    step: Int?,
+): CallRecord =
+    CallRecord(
+        seq = n,
+        vendor = vendor,
+        model = req.model,
+        systemShape = req.systemShape,
+        messageCount = req.messageCount,
+        outcome = outcome,
+        timestampMs = System.currentTimeMillis(),
+        promptSample = req.promptText.takeLast(PROMPT_SAMPLE_CHARS),
+        step = step,
+    )
 
 @Suppress("LongParameterList") // the vendor-neutral reply fields, passed through to one dialect
 internal fun vendorEnvelope(
@@ -272,22 +260,12 @@ internal fun vendorEnvelope(
         else -> anthropicEnvelope(text, stopReason, seq, cacheable, thinking)
     }
 
-private fun Match.matches(req: ParsedRequest): Boolean =
-    (modelContains == null || req.model.contains(modelContains)) &&
-        (systemShape == null || req.systemShape == systemShape) &&
-        (caller == null || req.caller == caller) &&
-        promptContainsAll.all { req.promptText.contains(it) } &&
-        (promptContainsAny.isEmpty() || promptContainsAny.any { req.promptText.contains(it) })
-
 internal const val HTTP_OK = 200
 internal const val CANNED_ASSISTANT_TEXT = "This is a canned response from fake-llm."
 
 private const val HTTP_BAD_REQUEST = 400
-private const val UNMATCHED_ROLE = "UNMATCHED"
-private const val UNMATCHED_OUTCOME = "unmatched"
-private const val NO_SCENARIO_WHY = "no scenario loaded; POST /control/scenario first (or start with --lenient)"
 
-/** Characters of prompt text kept, from the start, on an unmatched request's `prompt_preview`. */
+/** Characters of prompt text kept, from the start, on a 400 body's `prompt_preview`. */
 private const val PROMPT_PREVIEW_CHARS = 200
 
 /** Characters of prompt text kept, from the end, on [CallRecord.promptSample]. */

@@ -3,8 +3,6 @@ package example
 import com.davidjonesgriz.fakellm.ErrorStep
 import com.davidjonesgriz.fakellm.FakeLlmClient
 import com.davidjonesgriz.fakellm.FakeLlmServer
-import com.davidjonesgriz.fakellm.Match
-import com.davidjonesgriz.fakellm.Rule
 import com.davidjonesgriz.fakellm.Scenario
 import com.davidjonesgriz.fakellm.ScenarioEngine
 import com.davidjonesgriz.fakellm.Step
@@ -44,9 +42,13 @@ class SummarizerTest {
 
         assertEquals("Quarterly revenue rose 12% on subscription growth.", summary.text)
         assertFalse(summary.truncated)
-        val call = server.engine.calls().single()
-        assertEquals("summarize", call.role)
-        assertContains(call.promptSample, "Revenue for the quarter")
+        assertContains(
+            server.engine
+                .calls()
+                .single()
+                .promptSample,
+            "Revenue for the quarter",
+        )
     }
 
     @Test
@@ -57,9 +59,7 @@ class SummarizerTest {
 
             assertEquals("Loaded over HTTP.", summarizer.summarize("doc").text)
 
-            val call = client.calls().single()
-            assertEquals("summarize", call.role)
-            assertEquals("text", call.outcome)
+            assertEquals("text", client.calls().single().outcome)
         }
     }
 
@@ -91,7 +91,8 @@ class SummarizerTest {
 
     @Test
     fun `gives up when the rate limit persists`() {
-        server.engine.loadInline(scenario(Step(error = ErrorStep(status = 429, headers = mapOf("retry-after" to "0")))))
+        val limited = Step(error = ErrorStep(status = 429, headers = mapOf("retry-after" to "0")))
+        server.engine.loadInline(scenario(limited, limited))
 
         val failure = assertFailsWith<IllegalStateException> { summarizer.summarize("doc") }
 
@@ -107,19 +108,15 @@ class SummarizerTest {
     }
 
     @Test
-    fun `a request the scenario does not cover fails loudly`() {
-        server.engine.loadInline(
-            Scenario(
-                name = "other-model-only",
-                rules = listOf(Rule(role = "other", match = Match(modelContains = "other-model"), respond = listOf(Step(text = "x")))),
-            ),
-        )
+    fun `a call the scenario has no step for fails loudly`() {
+        server.engine.loadInline(scenario(Step(text = "The only summary.")))
+        summarizer.summarize("doc")
 
-        val failure = assertFailsWith<IllegalStateException> { summarizer.summarize("doc") }
+        val failure = assertFailsWith<IllegalStateException> { summarizer.summarize("another doc") }
 
         assertContains(failure.message!!, "HTTP 400")
-        assertContains(failure.message!!, "no rule in scenario 'other-model-only' matches this request")
+        assertContains(failure.message!!, "no more steps")
     }
 
-    private fun scenario(vararg steps: Step) = Scenario(name = "inline", rules = listOf(Rule(role = "summarize", respond = steps.toList())))
+    private fun scenario(vararg steps: Step) = Scenario(name = "inline", steps = steps.toList())
 }

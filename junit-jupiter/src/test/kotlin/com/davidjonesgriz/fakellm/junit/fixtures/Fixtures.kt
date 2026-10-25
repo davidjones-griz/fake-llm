@@ -2,6 +2,7 @@ package com.davidjonesgriz.fakellm.junit.fixtures
 
 import com.davidjonesgriz.fakellm.FakeLlmServer
 import com.davidjonesgriz.fakellm.ScenarioEngine
+import com.davidjonesgriz.fakellm.junit.FakeLlmAllowUnservedCalls
 import com.davidjonesgriz.fakellm.junit.FakeLlmExtension
 import com.davidjonesgriz.fakellm.junit.FakeLlmScenario
 import com.davidjonesgriz.fakellm.junit.FakeLlmTest
@@ -151,9 +152,13 @@ class PrecedenceFixture {
     }
 }
 
-/** No @FakeLlmScenario anywhere: a scenario loaded in @BeforeAll is unloaded before the test. */
+/**
+ * No @FakeLlmScenario anywhere: a scenario loaded in @BeforeAll is unloaded before the test. Its
+ * call gets the strict-mode 400 on purpose, so the class opts out of the unserved-call check.
+ */
 @Fixture
 @FakeLlmTest
+@FakeLlmAllowUnservedCalls
 class NoScenarioFixture {
     @Test
     fun unloaded(server: FakeLlmServer) {
@@ -171,8 +176,8 @@ class NoScenarioFixture {
 }
 
 /**
- * fail-then-retry answers a caller's first request with HTTP 500 and the next with 200, so each
- * test sees 500 only if the step counters were reset, and one call only if the log was cleared.
+ * fail-then-retry answers call 1 with HTTP 500 and call 2 with 200, so each test sees 500 only if
+ * the scenario started over, and one call only if the log was cleared.
  */
 @Fixture
 @FakeLlmTest
@@ -194,16 +199,23 @@ class IsolationFixture {
     }
 }
 
-/** scenarioDirectory finds a scenario that is not on the classpath; lenient answers unmatched requests. */
+/**
+ * scenarioDirectory finds a scenario that is not on the classpath; lenient answers a call made while
+ * no scenario is loaded.
+ */
 @Fixture
 @FakeLlmTest(scenarioDirectory = "src/test/fixture-scenarios", lenient = true)
-@FakeLlmScenario("custom")
 class ConfiguredFixture {
     @Test
+    @FakeLlmScenario("custom")
     fun configured(server: FakeLlmServer) {
         Sink.add("configured:lenient", server.engine.lenient)
-        Sink.add("configured:matched", post(server, model = "custom-model"))
-        Sink.add("configured:unmatched", post(server))
+        Sink.add("configured:fromDirectory", post(server))
+    }
+
+    @Test
+    fun noScenario(server: FakeLlmServer) {
+        Sink.add("configured:noScenario", post(server))
     }
 }
 
@@ -218,10 +230,15 @@ class StaticRegisteredFixture {
     @FakeLlmScenario("custom")
     fun second(server: FakeLlmServer) = record(server)
 
+    @Test
+    fun noScenario(server: FakeLlmServer) {
+        Sink.add("static:port", server.port)
+        Sink.add("static:noScenario", post(server))
+    }
+
     private fun record(server: FakeLlmServer) {
         Sink.add("static:port", server.port)
-        Sink.add("static:matched", post(server, model = "custom-model"))
-        Sink.add("static:unmatched", post(server))
+        Sink.add("static:fromDirectory", post(server))
     }
 
     companion object {

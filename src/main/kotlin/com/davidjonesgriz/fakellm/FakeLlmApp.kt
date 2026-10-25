@@ -14,29 +14,28 @@ import kotlin.system.exitProcess
  * embeds the server calls [startFakeLlmServer] instead.
  *
  * Deterministic, scenario-driven stand-in for vendor LLM HTTP APIs. Clients send each vendor's
- * usual JSON to this server. The `X-Fake-LLM-Caller` header is a free-form tag so scenario rules
- * can match on which part of the client is calling.
+ * usual JSON to this server, and the loaded scenario's steps answer the calls in order.
  *
  * Surfaces:
  *  - `POST /anthropic/v1/messages` — Anthropic Messages. `"stream": true` is answered as a
  *    Server-Sent Events stream of the Messages event sequence. Any other request is one JSON
- *    assistant message. The response comes from the first matching scenario rule. When no
- *    scenario is loaded, or no rule matches, strict mode (the default) answers HTTP 400 with a
- *    JSON body and writes no SSE bytes. Lenient mode answers with the canned assistant reply.
+ *    assistant message. The response is the loaded scenario's next step. A call after the last
+ *    step, or a call with no scenario loaded in strict mode (the default), is HTTP 400 with a
+ *    JSON body, and no SSE bytes are written. With no scenario loaded, lenient mode answers with
+ *    the canned assistant reply.
  *  - `/anthropic/v1/messages/batches` — the Batches API is not implemented; any request answers 501.
- *  - `POST /openai/v1/chat/completions` — OpenAI chat completions, as one JSON response. An
- *    unmatched request is HTTP 400 in strict mode, or the canned reply in lenient mode.
+ *  - `POST /openai/v1/chat/completions` — OpenAI chat completions, as one JSON response.
  *  - `POST /gemini/…:generateContent` — Gemini `generateContent`, as one JSON response. The model
- *    id is the path segment between `/models/` and `:`. An unmatched request is HTTP 400 in strict
- *    mode, or the canned reply in lenient mode.
+ *    id is the path segment between `/models/` and `:`.
+ *  - The three vendor routes share the scenario's steps: call N, on whichever route, gets step N.
  *  - `GET /health` — liveness, the loaded scenario name, and whether lenient mode is on. Always
  *    open, including when a control token is configured.
  *  - `POST /control/scenario` with exactly one of `{"name": "..."}` or `{"scenario": { ... }}` —
- *    load that scenario and reset counters and the call log. A name is resolved from the scenario
+ *    load that scenario and start it over (empty call log, next call is call 1). A name is resolved from the scenario
  *    directory (`--scenario-dir` or `FAKE_LLM_SCENARIO_DIR`), then the classpath `/scenarios/`, then
  *    the bundled scenarios.
  *  - `GET /control/scenarios` — `{"scenarios": [names]}` from the directory and the indexes.
- *  - `POST /control/reset` — reset counters and the call log; keep the loaded scenario.
+ *  - `POST /control/reset` — start the loaded scenario over: empty call log, next call is call 1.
  *  - `GET /control/calls` — the call log.
  *
  * Startup flags override the matching environment variable when both are set: `--port <n>` (`PORT`,
@@ -119,9 +118,7 @@ internal fun handleMessages(
     engine: ScenarioEngine,
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
-    // Free-form caller tag from the header. Scenario rules may match on it.
-    val caller = ex.requestHeaders.getFirst(CALLER_HEADER)
-    val parsed = parseAnthropicRequest(body, caller)
+    val parsed = parseAnthropicRequest(body)
     if (parsed.stream) {
         streamAnthropicMessages(ex, engine, parsed)
     } else {
@@ -135,8 +132,7 @@ internal fun handleOpenAi(
     engine: ScenarioEngine,
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
-    val caller = ex.requestHeaders.getFirst(CALLER_HEADER)
-    val parsed = parseOpenAiRequest(body, caller)
+    val parsed = parseOpenAiRequest(body)
     val response = engine.handle(vendor = "openai", req = parsed)
     respond(ex, response.status, response.body, response.headers)
 }
@@ -147,14 +143,13 @@ internal fun handleGemini(
     path: String,
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
-    val caller = ex.requestHeaders.getFirst(CALLER_HEADER)
-    val parsed = parseGeminiRequest(body, geminiModelFromPath(path), caller)
+    val parsed = parseGeminiRequest(body, geminiModelFromPath(path))
     val response = engine.handle(vendor = "gemini", req = parsed)
     respond(ex, response.status, response.body, response.headers)
 }
 
 /**
- * SSE variant of [handleMessages]. Resolves the same rule, step, and occurrence through
+ * SSE variant of [handleMessages]. Takes the call's number and step through the same
  * [ScenarioEngine.resolve] that [ScenarioEngine.handle] uses, so the call log records the request
  * once whichever transport answers it.
  *
@@ -162,8 +157,8 @@ internal fun handleGemini(
  * [Step.streamErrorAfterChunks] is null is a plain HTTP error, and no SSE bytes are written
  * first: that is how a provider rejects before generation starts (the usual timing for rate-limit
  * and overload errors). Setting [Step.streamErrorAfterChunks] opts into the other timing — some
- * text deltas, then an in-stream `event: error`. A strict-mode unmatched request is that same
- * plain HTTP 400: [ScenarioEngine.resolve] records it as an error step with
+ * text deltas, then an in-stream `event: error`. The "no more steps" and "no scenario loaded" 400s
+ * are that same plain HTTP error: [ScenarioEngine.resolve] returns them as error steps with
  * [Step.streamErrorAfterChunks] unset, and the branch below returns before any SSE bytes.
  */
 private fun streamAnthropicMessages(
@@ -213,7 +208,6 @@ private fun streamAnthropicMessages(
 private const val DEFAULT_PORT = "8080"
 private const val HTTP_THREADS = 16
 private const val MAX_PORT = 65535
-private const val CALLER_HEADER = "X-Fake-LLM-Caller"
 
 internal class StartupUsageException(
     message: String,

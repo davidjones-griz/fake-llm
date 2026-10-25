@@ -23,9 +23,16 @@ info:
 
     **Compatibility.** Clients should ignore response fields they do not know: a later version
     may add fields. Request bodies are strict: unknown fields are rejected. Human-readable
-    messages (`fake_llm_error` texts other than `"exception"` and `"unmatched request"`, and
-    `detail`) are diagnostics, not part of the contract. Integers are written as JSON integers,
+    messages (`fake_llm_error` texts other than `"exception"`, `"no scenario loaded"` and
+    `"no more steps"`, and `detail`) are diagnostics, not part of the contract. Integers are written as JSON integers,
     without a fraction or exponent: `24.0` is rejected where an integer is expected.
+
+    **Scenarios and calls.** A scenario is an ordered list of steps. Every request to a vendor
+    route that does not get `ExceptionError` is a call: it takes the next call number (`seq`,
+    from 1) and one call-log entry, and call N after a load or reset gets step N, on any vendor
+    route. Calls are numbered in arrival order. A call after the last step gets
+    `NoMoreStepsError`; the last step does not repeat. A request that gets `ExceptionError`, a
+    404 and the Batches 501 are not calls.
 
     **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
     cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.
@@ -78,8 +85,9 @@ paths:
       operationId: loadScenario
       summary: Load a scenario by name or inline
       description: |
-        Replaces the loaded scenario and clears the call log and the occurrence counters. A
-        name is looked up in this order, and the first match wins:
+        Replaces the loaded scenario and starts it over: the call log is emptied, and the next
+        call is call 1 and gets step 1 (its response IDs restart too). A name is looked up in
+        this order, and the first match wins:
 
         1. `<name>.json` in the server's scenario directory, when one is set;
         2. a scenario the embedding project provides under that name (for the JVM library: the
@@ -137,8 +145,11 @@ paths:
     post:
       tags: [control]
       operationId: resetState
-      summary: Clear the call log and occurrence counters, keeping the scenario
-      description: The request body is ignored. Sequence numbers are not restarted.
+      summary: Start the loaded scenario over
+      description: |
+        Keeps the loaded scenario and starts it over, as loading it again would: the call log is
+        emptied, and the next call is call 1 and gets step 1 (its response IDs restart too). The
+        request body is ignored.
       security:
         - controlToken: []
         - {}
@@ -155,13 +166,13 @@ paths:
     get:
       tags: [control]
       operationId: listCalls
-      summary: Read the call log, oldest first
+      summary: Read the call log, in call order
       security:
         - controlToken: []
         - {}
       responses:
         "200":
-          description: The calls served since the last load or reset.
+          description: The calls since the last load or reset, in `seq` order.
           content:
             application/json:
               schema:
@@ -351,16 +362,18 @@ components:
             $ref: "#/components/schemas/MessageError"
     VendorBadRequest:
       description: |
-        fake-llm's own 400s, not the provider's. In strict mode (the default), a request that no
-        rule of the loaded scenario matches, or any request when no scenario is loaded, gets
-        `UnmatchedRequestError`. A request body that is not valid JSON, or lacks the `messages`
+        fake-llm's own 400s, not the provider's. A call after the loaded scenario's last step gets
+        `NoMoreStepsError`, in strict and lenient mode. A call when no scenario is loaded gets
+        `NoScenarioError` in strict mode (the default); lenient mode serves the canned reply. On
+        the Anthropic route both are JSON even when the request sets `"stream": true`. A request body that is not valid JSON, or lacks the `messages`
         (Anthropic, OpenAI) or `contents` (Gemini) array, gets `ExceptionError`. A step's scripted
         error is outside these schemas, even when its status is 400: see `ScriptedError`.
       content:
         application/json:
           schema:
             oneOf:
-              - $ref: "#/components/schemas/UnmatchedRequestError"
+              - $ref: "#/components/schemas/NoScenarioError"
+              - $ref: "#/components/schemas/NoMoreStepsError"
               - $ref: "#/components/schemas/ExceptionError"
     ScriptedError:
       description: |
@@ -380,7 +393,9 @@ components:
           description: The loaded scenario's name, or null when none is loaded.
         lenient:
           type: boolean
-          description: Whether an unmatched request gets the canned reply instead of HTTP 400.
+          description: |
+            Whether a call made while no scenario is loaded gets the canned reply instead of
+            `NoScenarioError`. It does not change what a call after the last step gets.
     LoadRequest:
       description: Exactly one of `name` or `scenario`.
       oneOf:
@@ -402,16 +417,16 @@ components:
               $ref: "#/components/schemas/Scenario"
     LoadResult:
       type: object
-      required: [loaded, rules]
+      required: [loaded, steps]
       properties:
         loaded:
           type: string
           description: The loaded scenario's name.
-        rules:
+        steps:
           type: integer
           minimum: 1
           maximum: 2147483647
-          description: How many rules it has.
+          description: How many steps it has.
     ScenarioNames:
       type: object
       required: [scenarios]
@@ -429,15 +444,14 @@ components:
           const: true
     CallRecord:
       type: object
-      description: One request the server served.
+      description: One call.
       required:
         - seq
+        - step
         - vendor
         - model
         - systemShape
         - messageCount
-        - role
-        - occurrence
         - outcome
         - timestampMs
         - promptSample
@@ -446,7 +460,14 @@ components:
           type: integer
           minimum: 1
           maximum: 9223372036854775807
-          description: Sequence number, increasing across loads and resets.
+          description: The call's number since the last load or reset, from 1.
+        step:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 2147483647
+          description: |
+            The 1-based step that served the call: equal to `seq` whenever it is not null. Null
+            when no step served it (`outcome` is `default`, `no-scenario` or `no-more-steps`).
         vendor:
           type: string
           enum: [anthropic, openai, gemini]
@@ -459,22 +480,12 @@ components:
           minimum: 0
           maximum: 2147483647
           description: The length of the request's `messages` (Anthropic, OpenAI) or `contents` (Gemini) array.
-        role:
-          type: string
-          description: |
-            The matched rule's `role`, `DEFAULT` when lenient mode served the canned reply, or
-            `UNMATCHED` when strict mode rejected the request.
-        occurrence:
-          type: integer
-          minimum: 0
-          maximum: 2147483647
-          description: |
-            1-based count of the calls the matched rule (or the lenient canned reply) has served;
-            0 for an unmatched request.
         outcome:
           type: string
-          pattern: "^(text|default|unmatched|error:[1-5][0-9]{2})$"
-          description: "`text`, `error:<status>` (a scripted error), `default` (the lenient canned reply) or `unmatched`."
+          pattern: "^(text|default|no-scenario|no-more-steps|error:[1-5][0-9]{2})$"
+          description: |
+            `text` or `error:<status>` (a step served it), `default` (the lenient canned reply),
+            `no-scenario` (`NoScenarioError`) or `no-more-steps` (`NoMoreStepsError`).
         timestampMs:
           type: integer
           minimum: 0
@@ -482,7 +493,13 @@ components:
           description: Wall-clock time the call was recorded, in milliseconds since the epoch.
         promptSample:
           type: string
-          description: The last 500 UTF-16 code units of the combined prompt text (see `promptContainsAll`).
+          description: |
+            The last 500 UTF-16 code units of the combined prompt text: each text piece of the
+            request, in order, each followed by a newline. Anthropic: `system` when it is a string
+            or an array of text blocks, then each message `content` that is a string or an array
+            of text blocks (other blocks contribute nothing). OpenAI: each message `content` that
+            is a JSON string, including a system message (array content is skipped). Gemini: each
+            `contents[].parts[].text`.
     RequestSystemShape:
       type: string
       enum: [blocks, string, absent, unknown]
@@ -509,48 +526,76 @@ components:
         detail:
           type: [string, "null"]
           description: A human-readable explanation; not part of the contract.
-    UnmatchedRequestError:
+    NoScenarioError:
       type: object
-      required:
-        - fake_llm_error
-        - why
-        - vendor
-        - model
-        - system_shape
-        - message_count
-        - caller
-        - prompt_preview
+      description: A call made while no scenario is loaded, in strict mode.
+      required: [fake_llm_error, seq, vendor, model, system_shape, message_count, prompt_preview]
       properties:
         fake_llm_error:
           type: string
-          const: unmatched request
-        why:
-          type: string
-          description: Why nothing matched; not part of the contract.
+          const: no scenario loaded
+        seq:
+          $ref: "#/components/schemas/CallNumber"
         vendor:
-          type: string
-          enum: [anthropic, openai, gemini]
+          $ref: "#/components/schemas/Vendor"
         model:
           type: string
         system_shape:
           $ref: "#/components/schemas/RequestSystemShape"
         message_count:
-          type: integer
-          minimum: 0
-          maximum: 2147483647
-        caller:
-          type: [string, "null"]
-          description: The `X-Fake-LLM-Caller` request header, or null when absent.
+          $ref: "#/components/schemas/MessageCount"
         prompt_preview:
+          $ref: "#/components/schemas/PromptPreview"
+    NoMoreStepsError:
+      type: object
+      description: A call after the loaded scenario's last step.
+      required: [fake_llm_error, scenario, steps, seq, vendor, model, system_shape, message_count, prompt_preview]
+      properties:
+        fake_llm_error:
           type: string
-          description: The first 200 UTF-16 code units of the combined prompt text.
+          const: no more steps
+        scenario:
+          type: string
+          description: The loaded scenario's name.
+        steps:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: How many steps it has.
+        seq:
+          $ref: "#/components/schemas/CallNumber"
+        vendor:
+          $ref: "#/components/schemas/Vendor"
+        model:
+          type: string
+        system_shape:
+          $ref: "#/components/schemas/RequestSystemShape"
+        message_count:
+          $ref: "#/components/schemas/MessageCount"
+        prompt_preview:
+          $ref: "#/components/schemas/PromptPreview"
+    CallNumber:
+      type: integer
+      minimum: 1
+      maximum: 9223372036854775807
+      description: The call's number since the last load or reset, as `seq` in the call log.
+    Vendor:
+      type: string
+      enum: [anthropic, openai, gemini]
+    MessageCount:
+      type: integer
+      minimum: 0
+      maximum: 2147483647
+      description: The length of the request's `messages` (Anthropic, OpenAI) or `contents` (Gemini) array.
+    PromptPreview:
+      type: string
+      description: The first 200 UTF-16 code units of the combined prompt text (see `CallRecord.promptSample`).
     Scenario:
       type: object
       description: |
-        One named behaviour: an ordered list of rules. The first rule whose `match` accepts a
-        request wins. Each match takes the rule's next `respond` step, and the last step repeats
-        once the list runs out.
-      required: [name, rules]
+        One named behaviour: an ordered list of steps. After a load or reset, call N gets step N.
+        A call after the last step gets `NoMoreStepsError`.
+      required: [name, steps]
       additionalProperties: false
       properties:
         name:
@@ -558,67 +603,11 @@ components:
         description:
           type: string
           default: ""
-        rules:
-          type: array
-          minItems: 1
-          items:
-            $ref: "#/components/schemas/Rule"
-    Rule:
-      type: object
-      required: [role, respond]
-      additionalProperties: false
-      properties:
-        role:
-          type: string
-          description: Free-form label recorded in the call log for each request this rule serves.
-        match:
-          $ref: "#/components/schemas/Match"
-        respond:
+        steps:
           type: array
           minItems: 1
           items:
             $ref: "#/components/schemas/Step"
-    Match:
-      type: object
-      description: |
-        Every predicate that is set must hold (AND). An empty match accepts every request, so
-        order rules accordingly.
-      additionalProperties: false
-      properties:
-        modelContains:
-          type: [string, "null"]
-          description: |
-            A case-sensitive substring of the request's model: the body's `model` (Anthropic,
-            OpenAI; empty when absent), or the `{model}` path segment (Gemini).
-        promptContainsAll:
-          type: array
-          items:
-            type: string
-          description: |
-            Every entry must appear (case-sensitive substring) in the combined prompt text: each
-            text piece of the request, in order, each followed by a newline. Anthropic: `system`
-            when it is a string or an array of text blocks, then each message `content` that is a
-            string or an array of text blocks (other blocks contribute nothing). OpenAI: each
-            message `content` that is a JSON string, including a system message (array content
-            is skipped). Gemini: each `contents[].parts[].text`.
-        promptContainsAny:
-          type: array
-          items:
-            type: string
-          description: |
-            When non-empty, at least one entry must appear in the combined prompt text (see
-            `promptContainsAll`).
-        systemShape:
-          type: [string, "null"]
-          enum: [blocks, string, absent, null]
-          description: |
-            Exact match on the request's system-prompt shape (see `RequestSystemShape`). A rule
-            cannot target `unknown`.
-        caller:
-          type: [string, "null"]
-          description: |
-            Exact match on the request's `X-Fake-LLM-Caller` header. A request without the header
-            does not match a rule that sets `caller`.
     Step:
       type: object
       description: |

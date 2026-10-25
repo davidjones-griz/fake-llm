@@ -44,7 +44,7 @@ class StartupConfigTest {
     fun `FAKE_LLM_SCENARIO_DIR reaches the served engine's scenario listing`() {
         val dir = Files.createTempDirectory("fake-llm-env-scenarios")
         try {
-            dir.resolve("from-env.json").writeText("""{"name":"from-env","rules":[{"role":"r","respond":[{"text":"x"}]}]}""")
+            dir.resolve("from-env.json").writeText("""{"name":"from-env","steps":[{"text":"x"}]}""")
             val engine = parseStartupConfig(emptyArray(), env = mapOf("FAKE_LLM_SCENARIO_DIR" to dir.toString())).engine()
             withServer(engine) { client, _ ->
                 val listing = client.get("/control/scenarios").body()
