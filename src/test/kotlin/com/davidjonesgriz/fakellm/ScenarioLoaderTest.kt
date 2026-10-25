@@ -111,6 +111,8 @@ class ScenarioLoaderTest {
                 assertEquals("project refusal", ScenarioLoader.load("refusal", null, loader).onlyText())
                 assertEquals(BUNDLED_HELLO, ScenarioLoader.load("hello", null).onlyText(), "without the project, the bundled file")
                 assertEquals("hello", ScenarioLoader.load("hello", null, loader).name)
+                // The project's loader sees no bundled files, which are read through ScenarioLoader itself.
+                assertEquals("rate-limit-429", ScenarioLoader.load("rate-limit-429", null, loader).name)
             }
         }
     }
@@ -131,7 +133,7 @@ class ScenarioLoaderTest {
             writeScenario(dir, "from-directory", singleReply("from-directory", role = "d", text = "d"))
             withProjectRoots(
                 mapOf("index.txt" to "# one module's scenarios\nfirst-module\n\nshared\n"),
-                mapOf("index.txt" to "second-module\nshared\nhello\n"),
+                mapOf("index.txt" to "  second-module  \nshared\nhello\n"),
             ) { loader ->
                 val names = ScenarioLoader.availableNames(dir, loader)
                 assertEquals(names.sorted(), names)

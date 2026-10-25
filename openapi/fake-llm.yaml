@@ -114,10 +114,11 @@ paths:
       operationId: listScenarios
       summary: List the scenario names the server can load
       description: |
-        The names a load by name can find: the `*.json` names in the server's scenario directory
-        when one is set, the names in every index the embedding project provides (for the JVM
-        library: each `/scenarios/index.txt` on the classpath, one name per line, `#` comments and
-        blank lines skipped), and the bundled names; deduplicated and sorted. A name that is not
+        The `*.json` names in the server's scenario directory when one is set, the names in every
+        index the embedding project provides (for the JVM library: each `/scenarios/index.txt` on
+        the classpath, one name per line, surrounding spaces trimmed, blank lines and whole-line
+        `#` comments skipped), and the bundled names; deduplicated and sorted. A project scenario
+        that no index lists still loads by name but is not listed. A name that is not
         a valid scenario name (letters, digits, `_` and `-`) is skipped. Listed means found in a
         directory or an index; an indexed name whose file is missing still fails to load.
       security:

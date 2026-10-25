@@ -177,8 +177,8 @@ private val HTTP_STATUS_RANGE = MIN_HTTP_STATUS..MAX_HTTP_STATUS
  * A name is looked up in this order, and the first match wins:
  * 1. `<directory>/<name>.json`, when a directory is given;
  * 2. the project's classpath resource `/scenarios/<name>.json` (the first on the classpath);
- * 3. the bundled scenario, kept under fake-llm's own resource path so a project's files can never
- *    hide it by accident.
+ * 3. the bundled scenario, kept under fake-llm's own resource path, so a project's index no
+ *    longer hides the bundled list. A classpath scenario with a bundled name still replaces it.
  *
  * [projectLoader] finds the project's resources; tests pass their own. The bundled files are always
  * read through this class.

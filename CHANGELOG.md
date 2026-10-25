@@ -30,8 +30,9 @@ change the public API.
   from different directories.
 - Scenarios from the project's classpath: a name is looked up in the scenario directory, then the
   classpath `/scenarios/<name>.json`, then the bundled scenarios, which live under fake-llm's own
-  resource path so a project's files cannot hide them by accident. `GET /control/scenarios` merges
-  every `/scenarios/index.txt` on the classpath with the bundled names.
+  resource path, so a project's `index.txt` no longer hides the bundled list.
+  `GET /control/scenarios` merges every `/scenarios/index.txt` on the classpath with the bundled
+  names.
 - `com.davidjonesgriz:fake-llm-junit-jupiter`, a JUnit Jupiter extension (5.10.5 or newer,
   including 6.x): `@FakeLlmTest` runs one in-process server per test class, `@FakeLlmScenario`
   loads a scenario before each test, and `FakeLlmServer` and `ScenarioEngine` are injected as

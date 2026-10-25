@@ -12,8 +12,8 @@ import java.lang.annotation.Inherited
  * [scenarioDirectory] is searched first when a scenario is loaded by name, as with
  * `ScenarioEngine(scenarioDirectory = ...)`, before the project's classpath scenarios and the
  * bundled ones; a relative path resolves against the working directory, and an empty string skips
- * it. When [lenient] is true, a request no
- * rule matches gets the canned reply instead of HTTP 400.
+ * it. When [lenient] is true, a request no rule matches gets the canned reply instead of HTTP
+ * 400.
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)
