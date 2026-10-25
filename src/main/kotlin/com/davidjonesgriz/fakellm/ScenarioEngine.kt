@@ -167,7 +167,7 @@ public class ScenarioEngine(
             synchronized(lock) {
                 val n = ++callCount
                 val s = scenario
-                val step = s?.steps?.getOrNull((n - 1).toInt())
+                val step = s?.steps?.takeIf { n <= it.size }?.get((n - 1).toInt())
                 val outcome =
                     when {
                         step != null -> if (step.error != null) "error:${step.error.status}" else "text"
