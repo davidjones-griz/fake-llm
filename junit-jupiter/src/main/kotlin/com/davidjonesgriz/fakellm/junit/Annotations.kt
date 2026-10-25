@@ -9,9 +9,10 @@ import java.lang.annotation.Inherited
  * `FakeLlmServer` and `ScenarioEngine` into constructors, `@BeforeAll`, `@BeforeEach` and test
  * methods. Subclasses inherit it, and `@Nested` classes share the outer class's server.
  *
- * [scenarioDirectory] is searched before the classpath when a scenario is loaded by name, as with
- * `ScenarioEngine(scenarioDirectory = ...)`; a relative path resolves against the working
- * directory, and an empty string means the classpath only. When [lenient] is true, a request no
+ * [scenarioDirectory] is searched first when a scenario is loaded by name, as with
+ * `ScenarioEngine(scenarioDirectory = ...)`, before the project's classpath scenarios and the
+ * bundled ones; a relative path resolves against the working directory, and an empty string skips
+ * it. When [lenient] is true, a request no
  * rule matches gets the canned reply instead of HTTP 400.
  */
 @Target(AnnotationTarget.CLASS)

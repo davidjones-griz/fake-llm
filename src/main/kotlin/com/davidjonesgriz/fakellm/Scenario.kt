@@ -18,8 +18,8 @@ import java.nio.file.Path
  * share one counter and take successive steps in arrival order.
  *
  * Scenario files are JSON in this shape. [ScenarioEngine.load] reads one by name from the engine's
- * [ScenarioEngine.scenarioDirectory] or the classpath resource `/scenarios/<name>.json`, and
- * [ScenarioEngine.loadInline] takes one built in code.
+ * [ScenarioEngine.scenarioDirectory], the project's classpath resource `/scenarios/<name>.json`, or
+ * the bundled scenarios, in that order, and [ScenarioEngine.loadInline] takes one built in code.
  *
  * @throws IllegalArgumentException when [rules] is empty. The message text is diagnostic, not part
  *   of the API.
@@ -174,8 +174,14 @@ private val HTTP_STATUS_RANGE = MIN_HTTP_STATUS..MAX_HTTP_STATUS
  * Loads named scenarios. An unknown name is a hard error. Holds no state: each call takes the
  * directory of the [ScenarioEngine] it serves.
  *
- * When a directory is given, `<directory>/<name>.json` is tried first and the classpath resource
- * `/scenarios/<name>.json` is the fallback. With no directory, only the classpath is searched.
+ * A name is looked up in this order, and the first match wins:
+ * 1. `<directory>/<name>.json`, when a directory is given;
+ * 2. the project's classpath resource `/scenarios/<name>.json` (the first on the classpath);
+ * 3. the bundled scenario, kept under fake-llm's own resource path so a project's files can never
+ *    hide it by accident.
+ *
+ * [projectLoader] finds the project's resources; tests pass their own. The bundled files are always
+ * read through this class.
  */
 internal object ScenarioLoader {
     private val json = Json { ignoreUnknownKeys = false }
@@ -183,9 +189,10 @@ internal object ScenarioLoader {
     fun load(
         name: String,
         directory: Path?,
+        projectLoader: ClassLoader = defaultLoader,
     ): Scenario {
-        require(name.matches(Regex("[A-Za-z0-9_-]+"))) { "illegal scenario name '$name'" }
-        val text = readScenarioText(name, directory?.toFile())
+        require(name.matches(SCENARIO_NAME)) { "illegal scenario name '$name'" }
+        val text = readScenarioText(name, directory?.toFile(), projectLoader)
         val scenario = json.decodeFromString<Scenario>(text)
         check(scenario.name == name) {
             "scenario file $name.json declares name '${scenario.name}' — file name and declared name must match"
@@ -197,49 +204,67 @@ internal object ScenarioLoader {
     internal fun decode(element: JsonElement): Scenario = json.decodeFromJsonElement(element)
 
     /**
-     * Names from [directory] (`*.json` files in it; none when it is null or missing) and from the
-     * classpath index `/scenarios/index.txt` (one name per line; blank lines and `#` comments are
-     * skipped). The combined list is deduplicated and sorted.
+     * The names [load] can find: `*.json` files in [directory] (none when it is null or missing),
+     * the names in every `/scenarios/index.txt` on the project's classpath, and the bundled names.
+     * Indexes list one name per line; blank lines and `#` comments are skipped. Names that are not
+     * legal scenario names are skipped; the rest are deduplicated and sorted. An indexed name is
+     * listed without checking that its file exists.
      */
-    fun availableNames(directory: Path?): List<String> = (directoryNames(directory?.toFile()) + classpathNames()).distinct().sorted()
+    fun availableNames(
+        directory: Path?,
+        projectLoader: ClassLoader = defaultLoader,
+    ): List<String> =
+        (directoryNames(directory?.toFile()) + projectNames(projectLoader) + bundledNames())
+            .filter { it.matches(SCENARIO_NAME) }
+            .distinct()
+            .sorted()
 
     private fun readScenarioText(
         name: String,
         dir: File?,
-    ): String {
-        if (dir != null) {
-            val file = File(dir, "$name.json")
-            if (file.isFile) return file.readText()
-        }
-        val resource = ScenarioLoader::class.java.getResourceAsStream("/scenarios/$name.json")
-        if (resource != null) return resource.use { it.readBytes().decodeToString() }
-        val where =
-            if (dir != null) {
-                "no $name.json in ${dir.path} and no /scenarios/$name.json on the classpath"
-            } else {
-                "no /scenarios/$name.json on the classpath"
-            }
-        error("unknown scenario '$name' — $where")
-    }
+        projectLoader: ClassLoader,
+    ): String =
+        dir?.let { File(it, "$name.json") }?.takeIf { it.isFile }?.readText()
+            ?: projectLoader.getResourceAsStream("$PROJECT_SCENARIOS/$name.json")?.use { it.readBytes().decodeToString() }
+            ?: ScenarioLoader::class.java.getResourceAsStream("$BUNDLED_SCENARIOS/$name.json")?.use { it.readBytes().decodeToString() }
+            ?: error(
+                "unknown scenario '$name' — " + (if (dir != null) "no $name.json in ${dir.path}, " else "") +
+                    "no /$PROJECT_SCENARIOS/$name.json on the classpath and no bundled scenario '$name'",
+            )
 
     private fun directoryNames(dir: File?): List<String> {
         val files = dir?.takeIf { it.isDirectory }?.listFiles() ?: return emptyList()
         return files
             .filter { it.isFile && it.name.endsWith(".json") }
             .map { it.name.removeSuffix(".json") }
-            .filter { it.isNotEmpty() }
     }
 
-    /** Names from `/scenarios/index.txt`: one per line, with blank lines and `#` comments skipped. */
-    private fun classpathNames(): List<String> {
-        val raw =
-            ScenarioLoader::class.java
-                .getResourceAsStream("/scenarios/index.txt")
-                ?.use { it.readBytes().decodeToString() }
-                ?: error("/scenarios/index.txt missing — it lists every scenario name, one per line")
-        return raw
+    /** Names from every `/scenarios/index.txt` on the project's classpath; none when there is no index. */
+    private fun projectNames(projectLoader: ClassLoader): List<String> =
+        projectLoader
+            .getResources("$PROJECT_SCENARIOS/index.txt")
+            .toList()
+            .flatMap { url -> url.openStream().use { indexNames(it.readBytes().decodeToString()) } }
+
+    private fun bundledNames(): List<String> =
+        ScenarioLoader::class.java
+            .getResourceAsStream("$BUNDLED_SCENARIOS/index.txt")
+            ?.use { indexNames(it.readBytes().decodeToString()) }
+            ?: error("$BUNDLED_SCENARIOS/index.txt missing — it lists every bundled scenario name, one per line")
+
+    private fun indexNames(raw: String): List<String> =
+        raw
             .lines()
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith("#") }
-    }
+
+    private val defaultLoader: ClassLoader = ScenarioLoader::class.java.classLoader
 }
+
+private val SCENARIO_NAME = Regex("[A-Za-z0-9_-]+")
+
+/** The project's scenarios, as a ClassLoader resource path (no leading slash). */
+private const val PROJECT_SCENARIOS = "scenarios"
+
+/** The bundled scenarios, under fake-llm's own resource path. */
+private const val BUNDLED_SCENARIOS = "/com/davidjonesgriz/fakellm/scenarios"
