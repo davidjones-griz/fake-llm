@@ -176,12 +176,32 @@ class OpenApiConformanceTest {
             )
         assertEquals(emptyList(), caseDisagreements(control401(""""server":{"controlToken":"t"},""")))
         assertTrue(caseDisagreements(control401("")).isNotEmpty(), "a 401 without a control token")
+        val rightToken =
+            json.readTree(
+                """{"scenario":"hello","server":{"controlToken":"t"},"exchanges":[{"request":{"method":"GET","path":"/control/nope",
+                "headers":{"Authorization":"Bearer t"}},"response":{"status":404,"body":{"fake_llm_error":"x"}}}]}""",
+            )
+        assertEquals(emptyList(), caseDisagreements(rightToken), "the right token on an unknown control path is a 404")
+        assertEquals(
+            emptyList(),
+            caseDisagreements(
+                vendor400("").also {
+                    (it.path("exchanges")[0].path("response") as ObjectNode).put("status", 401)
+                },
+            ),
+            "a scripted 401",
+        )
     }
 
     /** How one conformance case disagrees with the spec; empty when it agrees. */
     private fun caseDisagreements(case: JsonNode): List<String> {
         val found = mutableListOf<String>()
-        val tokenSet = case.path("server").path("controlToken").isString
+        val token =
+            case
+                .path("server")
+                .path("controlToken")
+                .takeIf { it.isString }
+                ?.asString()
         case.path("scenario").takeIf { it.isObject }?.let { scenario ->
             validate(SCENARIO, scenario.toString()).forEach { found += "scenario: $it" }
         }
@@ -192,13 +212,22 @@ class OpenApiConformanceTest {
             val path = request.path("path").asString().substringBefore('?')
             val status = response.path("status").asInt()
             val where = "exchange ${i + 1} ($method $path $status)"
+            // With a control token configured, a request without exactly that bearer token gets 401 on /control/.
+            val sent =
+                request
+                    .path("headers")
+                    .properties()
+                    .firstOrNull { (name, _) ->
+                        name.equals("authorization", ignoreCase = true)
+                    }?.value
+            val rejected = token != null && sent?.asString() != "Bearer $token"
             val successfulLoad = method == "POST" && path == "/control/scenario" && status == HTTP_OK && request.has("body")
             if (successfulLoad) {
                 val load = "${operationPointer(path, method)}/requestBody/content/application~1json/schema"
                 validate(load, request.path("body").toString()).forEach { found += "$where request: $it" }
             }
             val pointer =
-                responsePointerFor(method, path, status, response.path("body"), tokenSet)
+                responsePointerFor(method, path, status, response.path("body"), rejected)
                     .getOrElse { error ->
                         found += "$where: ${error.message}"
                         return@forEachIndexed
@@ -218,7 +247,7 @@ class OpenApiConformanceTest {
         path: String,
         status: Int,
         body: JsonNode,
-        tokenSet: Boolean,
+        rejected: Boolean,
     ): Result<String?> {
         val template =
             spec.path("paths").propertyNames().firstOrNull { template ->
@@ -226,8 +255,10 @@ class OpenApiConformanceTest {
                     spec.path("paths").path(template).has(method.lowercase())
             }
         return when {
-            template != null && status == HTTP_UNAUTHORIZED && !tokenSet -> {
-                Result.failure(IllegalStateException("a 401 needs a control token, and the case sets none"))
+            template != null && template.startsWith("/control/") && rejected != (status == HTTP_UNAUTHORIZED) -> {
+                val why =
+                    if (rejected) "lacks the case's control token, so it gets a 401" else "has no token problem, so it gets no 401"
+                Result.failure(IllegalStateException("the request $why"))
             }
 
             template != null -> {
@@ -238,7 +269,7 @@ class OpenApiConformanceTest {
                 expect(status, 501, "#/components/responses/NotImplemented")
             }
 
-            path.startsWith("/control/") && tokenSet -> {
+            path.startsWith("/control/") && rejected -> {
                 expect(status, HTTP_UNAUTHORIZED, "#/components/responses/Unauthorized")
             }
 
@@ -468,7 +499,6 @@ class OpenApiConformanceTest {
         val HTTP_METHODS = setOf("get", "put", "post", "delete", "options", "head", "patch", "trace")
         val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Step", "ErrorStep")
 
-        /** The `fake_llm_error` values of fake-llm's own vendor 400s (`VendorBadRequest`). */
         const val HTTP_OK = 200
         const val HTTP_BAD_REQUEST = 400
         const val HTTP_UNAUTHORIZED = 401

@@ -5,7 +5,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.io.IOException
 import java.net.ServerSocket
 import java.net.URI
 import java.net.http.HttpClient
@@ -14,7 +13,9 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.readText
 
@@ -142,10 +143,15 @@ class CommandServer private constructor(
             if (!process.isAlive) {
                 throw ServerStartException("the server exited with code ${process.exitValue()} before answering GET /health:\n${output()}")
             }
+            // send's timeout stops at the headers; waiting on the future bounds the whole answer.
+            val answer = http.sendAsync(request, HttpResponse.BodyHandlers.discarding())
             val status =
                 try {
-                    http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()
-                } catch (_: IOException) {
+                    answer.get(HEALTH_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS).statusCode()
+                } catch (_: ExecutionException) {
+                    null
+                } catch (_: TimeoutException) {
+                    answer.cancel(true)
                     null
                 }
             if (status == HTTP_OK) return

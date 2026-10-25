@@ -248,6 +248,12 @@ class CaseRunnerTest {
     }
 
     @Test
+    fun `a path the HTTP client cannot send fails the case, not the run`() {
+        val failure = assertFailsWith<CaseFailedException> { CaseRunner("http://127.0.0.1:1").use { it.send(CaseRequest("GET", "/a|b")) } }
+        assertContains(failure.message!!, "is not a valid request path")
+    }
+
+    @Test
     fun `no response at all fails the case`() {
         val failure = assertFailsWith<CaseFailedException> { CaseRunner("http://127.0.0.1:1").run(case(get(ExpectedResponse(200)))) }
         assertContains(failure.message!!, "GET /thing got no response")

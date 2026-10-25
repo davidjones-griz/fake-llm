@@ -11,6 +11,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -90,21 +91,11 @@ class CaseRunner(
         val publisher = payload?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody()
         val builder =
             HttpRequest
-                .newBuilder(URI.create(base + request.path))
+                .newBuilder(uriFor(request))
                 .timeout(requestTimeout)
                 .method(request.method, publisher)
         request.headers.forEach { (name, value) -> builder.header(name, value) }
-        // send's timeout stops at the headers; waiting on the future bounds the body too.
-        val future = http.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
-        val response =
-            try {
-                future.get(requestTimeout.toMillis(), TimeUnit.MILLISECONDS)
-            } catch (_: TimeoutException) {
-                future.cancel(true)
-                throw CaseFailedException("${request.method} ${request.path}: no complete response within ${requestTimeout.toMillis()} ms")
-            } catch (e: ExecutionException) {
-                throw CaseFailedException("${request.method} ${request.path} got no response: ${e.cause}", e)
-            }
+        val response = await(http.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString()), request)
         return ActualResponse(
             status = response.statusCode(),
             headers =
@@ -116,6 +107,27 @@ class CaseRunner(
             body = response.body(),
         )
     }
+
+    private fun uriFor(request: CaseRequest): URI =
+        try {
+            URI.create(base + request.path)
+        } catch (e: IllegalArgumentException) {
+            throw CaseFailedException("${request.method} ${request.path} is not a valid request path: ${e.message}", e)
+        }
+
+    /** send's timeout stops at the headers; waiting on the future bounds the body too. */
+    private fun await(
+        future: CompletableFuture<HttpResponse<String>>,
+        request: CaseRequest,
+    ): HttpResponse<String> =
+        try {
+            future.get(requestTimeout.toMillis(), TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            future.cancel(true)
+            throw CaseFailedException("${request.method} ${request.path}: no complete response within ${requestTimeout.toMillis()} ms")
+        } catch (e: ExecutionException) {
+            throw CaseFailedException("${request.method} ${request.path} got no response: ${e.cause}", e)
+        }
 
     private companion object {
         const val REQUEST_TIMEOUT_SECONDS = 10L
