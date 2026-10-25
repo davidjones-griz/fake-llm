@@ -56,9 +56,10 @@ tasks.test {
 }
 
 // The OpenAPI document is the language-neutral contract, kept at the repository root; the server
-// serves the copy bundled here at GET /openapi.
+// serves the copy bundled here at GET /openapi. It goes under fake-llm's own resource path, so a
+// project's own resources cannot replace it.
 tasks.processResources {
-    from("openapi") { into("openapi") }
+    from("openapi") { into("com/davidjonesgriz/fakellm/openapi") }
 }
 
 ktlint {
