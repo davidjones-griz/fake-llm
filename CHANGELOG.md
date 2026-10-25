@@ -10,11 +10,15 @@ change the public API.
 ### Added
 
 - HTTP server that stands in for Anthropic Messages, OpenAI Chat Completions, and Gemini
-  `generateContent`, driven by a JSON scenario: first-match rules, and per-rule step sequences
-  for scripted errors, `max_tokens` truncation, thinking, and failures followed by a retry.
+  `generateContent`, driven by a JSON scenario: an ordered list of steps, where call N after a load
+  or reset gets step N, on any vendor route. Steps script errors, `max_tokens` truncation,
+  thinking, and failures followed by a retry.
 - Anthropic SSE streaming, including an error partway through the stream.
-- Strict mode by default: a request no rule matches is HTTP 400 with an explanation.
-  `--lenient` serves a canned reply instead.
+- A call the scenario has no step for fails: a call after the last step is HTTP 400
+  (`no more steps`), and so, in strict mode (the default), is a call with no scenario loaded
+  (`no scenario loaded`). `--lenient` serves a canned reply for the second case only.
+- Load and reset are a fresh start: the call log is emptied, numbering restarts at 1, and
+  response IDs restart with it. The call log records the step that served each call.
 - Control API: load a scenario by name or inline, reset, list scenarios, read the call log, and an
   optional bearer token.
 - Bundled scenarios for rate limits, overload, refusal, truncation, malformed JSON, stream errors,
@@ -37,13 +41,15 @@ change the public API.
   including 6.x): `@FakeLlmTest` runs one in-process server per test class, `@FakeLlmScenario`
   loads a scenario before each test, and `FakeLlmServer` and `ScenarioEngine` are injected as
   parameters. The annotations also work inside composed annotations and on interfaces. Also
-  usable through `@RegisterExtension` with `FakeLlmExtension`.
-- `ScenarioEngine.unload()`: removes the loaded scenario and clears the call log and counters.
+  usable through `@RegisterExtension` with `FakeLlmExtension`. A test fails when one of its calls
+  got no step, since an app can catch the 400 and carry on; `@FakeLlmAllowUnservedCalls` opts a
+  test out.
+- `ScenarioEngine.unload()`: removes the loaded scenario and empties the call log.
 - An OpenAPI 3.1 document for the control API, `/health` and `/openapi`
   (`openapi/fake-llm.yaml`), served by the running server at `GET /openapi`. Tests check every
   control response against it. The scenario format is part of it.
 - Strict input checks matching the spec: `POST /control/scenario` rejects unknown fields, a
-  `Match` rejects a `systemShape` other than `blocks`, `string` or `absent`, and an `ErrorStep`
+  `Step` must set exactly one of `text` and `error` (checked when it is built), and an `ErrorStep`
   rejects a status outside 100 to 599. The control routes' 401 carries `WWW-Authenticate: Bearer`,
   and a scripted `content-type` header replaces the default instead of adding a second one. The
   Gemini route matches only `/gemini/{version}/models/{model}:generateContent`, and the Batches
@@ -60,8 +66,12 @@ Compared with pre-release builds of `main`:
   the whole process; `--scenario-dir` and `FAKE_LLM_SCENARIO_DIR` set it for the command-line
   server's engine and behave as before.
 - `CallRecord`'s constructor and `copy` are internal.
-- `Scenario.rules` has no default value. A scenario file without `rules` now fails as a missing
-  field instead of as an empty list.
+- A scenario is an ordered list of `steps`. Rules, rule matching (`Rule`, `Match`, `role`, the
+  match fields) and the `X-Fake-LLM-Caller` header are removed, and so are the call log's `role`
+  and `occurrence`. The last step no longer repeats, and lenient mode covers only "no scenario
+  loaded". `POST /control/scenario` returns `steps` instead of `rules`.
+- `Step` checks text-xor-error itself, so an invalid `Step` throws when it is built, not only
+  inside a scenario.
 - `kotlinx-serialization-json` is an `api` dependency.
 - Built with Kotlin 2.4, and the `kotlinx-serialization-json` dependency is 1.12.0. A Kotlin build
   that uses the library needs Kotlin 2.4 (2.3 may work, on a best-effort basis), and gets
@@ -69,7 +79,7 @@ Compared with pre-release builds of `main`:
   Both published libraries need Java 21 or newer, tested on Java 21 and 25.
 - Including this repository as a composite build (`includeBuild`) needs Gradle 9.2 or newer in
   the including project, running on JDK 17 or newer.
-- A scenario that fails validation while being decoded from JSON now throws kotlinx-serialization's
-  `SerializationException` (still an `IllegalArgumentException`), whose message wraps the
-  validation message with the JSON path and input, and whose cause is the validation exception.
+- A scenario that fails validation while being decoded from JSON throws an
+  `IllegalArgumentException`. When a step is invalid, the message starts with its 1-based number
+  (`step 2: …`) and the cause is kotlinx-serialization's `SerializationException`.
 - Docker image and the `fake-llm-all.jar` fat jar.

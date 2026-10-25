@@ -6,9 +6,9 @@ A local HTTP stand-in for Anthropic Messages, OpenAI chat completions, and Gemin
 
 I got tired of my CI pipeline failing over trivial bugs that should have been caught easily, because there was no way to run each LLM-calling component without deploying it and paying for real model calls. I extracted fake-llm from a personal project so I could exercise each component on its own.
 
-A scenario scripts the reply. The result is determined by which rule matches and how many times that rule has already matched, locally and with no model call. That includes the failure paths: a scripted error status, a cutoff in the middle of a stream, `max_tokens` truncation, malformed output, and a failure followed by a successful retry.
+The code that calls an LLM is deterministic; the model is the only part you cannot predict. A scenario takes that part away: it is an ordered list of steps, and call N gets step N, locally and with no model call. That includes the failure paths: a scripted error status, a cutoff in the middle of a stream, `max_tokens` truncation, malformed output, and a failure followed by a successful retry.
 
-Strict is the default: a request the loaded scenario does not cover returns HTTP 400, so a gap in the scenario fails the call instead of silently passing with a canned reply. `--lenient` or `FAKE_LLM_LENIENT=true` turns that path back into the canned reply.
+A call the scenario has no step for fails: a call after the last step returns HTTP 400 (`no more steps`), and so does a call with no scenario loaded, unless the server runs with `--lenient` or `FAKE_LLM_LENIENT=true`, which answers that case with a canned reply.
 
 ## Quickstart
 
@@ -43,7 +43,6 @@ import anthropic
 client = anthropic.Anthropic(
     api_key="not-used",
     base_url="http://localhost:8080/anthropic",
-    default_headers={"X-Fake-LLM-Caller": "summarizer"},
 )
 message = client.messages.create(
     model="example-model",
@@ -60,7 +59,6 @@ from openai import OpenAI
 client = OpenAI(
     api_key="not-used",
     base_url="http://localhost:8080/openai/v1",
-    default_headers={"X-Fake-LLM-Caller": "summarizer"},
 )
 completion = client.chat.completions.create(
     model="example-gpt",
@@ -75,10 +73,7 @@ from google import genai
 
 client = genai.Client(
     api_key="not-used",
-    http_options={
-        "base_url": "http://localhost:8080/gemini/",
-        "headers": {"X-Fake-LLM-Caller": "summarizer"},
-    },
+    http_options={"base_url": "http://localhost:8080/gemini/"},
 )
 response = client.models.generate_content(
     model="gemini-2.0-flash",
@@ -86,15 +81,16 @@ response = client.models.generate_content(
 )
 ```
 
-The same call with curl. `X-Fake-LLM-Caller` is optional. Rules that set `match.caller` use it. This call gets the greeting because the `hello` scenario's match is empty, so every request matches. A request that matches no rule is HTTP 400 unless the process was started with `--lenient`.
+The same call with curl. `hello` has one step, so the first call after it loads gets the greeting and the next gets HTTP 400 (`no more steps`). Each example above is one call: reset the scenario between them, which starts it over at step 1:
 
 ```bash
 curl -s http://localhost:8080/health
 
 curl -s http://localhost:8080/anthropic/v1/messages \
   -H 'content-type: application/json' \
-  -H 'X-Fake-LLM-Caller: summarizer' \
   -d '{"model":"example-model","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
+
+curl -s -X POST http://localhost:8080/control/reset
 ```
 
 ## Use as a library
@@ -128,7 +124,7 @@ startFakeLlmServer(port = 0, engine = ScenarioEngine(), controlToken = null).use
 }
 ```
 
-`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, counters, call log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. The library depends on `kotlinx-serialization-json` as an API dependency, so `Json.decodeFromString<Scenario>(text)` also works for scenario files kept elsewhere.
+`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, call log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. The library depends on `kotlinx-serialization-json` as an API dependency, so `Json.decodeFromString<Scenario>(text)` also works for scenario files kept elsewhere.
 
 A name is looked up in this order, and the first match wins: the engine's scenario directory, then your project's classpath `/scenarios/<name>.json` (the first on the classpath, if several modules have one), then the bundled scenarios, which fake-llm keeps under its own resource path, so your `index.txt` no longer hides the bundled list. So a scenario of yours with a bundled name, such as `scenarios/rate-limit-429.json`, replaces the bundled one, on purpose. `GET /control/scenarios` lists the directory's `*.json` names, the names in every `/scenarios/index.txt` on the classpath, and the bundled names. To have your classpath scenarios listed, add an `index.txt` beside them, one name per line (blank lines and whole-line `#` comments are skipped, and surrounding spaces are trimmed); without one they still load by name. A listed name is only as good as its index: a name whose file is missing still fails to load, and names that are not legal scenario names are skipped.
 
@@ -184,7 +180,8 @@ class MyClientTest {
 ```
 
 - **One server per class.** The server starts on an ephemeral port when the class first needs it, and stops when the class finishes. `@Nested` classes share it, and subclasses inherit `@FakeLlmTest`.
-- **A scenario per test.** Before each test, the nearest `@FakeLlmScenario` is loaded: the method's, then the class's (its own, then its interfaces', then its superclasses'), then each enclosing class's, the same way. Loading clears the call log and step counters, so every test starts fresh. A test with no `@FakeLlmScenario` anywhere runs with no scenario loaded (`ScenarioEngine.unload()`), so a scenario loaded by hand in `@BeforeAll` is gone again by the first test; put a shared scenario on the class instead. The extension runs before your own `@BeforeEach` methods, so they see the scenario and can replace it.
+- **A scenario per test.** Before each test, the nearest `@FakeLlmScenario` is loaded: the method's, then the class's (its own, then its interfaces', then its superclasses'), then each enclosing class's, the same way. Loading starts the scenario over, so every test's first call gets step 1 and the call log holds only that test's calls. A test with no `@FakeLlmScenario` anywhere runs with no scenario loaded (`ScenarioEngine.unload()`), so a scenario loaded by hand in `@BeforeAll` is gone again by the first test; put a shared scenario on the class instead. The extension runs before your own `@BeforeEach` methods, so they see the scenario and can replace it.
+- **Every call must get a step.** Right after the test method, before your `@AfterEach` methods, the test fails if a call made during `@BeforeEach` or the test got no step: a call after the scenario's last step, or a call with no scenario loaded in strict mode. The failure lists those calls. An app can catch the 400 and carry on, so without this check such a test could pass. A test that makes such a call on purpose, to test how the app handles it, opts out with `@FakeLlmAllowUnservedCalls` on the method or the class (found the same way as `@FakeLlmScenario`). An aborted test (a failed assumption) is not checked. For a `@TestFactory`, the check runs once around the whole factory. Calls made after a `reset()` or `load()` in the middle of a test erase the earlier ones from the log, so the check does not see those.
 - **Injection.** Constructors, `@BeforeAll`, `@BeforeEach` and test methods can take a `FakeLlmServer` (`baseUrl`, `port`, `engine`) or the `ScenarioEngine` itself.
 - **Configuration.** `@FakeLlmTest(scenarioDirectory = "src/test/scenarios", lenient = true)` sets the engine's scenario directory (searched first; relative to the working directory) and lenient mode. The server ignores `FAKE_LLM_CONTROL_TOKEN`. Both annotations also work inside your own composed annotation or on an interface the test class implements. When the outer class runs the extension, a `@Nested` class uses the outer class's server, so options on the nested class's own `@FakeLlmTest` have no effect.
 - **`@RegisterExtension`.** Instead of `@FakeLlmTest`, a field can hold `FakeLlmExtension(scenarioDirectory, lenient)`; from Java, `new FakeLlmExtension()` or `new FakeLlmExtension(path, lenient)`. A static field behaves like the annotation. An instance field exists only once the test instance does, so it cannot inject into its own class's constructor or a static `@BeforeAll` method, and a `@Nested` class may get a server of its own rather than the outer class's; use a static field or the annotation for those. Register the extension once per class: with both `@FakeLlmTest` and a field, JUnit rejects injected parameters because two extensions offer them.
@@ -203,57 +200,37 @@ The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6
 
 ### API stability
 
-The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Rule`, `Match`, `Step`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord` or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
+The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord` or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
 
 [examples/](examples/) is a complete consumer: a small client with retry logic, tested against the published artifact.
 
 ## Scenarios
 
-A scenario file is JSON. Unknown keys are rejected. `name` is required, `description` defaults to an empty string, and `rules` must be non-empty. For a load by name, the file is `<dir>/<name>.json`, the classpath resource `/scenarios/<name>.json`, or a bundled scenario, in that order; the declared `name` must equal the file name, and the name must match `[A-Za-z0-9_-]+`.
+A scenario file is JSON. Unknown keys are rejected. `name` is required, `description` defaults to an empty string, and `steps` must be non-empty. For a load by name, the file is `<dir>/<name>.json`, the classpath resource `/scenarios/<name>.json`, or a bundled scenario, in that order; the declared `name` must equal the file name, and the name must match `[A-Za-z0-9_-]+`.
 
 ```json
 {
   "name": "example",
-  "description": "Fail once for the weather caller, then answer.",
-  "rules": [
+  "description": "A rate limit, then the answer.",
+  "steps": [
     {
-      "role": "weather",
-      "match": {
-        "modelContains": "haiku",
-        "promptContainsAll": ["forecast"],
-        "promptContainsAny": ["tomorrow", "weekend"],
-        "systemShape": "string",
-        "caller": "weather"
-      },
-      "respond": [
-        {
-          "error": {
-            "status": 429,
-            "body": "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}",
-            "headers": { "retry-after": "1" }
-          }
-        },
-        {
-          "text": "Mild and dry.",
-          "stopReason": "end_turn"
-        }
-      ]
+      "error": {
+        "status": 429,
+        "body": "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}",
+        "headers": { "retry-after": "1" }
+      }
+    },
+    {
+      "text": "Mild and dry.",
+      "stopReason": "end_turn"
     }
   ]
 }
 ```
 
-`role` is a label stored on the call log. `match` may be omitted; an empty match matches every request, so put specific rules first. `respond` is a non-empty list of steps.
+After the scenario is loaded or reset, call N on any vendor route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every vendor request whose body parses is a call and gets one entry in the call log; a body that fails to parse, a 404 and the Batches 501 are not calls.
 
-Every predicate that is present must hold. `modelContains` is a case-sensitive substring of the request model. `promptContainsAll` requires every entry to appear in the combined prompt text. `promptContainsAny`, when the list is non-empty, requires one entry to appear. `systemShape` is an exact match on the request's system-field shape: `blocks`, `string`, or `absent`; any other value is rejected when the scenario loads. Anthropic also records `unknown` when `system` is a JSON object, but a rule cannot target it. `caller` is an exact match on the `X-Fake-LLM-Caller` header. A missing header does not match a rule that sets `caller`. Omitting `caller` skips that predicate.
-
-The combined prompt text depends on the dialect:
-
-- Anthropic: the `system` field, when it is a string or an array of text blocks, then each message `content` that is a string or an array of text blocks. Non-text blocks contribute nothing.
-- OpenAI: every message whose `content` is a JSON string, including a system message. Array content is skipped. A message with role `system` sets `systemShape` to `blocks`; otherwise it is `absent`. OpenAI requests never record `string`.
-- Gemini: each `contents[].parts[].text`. `systemInstruction` is not read, and `systemShape` is always `absent`. The model id comes from the URL, not the body.
-
-Each step sets exactly one of `text` or `error`.
+Each step sets exactly one of `text` or `error`. When a step in a file or an inline scenario is invalid, the error names its number, from 1.
 
 | Field | Meaning |
 | --- | --- |
@@ -265,40 +242,45 @@ Each step sets exactly one of `text` or `error`.
 | `streamInterChunkDelayMs` | Milliseconds to wait between SSE deltas. Default 0. Must be zero or positive. Anthropic streaming only. |
 | `streamErrorAfterChunks` | Legal only on an error step, and must be positive. Anthropic streaming only. Null, the default, means the error is a plain HTTP response and no SSE bytes are written, including when the client asked for a stream. Setting it writes HTTP 200 and an event stream: `message_start`, a text block start, this many filler deltas, then `event: error` whose data is `error.body` (or a generic `api_error` body when `body` is blank). `content_block_stop`, `message_delta`, and `message_stop` are skipped. `error.status` and `error.headers` are not used on that path. A non-streaming client still receives `error.status` and `error.body`. The filler is fixed text, not the error body. |
 
-The first matching rule wins. Each rule has its own occurrence counter, starting at 1 the first time that rule matches. Call number `n` for that rule uses `respond[n - 1]`, and once the list runs out the last step repeats. The counters are in memory and shared by every request in the process, so a sequence of different steps is well-defined when the caller sends those requests one at a time. A rule that concurrent requests can hit together should have a single step.
-
-When no scenario is loaded, or no rule matches, strict mode (the default) returns HTTP 400. The body is JSON:
+A call after the last step returns HTTP 400, in strict and lenient mode alike. The body is JSON:
 
 ```json
 {
-  "fake_llm_error": "unmatched request",
-  "why": "no scenario loaded; POST /control/scenario first (or start with --lenient)",
+  "fake_llm_error": "no more steps",
+  "scenario": "example",
+  "steps": 2,
+  "seq": 3,
   "vendor": "anthropic",
   "model": "example-model",
   "system_shape": "absent",
   "message_count": 1,
-  "caller": null,
   "prompt_preview": "Hello\n"
 }
 ```
 
-`why` is `no scenario loaded; POST /control/scenario first (or start with --lenient)` when nothing is loaded, and `no rule in scenario '<name>' matches this request` when a scenario is loaded but no rule matches. `caller` is the `X-Fake-LLM-Caller` header value, or JSON `null` when the header is absent. `prompt_preview` is the first 200 characters of the combined prompt text. The call log records role `UNMATCHED`, occurrence `0`, and outcome `unmatched`. Occurrence stays 0 for every unmatched call. An Anthropic request with `"stream": true` gets this same status and JSON body, and the server writes no SSE bytes.
+With no scenario loaded, strict mode (the default) returns HTTP 400 with the same fields except `scenario` and `steps`, and `"fake_llm_error": "no scenario loaded"`. `seq` is the call's number, as in the call log. `prompt_preview` is the first 200 characters of the combined prompt text. The call log records outcome `no-more-steps` or `no-scenario`, with `step` null. An Anthropic request with `"stream": true` gets the same status and JSON body, and the server writes no SSE bytes.
 
-Lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) returns one canned assistant reply on that path: `This is a canned response from fake-llm.` The call log records role `DEFAULT` and outcome `default`. That path has its own occurrence counter. A text step from a rule is logged as `text`. An error step is logged as `error:<status>`. In lenient mode the canned reply is a normal text step, so an Anthropic request with `"stream": true` streams it.
+Lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) answers a call with no scenario loaded with one canned assistant reply, `This is a canned response from fake-llm.`, logged with outcome `default`. It is a normal text reply, so an Anthropic request with `"stream": true` streams it. Lenient mode changes nothing once a scenario is loaded.
+
+The combined prompt text, used by `promptSample` and `prompt_preview`, depends on the dialect:
+
+- Anthropic: the `system` field, when it is a string or an array of text blocks, then each message `content` that is a string or an array of text blocks. Non-text blocks contribute nothing. Each piece is followed by a newline.
+- OpenAI: every message whose `content` is a JSON string, including a system message. Array content is skipped. A message with role `system` sets `systemShape` to `blocks`; otherwise it is `absent`. OpenAI requests never record `string`.
+- Gemini: each `contents[].parts[].text`. `systemInstruction` is not read, and `systemShape` is always `absent`. The model id comes from the URL, not the body.
 
 ### Bundled scenarios
 
 | Name | What it does |
 | --- | --- |
-| `hello` | Empty match. Every request gets one short greeting. |
-| `rate-limit-429` | The first call is HTTP 429 with a `retry-after: 2` header. The next call is a weather sentence, and that step repeats. |
-| `overloaded-529` | The first call is HTTP 529. The next call is a short support reply, and that step repeats. A streaming Anthropic request still gets HTTP 529, because the error step leaves `streamErrorAfterChunks` unset. |
+| `hello` | One step: a short greeting. |
+| `rate-limit-429` | Call 1 is HTTP 429 with a `retry-after: 2` header. Call 2 is a weather sentence. |
+| `overloaded-529` | Call 1 is HTTP 529. Call 2 is a short support reply. A streaming Anthropic request still gets HTTP 529, because the error step leaves `streamErrorAfterChunks` unset. |
 | `refusal` | One text reply with `stopReason` `refusal`. |
 | `max-tokens-cutoff` | One text reply cut off inside a JSON value, with `stopReason` `max_tokens`. |
-| `malformed-json` | Matches prompts that contain `Respond in JSON`. The first reply is prose with a broken JSON fragment. The next reply is a valid JSON object, and that step repeats. Other prompts do not match, so strict mode returns HTTP 400. |
+| `malformed-json` | Call 1 is prose with a broken JSON fragment. Call 2 is a valid JSON object. |
 | `stream-error-midway` | Anthropic streaming writes three 8-code-point filler deltas, then an `overloaded_error` event. A non-streaming client, including OpenAI and Gemini, receives that error as HTTP 529. |
 | `thinking-stream` | A text reply with a thinking trace. Anthropic streaming splits both into 8-code-point chunks and waits 20 ms between chunks. |
-| `fail-then-retry` | `X-Fake-LLM-Caller: summarizer` gets a short summary. That rule is first, so it wins. Every other caller gets HTTP 500 once, then a normal text reply that repeats. |
+| `fail-then-retry` | Call 1 is HTTP 500. Call 2 is a normal text reply. |
 
 ### Loading a scenario
 
@@ -306,7 +288,7 @@ At startup, `--scenario <name>` overrides `FAKE_LLM_SCENARIO`. With neither set,
 
 `--scenario-dir <path>` overrides `FAKE_LLM_SCENARIO_DIR`. A name is read from `<dir>/<name>.json` when that file exists, and otherwise from the bundled scenarios. `GET /control/scenarios` lists the `*.json` stems in that directory plus the bundled names. The combined list is deduplicated and sorted. (In-process use can add your project's classpath scenarios; see [Use as a library](#use-as-a-library).)
 
-`POST /control/scenario` loads a scenario in the running process and clears the call log and the occurrence counters. The body is a JSON object with exactly one of `name` or `scenario`:
+`POST /control/scenario` loads a scenario in the running process and starts it over: the call log is emptied, and the next call is call 1 and gets step 1. The body is a JSON object with exactly one of `name` or `scenario`:
 
 ```bash
 curl -s -X POST http://localhost:8080/control/scenario \
@@ -315,7 +297,7 @@ curl -s -X POST http://localhost:8080/control/scenario \
 ```
 
 ```json
-{"loaded":"hello","rules":1}
+{"loaded":"hello","steps":1}
 ```
 
 An inline scenario is decoded with the same strict rules as a file. The name does not have to match a file:
@@ -323,11 +305,11 @@ An inline scenario is decoded with the same strict rules as a file. The name doe
 ```bash
 curl -s -X POST http://localhost:8080/control/scenario \
   -H 'content-type: application/json' \
-  -d '{"scenario":{"name":"inline","rules":[{"role":"assistant","respond":[{"text":"ok"}]}]}}'
+  -d '{"scenario":{"name":"inline","steps":[{"text":"ok"}]}}'
 ```
 
 ```json
-{"loaded":"inline","rules":1}
+{"loaded":"inline","steps":1}
 ```
 
 Sending both `name` and `scenario`, or neither, is HTTP 400. A bad name or a body the decoder rejects is HTTP 400 with `{"fake_llm_error":"exception","detail":"..."}`.
@@ -346,7 +328,7 @@ A handler that throws, including a body that is not valid JSON, is HTTP 400:
 {"fake_llm_error":"exception","detail":"..."}
 ```
 
-An unmatched vendor request in strict mode is also HTTP 400. Its `fake_llm_error` value is `unmatched request`, not `exception`. The fields are described under Scenarios.
+A call after the scenario's last step, or a call with no scenario loaded in strict mode, is also HTTP 400. Its `fake_llm_error` value is `no more steps` or `no scenario loaded`, not `exception`. The fields are described under Scenarios.
 
 ### `GET /health`
 
@@ -362,7 +344,7 @@ Anthropic Messages JSON. A text step with `"stream": true` is answered as `text/
 
 The buffered message carries `id` (`fake-msg-<seq>`), `type`, `role`, `content` (an optional thinking block, then one text block), `stop_reason`, and `usage`. It does not include a `model` field. `message_start` on the stream does, and it echoes the request model.
 
-An unmatched request is HTTP 400 with the JSON body described under Scenarios, including when `"stream": true`. That response is `application/json`, and no SSE bytes are written. In lenient mode the canned reply is served instead, and `"stream": true` streams it as a text step.
+A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, including when `"stream": true`. That response is `application/json`, and no SSE bytes are written. With no scenario loaded, lenient mode serves the canned reply instead, and `"stream": true` streams it as a text step.
 
 ### `/anthropic/v1/messages/batches`
 
@@ -374,11 +356,11 @@ Any method on a path that starts with `/anthropic/v1/messages/batches` returns H
 
 ### `POST /openai/v1/chat/completions`
 
-One JSON chat completion: `id` `fake-openai-<seq>`, `object` `chat.completion`, `model` `fake-openai`, one choice with `message.role` `assistant` and `message.content` set to the step text, `finish_reason` as mapped above, and `usage`. `"stream": true` is parsed and ignored. The response is still this single JSON object, with `Content-Type: application/json`. An unmatched request in strict mode is HTTP 400 with the JSON body described under Scenarios, not a chat completion. Lenient mode returns the canned reply as a completion.
+One JSON chat completion: `id` `fake-openai-<seq>`, `object` `chat.completion`, `model` `fake-openai`, one choice with `message.role` `assistant` and `message.content` set to the step text, `finish_reason` as mapped above, and `usage`. `"stream": true` is parsed and ignored. The response is still this single JSON object, with `Content-Type: application/json`. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a chat completion. With no scenario loaded, lenient mode returns the canned reply as a completion.
 
 ### `POST /gemini/…:generateContent`
 
-One JSON `generateContent` body: one candidate whose part text is the step text, `finishReason` `STOP` or `MAX_TOKENS`, `usageMetadata`, and `fake_llm_seq`. The parser forces the call to be non-streaming. `:streamGenerateContent` does not contain `:generateContent`, so that path is a 404. An unmatched request in strict mode is HTTP 400 with the JSON body described under Scenarios, not a `generateContent` body. Lenient mode returns the canned reply as one candidate.
+One JSON `generateContent` body: one candidate whose part text is the step text, `finishReason` `STOP` or `MAX_TOKENS`, `usageMetadata`, and `fake_llm_seq`. The parser forces the call to be non-streaming. `:streamGenerateContent` does not contain `:generateContent`, so that path is a 404. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a `generateContent` body. With no scenario loaded, lenient mode returns the canned reply as one candidate.
 
 ### Control API
 
@@ -394,7 +376,7 @@ When `FAKE_LLM_CONTROL_TOKEN` is set to a non-blank value, every path under `/co
 
 Vendor routes and `/health` stay open. With no token configured, the control routes are open. The environment variable is read first. A JVM system property of the same name is used only when the environment variable is absent. A blank environment variable counts as unset and does not fall through to the system property.
 
-`POST /control/scenario` is described above. It replaces the loaded scenario and clears the call log and occurrence counters.
+`POST /control/scenario` is described above. It replaces the loaded scenario and starts it over.
 
 `GET /control/scenarios` returns the names the loader can see:
 
@@ -404,24 +386,23 @@ Vendor routes and `/health` stay open. With no token configured, the control rou
 
 With a scenario directory set, `*.json` names from that directory are merged in, and the list is sorted again.
 
-`POST /control/reset` clears the call log and the occurrence counters and keeps the loaded scenario. The body is ignored. Sequence numbers are not restarted.
+`POST /control/reset` starts the loaded scenario over, as loading it again would: the call log is emptied, and the next call is call 1 and gets step 1, with response IDs from `fake-msg-1` again. The body is ignored.
 
 ```json
 {"reset":true}
 ```
 
-`GET /control/calls` returns the call log as a JSON array, oldest first. `promptSample` is the last 500 characters of the combined prompt text. `occurrence` is 1-based for a matched rule, and for the canned reply in lenient mode. A strict-mode unmatched request records occurrence `0`, role `UNMATCHED`, and outcome `unmatched`. `timestampMs` is the wall-clock time when the call was recorded.
+`GET /control/calls` returns the call log as a JSON array, in call order. `seq` is the call's number since the last load or reset, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text` or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call was recorded.
 
 ```json
 [
   {
     "seq": 1,
+    "step": 1,
     "vendor": "anthropic",
     "model": "example-model",
     "systemShape": "absent",
     "messageCount": 1,
-    "role": "assistant",
-    "occurrence": 1,
     "outcome": "text",
     "timestampMs": 1710000000000,
     "promptSample": "Hello\n"
@@ -447,14 +428,14 @@ The process binds the IPv6 wildcard `::` when the host can, and otherwise the IP
 | `--port <n>` | `PORT` | `8080` | Listen port. |
 | `--scenario <name>` | `FAKE_LLM_SCENARIO` | none | Scenario loaded at startup. |
 | `--scenario-dir <path>` | `FAKE_LLM_SCENARIO_DIR` | bundled scenarios only | Directory searched before the bundled scenarios. |
-| `--lenient` | `FAKE_LLM_LENIENT` | off (`false`) | Unmatched requests. Off returns HTTP 400. On returns the canned assistant reply. The flag takes no value and turns lenient mode on. The environment variable accepts `true` or `false`, case-insensitively. |
+| `--lenient` | `FAKE_LLM_LENIENT` | off (`false`) | Calls made while no scenario is loaded. Off returns HTTP 400. On returns the canned assistant reply. A call after the last step is HTTP 400 either way. The flag takes no value and turns lenient mode on. The environment variable accepts `true` or `false`, case-insensitively. |
 | none | `FAKE_LLM_CONTROL_TOKEN` | unset, control routes open | Bearer token for `/control/*`. A JVM system property of the same name is the fallback when the environment variable is absent. |
 
 ## Limits
 
 Anthropic Messages is the only route that streams. On `POST /anthropic/v1/messages`, `"stream": true` is a server-sent event response for a text step, and for an error step that sets `streamErrorAfterChunks`. An error step that leaves that field unset is a plain HTTP error instead. OpenAI always returns one JSON chat completion; `"stream": true` is accepted and then ignored. Gemini always returns one JSON `generateContent` body. The Gemini parser sets `stream` to false, and `:streamGenerateContent` is not a route.
 
-Strict mode (the default) answers an unmatched request with HTTP 400 and a JSON body on every vendor route. On `POST /anthropic/v1/messages` that includes `"stream": true`: the response is `application/json`, and no server-sent events are written. Lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) returns the canned assistant reply on that path. For an Anthropic request with `"stream": true`, that reply is a normal text stream.
+A call after the scenario's last step, and in strict mode (the default) a call with no scenario loaded, gets HTTP 400 and a JSON body on every vendor route. On `POST /anthropic/v1/messages` that includes `"stream": true`: the response is `application/json`, and no server-sent events are written. With no scenario loaded, lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) returns the canned assistant reply instead. For an Anthropic request with `"stream": true`, that reply is a normal text stream.
 
 The Anthropic Batches API is not implemented. Every request under `/anthropic/v1/messages/batches` returns HTTP 501.
 
@@ -462,7 +443,7 @@ Token counts are constants, not a count of the prompt or the reply. Anthropic re
 
 The server does not simulate tool use or function calling. Responses are text, plus an Anthropic thinking block when the step sets `thinking`. Request fields such as `tools`, `tool_choice`, and Gemini `tools` are ignored, and the response never contains `tool_use`, `tool_calls`, or `functionCall` parts.
 
-Each process holds one scenario, one call log, and one set of occurrence counters in memory. Nothing is written to disk. Another process does not share that state.
+Each process holds one scenario and one call log in memory. Nothing is written to disk. Another process does not share that state.
 
 ## Development
 
