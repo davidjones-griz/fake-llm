@@ -154,41 +154,38 @@ public class ScenarioEngine(
 
     /**
      * Numbers the call, picks what answers it, and records its one call-log entry, all under the
-     * lock. Shared by the buffered [handle] and the SSE path in FakeLlmApp.kt, so a request is
-     * counted and logged once whichever transport renders it. The 400s are error steps with
-     * [Step.streamErrorAfterChunks] unset, so the Anthropic streaming path sends their JSON and
-     * writes no SSE bytes.
+     * lock; the 400 bodies are built after it. Shared by the buffered [handle] and the SSE path in
+     * FakeLlmApp.kt, so a request is counted and logged once whichever transport renders it. The
+     * 400s are error steps with [Step.streamErrorAfterChunks] unset, so the Anthropic streaming path
+     * sends their JSON and writes no SSE bytes.
      */
     internal fun resolve(
         vendor: String,
         req: ParsedRequest,
-    ): Resolution =
-        synchronized(lock) {
-            val n = ++callCount
-            val s = scenario
-            val index = (n - 1).toInt()
-            val (step, served, outcome) =
-                when {
-                    s != null && n <= s.steps.size -> {
-                        val step = s.steps[index]
-                        Triple(step, n.toInt(), if (step.error != null) "error:${step.error.status}" else "text")
+    ): Resolution {
+        val (n, loaded, served) =
+            synchronized(lock) {
+                val n = ++callCount
+                val s = scenario
+                val step = s?.steps?.getOrNull((n - 1).toInt())
+                val outcome =
+                    when {
+                        step != null -> if (step.error != null) "error:${step.error.status}" else "text"
+                        s != null -> "no-more-steps"
+                        lenient -> "default"
+                        else -> "no-scenario"
                     }
-
-                    s != null -> {
-                        Triple(errorStep(noMoreStepsBody(s, n, vendor, req)), null, "no-more-steps")
-                    }
-
-                    lenient -> {
-                        Triple(Step(text = CANNED_ASSISTANT_TEXT), null, "default")
-                    }
-
-                    else -> {
-                        Triple(errorStep(noScenarioBody(n, vendor, req)), null, "no-scenario")
-                    }
-                }
-            log.add(callRecord(n, vendor, req, outcome, served))
-            Resolution(seq = n, step = step)
-        }
+                log.add(callRecord(n, vendor, req, outcome, if (step != null) n.toInt() else null))
+                Triple(n, s, step)
+            }
+        val step =
+            served ?: when {
+                loaded != null -> errorStep(noMoreStepsBody(loaded, n, vendor, req))
+                lenient -> Step(text = CANNED_ASSISTANT_TEXT)
+                else -> errorStep(noScenarioBody(n, vendor, req))
+            }
+        return Resolution(seq = n, step = step)
+    }
 }
 
 private fun errorStep(body: String): Step = Step(error = ErrorStep(status = HTTP_BAD_REQUEST, body = body))

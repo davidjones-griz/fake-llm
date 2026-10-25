@@ -666,6 +666,20 @@ class OpenApiConformanceTest {
                     assertBody = { assertContains(it, "\"no more steps\"") },
                 ),
                 Exchange(
+                    "anthropic, lenient, after the last step",
+                    "POST",
+                    "/anthropic/v1/messages",
+                    Target.Operation("/anthropic/v1/messages"),
+                    anthropic(),
+                    lenient = true,
+                    expectStatus = 400,
+                    setup = { server ->
+                        server.engine.load("hello")
+                        send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
+                    },
+                    assertBody = { assertContains(it, "\"no more steps\"") },
+                ),
+                Exchange(
                     "anthropic, streamed with no scenario loaded",
                     "POST",
                     "/anthropic/v1/messages",

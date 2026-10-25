@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import java.nio.file.Files
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -288,14 +289,16 @@ class ScenarioEngineTest {
         try {
             val futures =
                 (1..size).map {
-                    pool.submit<String> {
+                    pool.submit<Resolution> {
                         start.await()
-                        engine.resolve("anthropic", req()).step.text!!
+                        engine.resolve("anthropic", req())
                     }
                 }
             start.countDown()
-            val texts = futures.map { it.get(10, TimeUnit.SECONDS) }
-            assertEquals(size, texts.toSet().size)
+            val resolutions = futures.map { it.get(10, TimeUnit.SECONDS) }
+            // Each call got the step matching its own number, not just some unused step.
+            resolutions.forEach { assertEquals("step-${it.seq}", it.step.text) }
+            assertEquals((1L..size).toSet(), resolutions.map { it.seq }.toSet())
         } finally {
             pool.shutdownNow()
         }
@@ -306,8 +309,10 @@ class ScenarioEngineTest {
 
     @Test
     fun `a reset during concurrent calls leaves a log that belongs to one run, in order`() {
-        // Probabilistic: racy code can pass a run, but most races leave gaps or stale entries.
-        val engine = engineWith(textScenario(*Array(1000) { "s" }))
+        // Probabilistic: racy code can pass a run, but most races leave gaps, stale entries, or a
+        // call whose step does not match its number.
+        val engine = engineWith(textScenario(*Array(1000) { "step-${it + 1}" }))
+        val mismatched = ConcurrentLinkedQueue<Resolution>()
         val pool = Executors.newFixedThreadPool(8)
         val start = CountDownLatch(1)
         try {
@@ -315,7 +320,8 @@ class ScenarioEngineTest {
                 (1..400).map {
                     pool.submit<Unit> {
                         start.await()
-                        engine.resolve("anthropic", req())
+                        val r = engine.resolve("anthropic", req())
+                        if (r.step.text != "step-${r.seq}") mismatched += r
                     }
                 }
             val resetter =
@@ -328,6 +334,7 @@ class ScenarioEngineTest {
         } finally {
             pool.shutdownNow()
         }
+        assertEquals(emptyList(), mismatched.toList())
         val calls = engine.calls()
         assertEquals((1L..calls.size).toList(), calls.map { it.seq })
         assertTrue(calls.all { it.step?.toLong() == it.seq })

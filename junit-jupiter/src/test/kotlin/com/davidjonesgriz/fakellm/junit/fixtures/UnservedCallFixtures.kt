@@ -5,6 +5,7 @@ import com.davidjonesgriz.fakellm.junit.FakeLlmAllowUnservedCalls
 import com.davidjonesgriz.fakellm.junit.FakeLlmExtension
 import com.davidjonesgriz.fakellm.junit.FakeLlmScenario
 import com.davidjonesgriz.fakellm.junit.FakeLlmTest
+import org.junit.AssumptionViolatedException
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.MethodOrderer
 import org.junit.jupiter.api.Nested
@@ -222,7 +223,7 @@ class AlreadyFailingFixture {
     }
 }
 
-/** The test aborts after an extra call: it stays aborted. */
+/** Each test aborts after an extra call: it stays aborted. */
 @Fixture
 @FakeLlmTest
 @FakeLlmScenario("hello")
@@ -231,6 +232,21 @@ class AbortedFixture {
     fun aborts(server: FakeLlmServer) {
         twoCalls(server)
         assumeTrue(false, "not this time")
+    }
+
+    @Test
+    fun abortsTheJUnit4Way(server: FakeLlmServer) {
+        twoCalls(server)
+        // org.junit.AssumptionViolatedException extends the internal class Jupiter checks for.
+        throw AssumptionViolatedException("not this time")
+    }
+
+    // The internal class itself, as JUnit 4.11's assumeThat throws it; only its constructors are deprecated.
+    @Suppress("DEPRECATION")
+    @Test
+    fun abortsTheOlderJUnit4Way(server: FakeLlmServer) {
+        twoCalls(server)
+        throw org.junit.internal.AssumptionViolatedException("not this time")
     }
 }
 

@@ -28,10 +28,11 @@ info:
     without a fraction or exponent: `24.0` is rejected where an integer is expected.
 
     **Scenarios and calls.** A scenario is an ordered list of steps. Every request to a vendor
-    route whose body parses is a call: it takes the next call number (`seq`, from 1) and one
-    call-log entry, and call N after a load or reset gets step N, on any vendor route. Calls are
-    numbered in arrival order. A call after the last step gets `NoMoreStepsError`; the last step
-    does not repeat. A body that fails to parse, a 404 and the Batches 501 are not calls.
+    route that does not get `ExceptionError` is a call: it takes the next call number (`seq`,
+    from 1) and one call-log entry, and call N after a load or reset gets step N, on any vendor
+    route. Calls are numbered in arrival order. A call after the last step gets
+    `NoMoreStepsError`; the last step does not repeat. A request that gets `ExceptionError`, a
+    404 and the Batches 501 are not calls.
 
     **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
     cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.

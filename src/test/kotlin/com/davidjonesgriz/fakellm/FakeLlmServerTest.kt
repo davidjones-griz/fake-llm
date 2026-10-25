@@ -284,26 +284,37 @@ class FakeLlmServerTest {
     }
 
     @Test
-    fun `calls that arrive together each get a different step, matching their log entry`() {
+    fun `calls that arrive together each get the step matching their own number`() {
         val size = 20
         withServer { client, _ ->
             client.post("/control/scenario", inline(*Array(size) { "step-${it + 1}" }))
             val pool = Executors.newFixedThreadPool(size)
             val start = CountDownLatch(1)
-            val texts =
+            val bodies =
                 try {
                     (1..size)
                         .map {
                             pool.submit<String> {
                                 start.await()
-                                anthropicText(client.post("/anthropic/v1/messages", anthropicBody("go")).body())
+                                client.post("/anthropic/v1/messages", anthropicBody("go")).body()
                             }
                         }.also { start.countDown() }
                         .map { it.get(15, TimeUnit.SECONDS) }
                 } finally {
                     pool.shutdownNow()
                 }
-            assertEquals((1..size).map { "step-$it" }.toSet(), texts.toSet())
+            // Each response's id carries its call number, and its text is that number's step.
+            bodies.forEach { body ->
+                val n =
+                    Json
+                        .parseToJsonElement(body)
+                        .jsonObject
+                        .getValue("id")
+                        .jsonPrimitive.content
+                        .removePrefix("fake-msg-")
+                assertEquals("step-$n", anthropicText(body))
+            }
+            assertEquals((1..size).map { "step-$it" }.toSet(), bodies.map { anthropicText(it) }.toSet())
 
             val log = calls(client)
             assertEquals((1L..size).toList(), log.longs("seq"))

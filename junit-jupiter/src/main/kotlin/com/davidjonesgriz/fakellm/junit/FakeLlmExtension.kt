@@ -86,8 +86,10 @@ public class FakeLlmExtension
             val engine = holder.server.engine
             val scenario = scenarioFor(context)
             if (scenario != null) engine.load(scenario) else engine.unload()
-            // Only a test that got this far is checked: one rejected by the guard above, or whose
-            // scenario failed to load, must not read another test's call log.
+            // Only a test that got this far is checked. JUnit already skips afterTestExecution when a
+            // beforeEach fails (the guard above, or a scenario that does not load); the marker keeps
+            // such a test from reading another test's log even if that ever changes, and lets only
+            // one of two registrations run the check.
             store.put(CHECK + id, true)
         }
 
@@ -153,8 +155,16 @@ private fun classContext(context: ExtensionContext): ExtensionContext {
     return current
 }
 
-/** True for an abort: opentest4j's, or JUnit 4's assumption failure, which Jupiter also treats as one. */
-private fun Throwable?.isAbort(): Boolean = this is TestAbortedException || this?.javaClass?.name == "org.junit.AssumptionViolatedException"
+/**
+ * True for what Jupiter reports as an abort: opentest4j's [TestAbortedException], or JUnit 4's
+ * `org.junit.internal.AssumptionViolatedException` and its subclasses, matched by name because
+ * JUnit 4 is not a dependency.
+ */
+private fun Throwable?.isAbort(): Boolean =
+    this is TestAbortedException ||
+        generateSequence<Class<*>>(this?.javaClass) { it.superclass }.any { it.name == JUNIT4_ASSUMPTION }
+
+private const val JUNIT4_ASSUMPTION = "org.junit.internal.AssumptionViolatedException"
 
 /** [FakeLlmAllowUnservedCalls] on the method, then the class, then each enclosing class. */
 private fun allowsUnservedCalls(context: ExtensionContext): Boolean =

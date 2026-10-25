@@ -298,7 +298,7 @@ class FakeLlmExtensionTest {
     }
 
     @Test
-    fun `a test whose scenario fails to load does not fail on an earlier test's calls`() {
+    fun `a test whose scenario fails to load fails with that alone, not with an earlier test's calls`() {
         val results = run(UnknownAfterUnservedFixture::class.java)
         results.testEvents().assertStatistics { it.started(2).succeeded(1).failed(1) }
         val failure = results.failures().getValue("b()")
@@ -307,7 +307,7 @@ class FakeLlmExtensionTest {
     }
 
     @Test
-    fun `a test rejected by the concurrency guard does not fail on the running test's calls`() {
+    fun `a test rejected by the concurrency guard fails with that alone, not with the running test's calls`() {
         Sink.latch = CountDownLatch(2)
         val results = run(ConcurrentUnservedFixture::class.java, parameters = PARALLEL_CLASSES + ("$PARALLEL.mode.default" to "concurrent"))
         results.testEvents().assertStatistics { it.started(2).failed(2) }
@@ -330,8 +330,8 @@ class FakeLlmExtensionTest {
     }
 
     @Test
-    fun `an aborted test stays aborted`() {
-        run(AbortedFixture::class.java).testEvents().assertStatistics { it.started(1).aborted(1).failed(0) }
+    fun `an aborted test stays aborted, with a JUnit 4 assumption too`() {
+        run(AbortedFixture::class.java).testEvents().assertStatistics { it.started(3).aborted(3).failed(0) }
     }
 
     private fun run(
