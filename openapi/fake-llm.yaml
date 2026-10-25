@@ -79,9 +79,15 @@ paths:
       summary: Load a scenario by name or inline
       description: |
         Replaces the loaded scenario and clears the call log and the occurrence counters. A
-        name is looked up as `<name>.json` in the server's scenario directory, when one is set,
-        and then as the classpath resource `/scenarios/<name>.json`; the file's declared `name`
-        must equal the file name.
+        name is looked up in this order, and the first match wins:
+
+        1. `<name>.json` in the server's scenario directory, when one is set;
+        2. a scenario the embedding project provides under that name (for the JVM library: the
+           classpath resource `/scenarios/<name>.json`, the first on the classpath if several);
+        3. the bundled scenario of that name.
+
+        So a scenario in the directory or the project replaces a bundled one with the same name.
+        The file's declared `name` must equal the file name.
       security:
         - controlToken: []
         - {}
@@ -108,8 +114,12 @@ paths:
       operationId: listScenarios
       summary: List the scenario names the server can load
       description: |
-        The bundled names, merged with the `*.json` names in the server's scenario directory when
-        one is set; deduplicated and sorted.
+        The names a load by name can find: the `*.json` names in the server's scenario directory
+        when one is set, the names in every index the embedding project provides (for the JVM
+        library: each `/scenarios/index.txt` on the classpath, one name per line, `#` comments and
+        blank lines skipped), and the bundled names; deduplicated and sorted. A name that is not
+        a valid scenario name (letters, digits, `_` and `-`) is skipped. Listed means found in a
+        directory or an index; an indexed name whose file is missing still fails to load.
       security:
         - controlToken: []
         - {}
