@@ -119,12 +119,19 @@ class CommandServer private constructor(
     /** Polls `GET /health`. Any I/O error counts as not ready yet: Docker accepts connections early. */
     private fun awaitHealthy(timeout: Duration) {
         val deadline = System.nanoTime() + timeout.toNanos()
-        val http =
-            HttpClient
-                .newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(HEALTH_REQUEST_TIMEOUT)
-                .build()
+        HttpClient
+            .newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .connectTimeout(HEALTH_REQUEST_TIMEOUT)
+            .build()
+            .use { http -> pollHealth(http, deadline, timeout) }
+    }
+
+    private fun pollHealth(
+        http: HttpClient,
+        deadline: Long,
+        timeout: Duration,
+    ) {
         val request =
             HttpRequest
                 .newBuilder(URI.create("$baseUrl/health"))
@@ -273,43 +280,51 @@ private class TargetProbe(
     var problem: String? = null
 
     init {
-        val runner = CaseRunner(target.baseUrl)
         try {
-            val health = runner.send(CaseRequest("GET", "/health"))
-            lenient = Json
-                .parseToJsonElement(health.body)
-                .jsonObject["lenient"]
-                ?.jsonPrimitive
-                ?.booleanOrNull ?: false
-            val open = runner.send(CaseRequest("GET", "/control/scenarios")).status
-            val token = target.controlToken
-            problem =
-                when {
-                    token == null && open == HTTP_UNAUTHORIZED -> {
-                        "the server requires a control token; set fakellm.controlToken"
-                    }
-
-                    token == null -> {
-                        null
-                    }
-
-                    open != HTTP_UNAUTHORIZED -> {
-                        "fakellm.controlToken is set, but the server does not require a control token"
-                    }
-
-                    runner.send(CaseRequest("GET", "/control/scenarios", mapOf("authorization" to "Bearer $token"))).status != HTTP_OK -> {
-                        "the server rejects fakellm.controlToken"
-                    }
-
-                    else -> {
-                        null
-                    }
-                }
+            CaseRunner(target.baseUrl).use { probe(it, target.controlToken) }
         } catch (e: CaseFailedException) {
             problem = "cannot reach ${target.baseUrl}: ${e.message}"
         } catch (e: SerializationException) {
             problem = "GET ${target.baseUrl}/health did not return JSON: ${e.message}"
+        } catch (e: IllegalArgumentException) {
+            problem = "GET ${target.baseUrl}/health did not return an object: ${e.message}"
         }
+    }
+
+    private fun probe(
+        runner: CaseRunner,
+        token: String?,
+    ) {
+        val health = Json.parseToJsonElement(runner.send(CaseRequest("GET", "/health")).body).jsonObject
+        val reported = health["lenient"]?.jsonPrimitive?.booleanOrNull
+        if (reported == null) {
+            problem = "GET /health has no boolean lenient field"
+            return
+        }
+        lenient = reported
+        val open = runner.send(CaseRequest("GET", "/control/scenarios")).status
+        problem =
+            when {
+                token == null && open == HTTP_UNAUTHORIZED -> {
+                    "the server requires a control token; set fakellm.controlToken"
+                }
+
+                token == null -> {
+                    null
+                }
+
+                open != HTTP_UNAUTHORIZED -> {
+                    "fakellm.controlToken is set, but the server does not require a control token"
+                }
+
+                runner.send(CaseRequest("GET", "/control/scenarios", mapOf("authorization" to "Bearer $token"))).status != HTTP_OK -> {
+                    "the server rejects fakellm.controlToken"
+                }
+
+                else -> {
+                    null
+                }
+            }
     }
 }
 

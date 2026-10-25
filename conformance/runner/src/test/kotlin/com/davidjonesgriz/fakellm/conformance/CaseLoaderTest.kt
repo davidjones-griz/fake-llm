@@ -76,6 +76,10 @@ class CaseLoaderTest {
                 "an unknown field" to case("x", """"extra":1,"""),
                 "a restricted request header" to
                     """{"name":"x","description":"d","scenario":"hello","exchanges":[{"request":{"method":"GET","path":"/","headers":{"Host":"h"}},"response":{"status":200}}]}""",
+                "a path with a space" to
+                    """{"name":"x","description":"d","scenario":"hello","exchanges":[{"request":{"method":"GET","path":"/a b"},"response":{"status":200}}]}""",
+                "a restricted header in another case" to
+                    """{"name":"x","description":"d","scenario":"hello","exchanges":[{"request":{"method":"GET","path":"/","headers":{"CONTENT-LENGTH":"1"}},"response":{"status":200}}]}""",
                 "two expected body forms" to
                     """{"name":"x","description":"d","scenario":"hello","exchanges":[{"request":{"method":"GET","path":"/"},"response":{"status":200,"body":{},"rawBody":""}}]}""",
             )

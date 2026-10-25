@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "load-replaces-scenario",
-  "description": "Loading another scenario replaces the loaded one and starts at its step 1.",
+  "description": "Loading another scenario replaces the loaded one, empties the call log, and starts at its step 1.",
   "scenario": {
     "name": "old",
     "steps": [
@@ -84,6 +84,19 @@
           "loaded": "new",
           "steps": 1
         }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
       }
     },
     {

@@ -22,9 +22,8 @@ conformance/
 From the repository root:
 
 ```bash
-# Against the fat jar: the runner starts the server itself.
-./gradlew shadowJar
-./gradlew :fake-llm-conformance:test -Pfakellm.command="java -jar build/libs/fake-llm-all.jar"
+# Against the fat jar, built first so the run never tests a stale one: the runner starts the server.
+./gradlew shadowJar :fake-llm-conformance:test -Pfakellm.command="java -jar build/libs/fake-llm-all.jar"
 
 # Against the Docker image.
 docker build -t fake-llm .
@@ -105,7 +104,8 @@ Turns every skip into a failure. CI sets it: with a command target, nothing shou
 - `server` (optional) gives the settings the case needs: `lenient` (default `false`),
   `controlToken` (default `null`), and `fresh` (default `false`) for a case that needs a newly
   started server, such as one that checks the state before any scenario is loaded.
-- `request`: `method`, `path`, optional `headers` (sent as given; the runner adds none), and either
+- `request`: `method`, `path`, optional `headers` (sent as given; the runner adds only what HTTP/1.1
+  needs, such as `Host` and `Content-Length`), and either
   `body` (a JSON value, sent as given) or `rawBody` (a string, sent byte for byte, for bodies that
   must not be valid JSON).
 - `response`: `status`, optional `headers`, and at most one of:
@@ -128,6 +128,10 @@ Turns every skip into a failure. CI sets it: with a command target, nothing shou
   value of that type. Cases use it only for values that vary (`timestampMs`) and for the messages
   the spec says are diagnostics, not contract (`detail`, and the `fake_llm_error` text of a 401,
   404 or 501).
+- **Timeouts:** each response, body included, must arrive within 10 seconds, so a stream that
+  stalls fails its case.
+- **Not checked:** a JSON body that repeats a key is read as its last value; the runner does not
+  flag the duplicate.
 
 ### What the cases make contract
 
@@ -152,4 +156,6 @@ them, exactly. That includes the values fake-llm fixes:
 2. Write the expected responses from the spec and the README, not by copying what the server
    happens to send.
 3. Run the suite against the fat jar (above) and `./gradlew :test --tests '*OpenApiConformanceTest*'`,
-   which checks the case against the spec.
+   which checks the case against the spec. A vendor 400 must list its body: one with
+   `fake_llm_error` is fake-llm's own and is checked against the spec; any other is a scripted
+   error step.

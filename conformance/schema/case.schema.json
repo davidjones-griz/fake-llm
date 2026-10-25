@@ -71,12 +71,12 @@
       "additionalProperties": false,
       "properties": {
         "method": { "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
-        "path": { "type": "string", "pattern": "^/" },
+        "path": { "type": "string", "pattern": "^/[^\\s]*$" },
         "headers": {
           "description": "Sent as given. Headers an HTTP client cannot set are not allowed.",
           "type": "object",
           "propertyNames": {
-            "not": { "pattern": "^(?i:host|connection|content-length|expect|upgrade|transfer-encoding)$" }
+            "not": { "pattern": "^([Hh][Oo][Ss][Tt]|[Cc][Oo][Nn][Nn][Ee][Cc][Tt][Ii][Oo][Nn]|[Cc][Oo][Nn][Tt][Ee][Nn][Tt]-[Ll][Ee][Nn][Gg][Tt][Hh]|[Ee][Xx][Pp][Ee][Cc][Tt]|[Uu][Pp][Gg][Rr][Aa][Dd][Ee]|[Tt][Rr][Aa][Nn][Ss][Ff][Ee][Rr]-[Ee][Nn][Cc][Oo][Dd][Ii][Nn][Gg])$" }
           },
           "additionalProperties": { "type": "string" }
         },

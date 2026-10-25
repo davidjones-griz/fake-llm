@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "reset-starts-over",
-  "description": "Reset puts the scenario back at step 1: the call log empties and numbering restarts at 1.",
+  "description": "Reset keeps the scenario and puts it back at step 1: the call log empties and numbering restarts at 1.",
   "scenario": {
     "name": "two-steps",
     "steps": [
@@ -70,6 +70,23 @@
         },
         "body": {
           "reset": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "two-steps",
+          "lenient": false
         }
       }
     },

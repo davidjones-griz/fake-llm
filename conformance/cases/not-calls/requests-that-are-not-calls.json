@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "requests-that-are-not-calls",
-  "description": "An unparseable body, an unknown path and the Batches route get their responses, take no step and are not logged.",
+  "description": "An unparseable body, an incomplete body, an unknown path and the Batches route get their responses, take no step and are not logged.",
   "scenario": {
     "name": "one-step",
     "steps": [
@@ -19,6 +19,30 @@
           "content-type": "application/json"
         },
         "rawBody": "{\"model\":"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model"
+        }
       },
       "response": {
         "status": 400,

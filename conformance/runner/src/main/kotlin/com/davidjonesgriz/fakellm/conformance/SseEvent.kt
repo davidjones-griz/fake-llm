@@ -7,20 +7,22 @@ data class SseEvent(
 )
 
 /**
- * Parses an SSE body into events. Frames are separated by a blank line; `:` comment lines are
- * skipped; several `data:` lines join with `\n`; a frame without `event:` is named `message`.
+ * Parses an SSE body into events, as an SSE client dispatches them. Frames end with a blank line,
+ * and a final frame without one is discarded; `:` comment lines are skipped; several `data:` lines
+ * join with `\n`; a frame without `event:` is named `message`; a frame with no `data:` line (only
+ * `retry:` or `id:`, say) dispatches nothing.
  */
-fun parseSse(body: String): List<SseEvent> =
-    body
-        .replace("\r\n", "\n")
-        .split("\n\n")
-        .mapNotNull { frame ->
-            val lines = frame.lines().filter { it.isNotEmpty() && !it.startsWith(":") }
-            if (lines.isEmpty()) return@mapNotNull null
-            val event = lines.firstOrNull { it.startsWith("event:") }?.let { field(it, "event:") } ?: "message"
-            val data = lines.filter { it.startsWith("data:") }.joinToString("\n") { field(it, "data:") }
-            SseEvent(event, data)
-        }
+fun parseSse(body: String): List<SseEvent> {
+    val frames = body.replace("\r\n", "\n").split("\n\n")
+    // The text after the last blank line is an unterminated frame (or empty).
+    return frames.dropLast(1).mapNotNull { frame ->
+        val lines = frame.lines().filter { it.isNotEmpty() && !it.startsWith(":") }
+        val data = lines.filter { it.startsWith("data:") }
+        if (data.isEmpty()) return@mapNotNull null
+        val event = lines.firstOrNull { it.startsWith("event:") }?.let { field(it, "event:") } ?: "message"
+        SseEvent(event, data.joinToString("\n") { field(it, "data:") })
+    }
+}
 
 private fun field(
     line: String,

@@ -5,13 +5,20 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.nio.file.Path
+import java.time.Duration
 import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+
+private const val BUFFER = 4096
+private const val STALL_MS = 30_000L
 
 /** The runner's checks, against a stub server that sends exactly the response a test gives it. */
 class CaseRunnerTest {
@@ -206,6 +213,38 @@ class CaseRunnerTest {
             assertContains(failure.message!!, "stub-case, scenario load: expected 200, got 400")
         }
         assertEquals(1, received.size)
+    }
+
+    @Test
+    fun `a stream that stalls after its headers fails within the request timeout`() {
+        ServerSocket(0, 0, InetAddress.getLoopbackAddress()).use { socket ->
+            val stub =
+                Thread {
+                    runCatching {
+                        socket.accept().use { conn ->
+                            conn.getInputStream().read(ByteArray(BUFFER))
+                            val out = conn.getOutputStream()
+                            out.write(
+                                "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n5\r\nevent\r\n"
+                                    .toByteArray(),
+                            )
+                            out.flush()
+                            Thread.sleep(STALL_MS)
+                        }
+                    }
+                }.apply {
+                    isDaemon = true
+                    start()
+                }
+            val started = System.nanoTime()
+            val failure =
+                assertFailsWith<CaseFailedException> {
+                    CaseRunner("http://127.0.0.1:${socket.localPort}", Duration.ofSeconds(1)).use { it.send(CaseRequest("GET", "/stream")) }
+                }
+            assertContains(failure.message!!, "no complete response within 1000 ms")
+            assertTrue(Duration.ofNanos(System.nanoTime() - started) < Duration.ofSeconds(STALL_MS / 1000 / 2))
+            stub.interrupt()
+        }
     }
 
     @Test

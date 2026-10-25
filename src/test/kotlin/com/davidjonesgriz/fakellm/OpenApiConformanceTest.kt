@@ -159,11 +159,29 @@ class OpenApiConformanceTest {
         assertTrue(caseDisagreements(case("""{"status":200,"headers":{"content-type":"text/plain"}}""")).isNotEmpty())
         val badScenario = json.readTree("""{"scenario":{"name":"s","steps":[]},"exchanges":[]}""")
         assertTrue(caseDisagreements(badScenario).isNotEmpty())
+
+        fun vendor400(body: String) =
+            json.readTree(
+                """{"scenario":"hello","exchanges":[{"request":{"method":"POST","path":"/anthropic/v1/messages"},
+                "response":{"status":400$body}}]}""",
+            )
+        assertEquals(emptyList(), caseDisagreements(vendor400(""","body":{"type":"error"}""")), "a scripted 400")
+        assertTrue(caseDisagreements(vendor400(""","body":{"fake_llm_error":"no more step"}""")).isNotEmpty(), "a misspelt own 400")
+        assertTrue(caseDisagreements(vendor400("")).isNotEmpty(), "a vendor 400 with no body")
+
+        fun control401(server: String) =
+            json.readTree(
+                """{"scenario":"hello",$server"exchanges":[{"request":{"method":"GET","path":"/control/nope"},
+                "response":{"status":401,"headers":{"www-authenticate":"Bearer"},"body":{"fake_llm_error":"x"}}}]}""",
+            )
+        assertEquals(emptyList(), caseDisagreements(control401(""""server":{"controlToken":"t"},""")))
+        assertTrue(caseDisagreements(control401("")).isNotEmpty(), "a 401 without a control token")
     }
 
     /** How one conformance case disagrees with the spec; empty when it agrees. */
     private fun caseDisagreements(case: JsonNode): List<String> {
         val found = mutableListOf<String>()
+        val tokenSet = case.path("server").path("controlToken").isString
         case.path("scenario").takeIf { it.isObject }?.let { scenario ->
             validate(SCENARIO, scenario.toString()).forEach { found += "scenario: $it" }
         }
@@ -180,7 +198,7 @@ class OpenApiConformanceTest {
                 validate(load, request.path("body").toString()).forEach { found += "$where request: $it" }
             }
             val pointer =
-                responsePointerFor(method, path, status, response.path("body"))
+                responsePointerFor(method, path, status, response.path("body"), tokenSet)
                     .getOrElse { error ->
                         found += "$where: ${error.message}"
                         return@forEachIndexed
@@ -200,6 +218,7 @@ class OpenApiConformanceTest {
         path: String,
         status: Int,
         body: JsonNode,
+        tokenSet: Boolean,
     ): Result<String?> {
         val template =
             spec.path("paths").propertyNames().firstOrNull { template ->
@@ -207,6 +226,10 @@ class OpenApiConformanceTest {
                     spec.path("paths").path(template).has(method.lowercase())
             }
         return when {
+            template != null && status == HTTP_UNAUTHORIZED && !tokenSet -> {
+                Result.failure(IllegalStateException("a 401 needs a control token, and the case sets none"))
+            }
+
             template != null -> {
                 operationResponse(template, method, status, body)
             }
@@ -215,8 +238,8 @@ class OpenApiConformanceTest {
                 expect(status, 501, "#/components/responses/NotImplemented")
             }
 
-            path.startsWith("/control/") && status == 401 -> {
-                Result.success("#/components/responses/Unauthorized")
+            path.startsWith("/control/") && tokenSet -> {
+                expect(status, HTTP_UNAUTHORIZED, "#/components/responses/Unauthorized")
             }
 
             else -> {
@@ -235,12 +258,31 @@ class OpenApiConformanceTest {
         val operation = operationPointer(template, method)
         val responses = spec.atRef("$operation/responses")
         val vendor = listOf("/anthropic/", "/openai/", "/gemini/").any { template.startsWith(it) }
-        val scripted = vendor && status == HTTP_BAD_REQUEST && body.path("fake_llm_error").asString("") !in OWN_400_ERRORS
+        // A vendor 400 whose body has fake_llm_error is fake-llm's own and is checked against
+        // VendorBadRequest (so a misspelt value fails); any other 400 body is a scripted error.
+        val vendor400 = vendor && status == HTTP_BAD_REQUEST
         return when {
-            scripted -> Result.success(null)
-            responses.has("$status") -> Result.success("$operation/responses/$status")
-            vendor && responses.has("default") -> Result.success(null)
-            else -> Result.failure(IllegalStateException("status $status is not documented"))
+            vendor400 && body.isMissingNode -> {
+                Result.failure(
+                    IllegalStateException("a vendor 400 must list its body, to tell a scripted 400 from fake-llm's own"),
+                )
+            }
+
+            vendor400 && !body.has("fake_llm_error") -> {
+                Result.success(null)
+            }
+
+            responses.has("$status") -> {
+                Result.success("$operation/responses/$status")
+            }
+
+            vendor && responses.has("default") -> {
+                Result.success(null)
+            }
+
+            else -> {
+                Result.failure(IllegalStateException("status $status is not documented"))
+            }
         }
     }
 
@@ -427,9 +469,9 @@ class OpenApiConformanceTest {
         val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Step", "ErrorStep")
 
         /** The `fake_llm_error` values of fake-llm's own vendor 400s (`VendorBadRequest`). */
-        val OWN_400_ERRORS = setOf("exception", "no scenario loaded", "no more steps")
         const val HTTP_OK = 200
         const val HTTP_BAD_REQUEST = 400
+        const val HTTP_UNAUTHORIZED = 401
 
         /** Documented, but reachable only from a broken build; FakeLlmServerTest covers openApiResponse(null). */
         val NOT_REACHABLE_OVER_HTTP = setOf(Triple("/openapi", "get", "500"))

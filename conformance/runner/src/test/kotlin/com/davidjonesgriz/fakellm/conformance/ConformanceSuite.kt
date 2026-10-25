@@ -39,7 +39,7 @@ class ConformanceSuite {
                 dynamicTest(case.name, case.file.toUri()) {
                     val handle = server.value.getOrThrow()
                     try {
-                        CaseRunner(handle.baseUrl).run(case)
+                        CaseRunner(handle.baseUrl).use { it.run(case) }
                     } catch (e: CaseFailedException) {
                         val output = handle.output()
                         if (output.isEmpty()) throw e

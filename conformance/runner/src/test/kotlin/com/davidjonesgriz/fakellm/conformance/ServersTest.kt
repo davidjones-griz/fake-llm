@@ -217,6 +217,26 @@ class ServersTest {
     }
 
     @Test
+    fun `a base URL target whose health is not an object with lenient is one problem, not a crash`() {
+        for (health in listOf("[]", """{"status":"ok"}""", "not json")) {
+            val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+            server.createContext("/") { ex ->
+                val bytes = health.toByteArray()
+                ex.sendResponseHeaders(200, bytes.size.toLong())
+                ex.responseBody.use { it.write(bytes) }
+            }
+            server.start()
+            try {
+                val plan = planRun(listOf(case("plain")), Target.BaseUrl("http://127.0.0.1:${server.address.port}", null))
+                assertTrue(plan.targetProblem != null, health)
+                assertEquals(emptyList(), plan.groups, health)
+            } finally {
+                server.stop(0)
+            }
+        }
+    }
+
+    @Test
     fun `the suite skips without a target, and fails instead with failOnSkip`() {
         val properties = listOf("fakellm.command", "fakellm.baseUrl", "fakellm.failOnSkip")
         val saved = properties.associateWith { System.getProperty(it) }

@@ -55,13 +55,18 @@ class ComparisonTest {
     }
 
     @Test
-    fun `SSE frames parse into named events with joined data`() {
-        val body = "event: a\ndata: {\"x\":1}\n\n: a comment\n\nevent: b\ndata: line 1\ndata: line 2\n\ndata:no-name\n\n\n"
+    fun `SSE frames parse into named events with joined data, as a client dispatches them`() {
+        val body = "event: a\ndata: {\"x\":1}\n\n: a comment\n\nretry: 100\n\nevent: b\ndata: line 1\ndata: line 2\n\ndata:no-name\n\n"
         assertEquals(
             listOf(SseEvent("a", """{"x":1}"""), SseEvent("b", "line 1\nline 2"), SseEvent("message", "no-name")),
             parseSse(body),
         )
-        assertEquals(listOf(SseEvent("a", "x")), parseSse("event: a\r\ndata: x"), "CRLF, and no final blank line")
+        assertEquals(listOf(SseEvent("a", "x")), parseSse("event: a\r\ndata: x\r\n\r\n"), "CRLF line ends")
+        assertEquals(
+            listOf(SseEvent("a", "{}")),
+            parseSse("event: a\ndata: {}\n\nevent: b\ndata: {\"cut"),
+            "an unterminated final frame is discarded",
+        )
     }
 
     @Test
