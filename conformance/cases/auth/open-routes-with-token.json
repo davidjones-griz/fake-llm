@@ -1,0 +1,71 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "open-routes-with-token",
+  "description": "With a control token set, /health and the vendor routes stay open.",
+  "server": {
+    "controlToken": "conformance-token"
+  },
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "hello",
+          "lenient": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello. I can help with the weather, a simple recipe, or a short how-to."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}

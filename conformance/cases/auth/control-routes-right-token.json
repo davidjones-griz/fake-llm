@@ -1,0 +1,96 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "control-routes-right-token",
+  "description": "With the right token, the control routes answer.",
+  "server": {
+    "controlToken": "conformance-token"
+  },
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/scenarios",
+        "headers": {
+          "authorization": "Bearer conformance-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenarios": [
+            "fail-then-retry",
+            "hello",
+            "malformed-json",
+            "max-tokens-cutoff",
+            "overloaded-529",
+            "rate-limit-429",
+            "refusal",
+            "stream-error-midway",
+            "thinking-stream"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json",
+          "authorization": "Bearer conformance-token"
+        },
+        "body": {
+          "name": "hello"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "loaded": "hello",
+          "steps": 1
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/reset",
+        "headers": {
+          "authorization": "Bearer conformance-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "reset": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls",
+        "headers": {
+          "authorization": "Bearer conformance-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

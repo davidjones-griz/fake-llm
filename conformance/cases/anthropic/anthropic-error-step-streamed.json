@@ -1,0 +1,51 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "anthropic-error-step-streamed",
+  "description": "An error step without streamErrorAfterChunks is a plain HTTP error even when the request streams.",
+  "scenario": {
+    "name": "overloaded",
+    "steps": [
+      {
+        "error": {
+          "status": 529,
+          "body": "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}"
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 529,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "type": "error",
+          "error": {
+            "type": "overloaded_error",
+            "message": "Overloaded"
+          }
+        }
+      }
+    }
+  ]
+}

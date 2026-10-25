@@ -1,0 +1,64 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "anthropic-thinking",
+  "description": "A thinking step puts a thinking block, with the fixed signature, before the text block.",
+  "scenario": {
+    "name": "thinking",
+    "steps": [
+      {
+        "text": "Use olive oil and garlic.",
+        "thinking": "A short recipe answer."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "A short recipe answer.",
+              "signature": "fake-thinking-signature"
+            },
+            {
+              "type": "text",
+              "text": "Use olive oil and garlic."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}

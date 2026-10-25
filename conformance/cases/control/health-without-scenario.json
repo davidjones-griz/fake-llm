@@ -1,0 +1,28 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "health-without-scenario",
+  "description": "GET /health reports no scenario on a new server.",
+  "server": {
+    "fresh": true
+  },
+  "scenario": null,
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": null,
+          "lenient": false
+        }
+      }
+    }
+  ]
+}

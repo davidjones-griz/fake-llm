@@ -1,0 +1,180 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "call-log-mixed-run",
+  "description": "The call log records each call's number, step and outcome.",
+  "scenario": {
+    "name": "mixed",
+    "steps": [
+      {
+        "text": "fine"
+      },
+      {
+        "error": {
+          "status": 529,
+          "body": "{}"
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "first"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "fine"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "second"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 529,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {}
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:generateContent",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "third"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no more steps",
+          "scenario": "mixed",
+          "steps": 2,
+          "seq": 3,
+          "vendor": "gemini",
+          "model": "example-gemini",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "third\n"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "first\n",
+            "step": 1
+          },
+          {
+            "seq": 2,
+            "vendor": "openai",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "error:529",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "second\n",
+            "step": 2
+          },
+          {
+            "seq": 3,
+            "vendor": "gemini",
+            "model": "example-gemini",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "no-more-steps",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "third\n",
+            "step": null
+          }
+        ]
+      }
+    }
+  ]
+}

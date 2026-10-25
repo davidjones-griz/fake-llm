@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "scripted-400-vs-own-400",
+  "description": "A scripted 400 is the scenario's body; fake-llm's own 400 after the last step is its no-more-steps body.",
+  "scenario": {
+    "name": "scripted-400",
+    "steps": [
+      {
+        "error": {
+          "status": 400,
+          "body": "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"max_tokens is too large\"}}"
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "type": "error",
+          "error": {
+            "type": "invalid_request_error",
+            "message": "max_tokens is too large"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no more steps",
+          "scenario": "scripted-400",
+          "steps": 1,
+          "seq": 2,
+          "vendor": "anthropic",
+          "model": "example-model",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "Hello\n"
+        }
+      }
+    }
+  ]
+}

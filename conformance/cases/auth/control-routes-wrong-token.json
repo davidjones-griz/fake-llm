@@ -1,0 +1,53 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "control-routes-wrong-token",
+  "description": "A wrong token is a 401 too.",
+  "server": {
+    "controlToken": "conformance-token"
+  },
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls",
+        "headers": {
+          "authorization": "Bearer wrong-token"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "www-authenticate": "Bearer"
+        },
+        "body": {
+          "fake_llm_error": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/reset",
+        "headers": {
+          "authorization": "Bearer wrong-token"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "www-authenticate": "Bearer"
+        },
+        "body": {
+          "fake_llm_error": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

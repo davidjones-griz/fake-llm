@@ -1,0 +1,47 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "anthropic-scripted-content-type",
+  "description": "A scripted content-type header replaces the default one.",
+  "scenario": {
+    "name": "html-error",
+    "steps": [
+      {
+        "error": {
+          "status": 503,
+          "body": "<p>down</p>",
+          "headers": {
+            "content-type": "text/html"
+          }
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "text/html"
+        },
+        "rawBody": "<p>down</p>"
+      }
+    }
+  ]
+}

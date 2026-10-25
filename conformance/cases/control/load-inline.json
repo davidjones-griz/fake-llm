@@ -1,0 +1,40 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "load-inline",
+  "description": "Loading an inline scenario returns its name and step count.",
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenario": {
+            "name": "inline",
+            "steps": [
+              {
+                "text": "a"
+              },
+              {
+                "text": "b"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "loaded": "inline",
+          "steps": 2
+        }
+      }
+    }
+  ]
+}

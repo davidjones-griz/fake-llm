@@ -1,0 +1,54 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "anthropic-error-step",
+  "description": "An error step is sent as scripted: its status, its body and its headers.",
+  "scenario": {
+    "name": "rate-limit",
+    "steps": [
+      {
+        "error": {
+          "status": 429,
+          "body": "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"Slow down\"}}",
+          "headers": {
+            "retry-after": "2"
+          }
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json",
+          "retry-after": "2"
+        },
+        "body": {
+          "type": "error",
+          "error": {
+            "type": "rate_limit_error",
+            "message": "Slow down"
+          }
+        }
+      }
+    }
+  ]
+}

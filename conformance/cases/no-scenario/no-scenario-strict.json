@@ -1,0 +1,72 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "no-scenario-strict",
+  "description": "With no scenario loaded, strict mode answers the no-scenario 400 and logs it.",
+  "server": {
+    "fresh": true
+  },
+  "scenario": null,
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no scenario loaded",
+          "seq": 1,
+          "vendor": "anthropic",
+          "model": "example-model",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "Hello\n"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "no-scenario",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": null
+          }
+        ]
+      }
+    }
+  ]
+}

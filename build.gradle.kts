@@ -53,6 +53,8 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // OpenApiConformanceTest checks every conformance case against the spec.
+    inputs.dir("conformance/cases").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("conformanceCases")
 }
 
 // The OpenAPI document is the language-neutral contract, kept at the repository root; the server
