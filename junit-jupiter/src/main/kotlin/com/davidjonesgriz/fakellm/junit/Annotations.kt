@@ -12,8 +12,8 @@ import java.lang.annotation.Inherited
  * [scenarioDirectory] is searched first when a scenario is loaded by name, as with
  * `ScenarioEngine(scenarioDirectory = ...)`, before the project's classpath scenarios and the
  * bundled ones; a relative path resolves against the working directory, and an empty string skips
- * it. When [lenient] is true, a request no rule matches gets the canned reply instead of HTTP
- * 400.
+ * it. When [lenient] is true, a call made while no scenario is loaded gets the canned reply instead
+ * of HTTP 400; a call after the last step is still HTTP 400.
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)
@@ -39,3 +39,15 @@ public annotation class FakeLlmTest(
 public annotation class FakeLlmScenario(
     val value: String,
 )
+
+/**
+ * Turns off [FakeLlmExtension]'s check that every call got a step, for a test that makes a call
+ * after the scenario's last step, or with no scenario loaded, on purpose (for example to test how
+ * the app handles that 400). On a method it applies to that test; on a class, to every test in it
+ * and in its `@Nested` classes and subclasses. It is also found inside a composed annotation.
+ */
+@Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+@MustBeDocumented
+@Inherited
+public annotation class FakeLlmAllowUnservedCalls

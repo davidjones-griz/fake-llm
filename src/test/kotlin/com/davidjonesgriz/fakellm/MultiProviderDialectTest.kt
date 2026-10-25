@@ -1,6 +1,7 @@
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -101,7 +102,7 @@ class MultiProviderDialectTest {
                     .jsonPrimitive.content
                     .toInt(),
             )
-            assertEquals("assistant", call.getValue("role").jsonPrimitive.content)
+            assertEquals("1", call.getValue("step").jsonPrimitive.content)
         }
     }
 
@@ -137,14 +138,13 @@ class MultiProviderDialectTest {
                     .jsonPrimitive.content
                     .toInt(),
             )
-            assertEquals("assistant", call.getValue("role").jsonPrimitive.content)
+            assertEquals("1", call.getValue("step").jsonPrimitive.content)
         }
     }
 
     @Test
-    fun `lenient mode returns the canned reply for an unmatched openai request`() {
+    fun `lenient mode returns the canned reply for an openai request with no scenario loaded`() {
         withServer(engine = ScenarioEngine(lenient = true)) { client, _ ->
-            assertEquals(200, client.post("/control/scenario", """{"name":"malformed-json"}""").statusCode())
             val resp = client.post("/openai/v1/chat/completions", openAiBody("an ordinary question"))
             assertEquals(200, resp.statusCode())
             assertEquals(CANNED_ASSISTANT_TEXT, openAiText(resp.body()))
@@ -164,15 +164,8 @@ class MultiProviderDialectTest {
                     .single()
                     .jsonObject
             assertEquals("openai", call.getValue("vendor").jsonPrimitive.content)
-            assertEquals("DEFAULT", call.getValue("role").jsonPrimitive.content)
             assertEquals("default", call.getValue("outcome").jsonPrimitive.content)
-            assertEquals(
-                1,
-                call
-                    .getValue("occurrence")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
+            assertEquals(JsonNull, call.getValue("step"))
             assertTrue(
                 call
                     .getValue("promptSample")

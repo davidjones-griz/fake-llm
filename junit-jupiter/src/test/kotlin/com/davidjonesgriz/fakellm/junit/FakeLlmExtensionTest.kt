@@ -1,26 +1,40 @@
 package com.davidjonesgriz.fakellm.junit
 
+import com.davidjonesgriz.fakellm.junit.fixtures.AbortedFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.AlreadyFailingFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ComposedFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.ComposedOptOutFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ConcurrentMethodsFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.ConcurrentUnservedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ConfiguredFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.CounterBalanceFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.DoubleRegisteredFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.DoubleRegisteredUnservedFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.ExtraCallFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.FIXTURES_PARAMETER
 import com.davidjonesgriz.fakellm.junit.fixtures.InheritedFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.InheritedOptOutFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InjectionFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InstanceRegisteredFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.InstanceRegisteredUnservedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InterfaceFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.IsolationFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.JavaFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.LenientNoScenarioFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.MethodOptOutFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.NestedInstanceRegisteredFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.NestedOptOutFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.NoScenarioFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ParallelFixtureA
 import com.davidjonesgriz.fakellm.junit.fixtures.ParallelFixtureB
 import com.davidjonesgriz.fakellm.junit.fixtures.ParameterizedFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.ParameterizedUnservedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.PerClassInjectionFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.PrecedenceFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.Sink
 import com.davidjonesgriz.fakellm.junit.fixtures.StaticRegisteredFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.StrictNoScenarioFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.UnknownAfterUnservedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.UnknownScenarioFixture
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
@@ -37,6 +51,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 
@@ -100,17 +115,17 @@ class FakeLlmExtensionTest {
 
     @Test
     fun `FakeLlmTest's scenarioDirectory and lenient configure the server`() {
-        run(ConfiguredFixture::class.java).assertAllPassed(tests = 1)
+        run(ConfiguredFixture::class.java).assertAllPassed(tests = 2)
         assertEquals(listOf(true), Sink.get("configured:lenient"))
-        assertEquals(listOf(200), Sink.get("configured:matched"), "custom.json is only in the scenario directory")
-        assertEquals(listOf(200), Sink.get("configured:unmatched"), "lenient answers a request no rule matches")
+        assertEquals(listOf(200), Sink.get("configured:fromDirectory"), "custom.json is only in the scenario directory")
+        assertEquals(listOf(200), Sink.get("configured:noScenario"), "lenient answers a call with no scenario loaded")
     }
 
     @Test
     fun `a static RegisterExtension field takes its configuration from the constructor`() {
-        run(StaticRegisteredFixture::class.java).assertAllPassed(tests = 2)
-        assertEquals(listOf(200, 200), Sink.get("static:matched"))
-        assertEquals(listOf(200, 200), Sink.get("static:unmatched"))
+        run(StaticRegisteredFixture::class.java).assertAllPassed(tests = 3)
+        assertEquals(listOf(200, 200), Sink.get("static:fromDirectory"))
+        assertEquals(listOf(200), Sink.get("static:noScenario"))
         assertEquals(1, Sink.get("static:port").toSet().size)
     }
 
@@ -218,6 +233,105 @@ class FakeLlmExtensionTest {
         run(InjectionFixture::class.java, PerClassInjectionFixture::class.java, parameters = scoped).assertAllPassed(tests = 4)
         assertEquals(1, Sink.get("injection").toSet().size, "${Sink.get("injection")}")
         assertEquals(1, Sink.get("perClass").toSet().size, "${Sink.get("perClass")}")
+    }
+
+    @Test
+    fun `a call after the last step fails a test that otherwise passed, naming the call`() {
+        val results = run(ExtraCallFixture::class.java)
+        results.testEvents().assertStatistics { it.started(1).failed(1) }
+        assertEquals(listOf(200, 400), Sink.get("extra:status"))
+        val failure = results.failures().getValue("extra(FakeLlmServer)")
+        assertIs<AssertionError>(failure)
+        assertContains(failure.message.orEmpty(), "call 2: anthropic model 'example-model', no-more-steps")
+        assertContains(failure.message.orEmpty(), "scenario 'hello'")
+        assertContains(failure.message.orEmpty(), "@FakeLlmAllowUnservedCalls")
+    }
+
+    @Test
+    fun `a strict no-scenario call fails the test, and a lenient one does not`() {
+        val strict = run(StrictNoScenarioFixture::class.java)
+        strict.testEvents().assertStatistics { it.started(1).failed(1) }
+        assertContains(
+            strict
+                .failures()
+                .values
+                .single()
+                .message
+                .orEmpty(),
+            "no-scenario",
+        )
+        run(LenientNoScenarioFixture::class.java).assertAllPassed(tests = 1)
+        assertEquals(listOf(200), Sink.get("lenientNoScenario:status"))
+    }
+
+    @Test
+    fun `the opt-out covers its method, its class's nested classes, composed annotations and subclasses`() {
+        val method = run(MethodOptOutFixture::class.java)
+        method.testEvents().assertStatistics { it.started(2).succeeded(1).failed(1) }
+        assertEquals(setOf("checked(FakeLlmServer)"), method.failures().keys)
+        run(NestedOptOutFixture::class.java).assertAllPassed(tests = 1)
+        run(ComposedOptOutFixture::class.java).assertAllPassed(tests = 1)
+        run(InheritedOptOutFixture::class.java).assertAllPassed(tests = 1)
+    }
+
+    @Test
+    fun `only the parameterized invocation that makes an extra call fails`() {
+        val results = run(ParameterizedUnservedFixture::class.java)
+        results.testEvents().assertStatistics { it.started(2).succeeded(1).failed(1) }
+        assertContains(results.failures().keys.single(), "2")
+    }
+
+    @Test
+    fun `a double registration reports the failure once`() {
+        val results = run(DoubleRegisteredUnservedFixture::class.java)
+        results.testEvents().assertStatistics { it.started(1).failed(1) }
+        val failure = results.failures().values.single()
+        assertContains(failure.message.orEmpty(), "no-more-steps")
+        assertEquals(0, failure.suppressed.size)
+    }
+
+    @Test
+    fun `an instance-field registration still checks, in nested classes too`() {
+        val results = run(InstanceRegisteredUnservedFixture::class.java)
+        results.testEvents().assertStatistics { it.started(2).failed(2) }
+        results.failures().values.forEach { assertContains(it.message.orEmpty(), "no-more-steps") }
+    }
+
+    @Test
+    fun `a test whose scenario fails to load does not fail on an earlier test's calls`() {
+        val results = run(UnknownAfterUnservedFixture::class.java)
+        results.testEvents().assertStatistics { it.started(2).succeeded(1).failed(1) }
+        val failure = results.failures().getValue("b()")
+        assertContains(failure.message.orEmpty(), "no-such-scenario")
+        assertEquals(0, failure.suppressed.size)
+    }
+
+    @Test
+    fun `a test rejected by the concurrency guard does not fail on the running test's calls`() {
+        Sink.latch = CountDownLatch(2)
+        val results = run(ConcurrentUnservedFixture::class.java, parameters = PARALLEL_CLASSES + ("$PARALLEL.mode.default" to "concurrent"))
+        results.testEvents().assertStatistics { it.started(2).failed(2) }
+        val (rejected, checked) = results.failures().values.partition { it.message.orEmpty().contains("must not run concurrently") }
+        assertEquals(0, rejected.single().suppressed.size)
+        assertContains(checked.single().message.orEmpty(), "no-more-steps")
+    }
+
+    @Test
+    fun `a test that already failed keeps its own failure, with the check's suppressed`() {
+        val failure = run(AlreadyFailingFixture::class.java).failures().values.single()
+        assertEquals("the test's own failure", failure.message)
+        assertContains(
+            failure.suppressed
+                .single()
+                .message
+                .orEmpty(),
+            "no-more-steps",
+        )
+    }
+
+    @Test
+    fun `an aborted test stays aborted`() {
+        run(AbortedFixture::class.java).testEvents().assertStatistics { it.started(1).aborted(1).failed(0) }
     }
 
     private fun run(

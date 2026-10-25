@@ -1,18 +1,12 @@
 {
   "name": "thinking-stream",
-  "description": "A text reply that includes a thinking trace. Streaming splits it into 8-character chunks and waits 20 milliseconds between chunks.",
-  "rules": [
+  "description": "One step: a text reply that includes a thinking trace. Streaming splits it into 8-character chunks and waits 20 milliseconds between chunks.",
+  "steps": [
     {
-      "role": "assistant",
-      "match": {},
-      "respond": [
-        {
-          "text": "A simple tomato sauce needs olive oil, garlic, crushed tomatoes, and a pinch of salt. Simmer it for about twenty minutes.",
-          "thinking": "The question is a short recipe. Keep the ingredient list small and the steps easy to follow at home.",
-          "streamChunkChars": 8,
-          "streamInterChunkDelayMs": 20
-        }
-      ]
+      "text": "A simple tomato sauce needs olive oil, garlic, crushed tomatoes, and a pinch of salt. Simmer it for about twenty minutes.",
+      "thinking": "The question is a short recipe. Keep the ingredient list small and the steps easy to follow at home.",
+      "streamChunkChars": 8,
+      "streamInterChunkDelayMs": 20
     }
   ]
 }

@@ -20,14 +20,40 @@ import kotlin.test.assertTrue
 
 class ScenarioLoaderTest {
     @Test
+    fun `an invalid step in a scenario file is reported by its 1-based number`() {
+        withScenarioDir { dir ->
+            writeScenario(dir, "bad", """{"name":"bad","steps":[{"text":"ok"},{"text":"x","error":{"status":500}}]}""")
+            val failure = assertFailsWith<IllegalArgumentException> { ScenarioLoader.load("bad", dir) }
+            assertTrue(failure.message!!.startsWith("step 2: "), failure.message)
+        }
+    }
+
+    @Test
+    fun `an invalid inline step is reported by its number`() {
+        val inline = Json.parseToJsonElement("""{"name":"bad","steps":[{"text":"ok"},{"text":"ok"},{}]}""")
+        val failure = assertFailsWith<IllegalArgumentException> { ScenarioLoader.decode(inline) }
+        assertTrue(failure.message!!.startsWith("step 3: "), failure.message)
+    }
+
+    @Test
+    fun `a scenario with no steps, or in the removed rules format, does not load`() {
+        withScenarioDir { dir ->
+            writeScenario(dir, "empty", """{"name":"empty","steps":[]}""")
+            assertFailsWith<IllegalArgumentException> { ScenarioLoader.load("empty", dir) }
+            writeScenario(dir, "old", """{"name":"old","rules":[{"role":"r","respond":[{"text":"x"}]}]}""")
+            val old = assertFailsWith<IllegalArgumentException> { ScenarioLoader.load("old", dir) }
+            assertTrue(old.message!!.contains("rules"), old.message)
+        }
+    }
+
+    @Test
     fun `a scenario directory is searched before the classpath`() {
         withScenarioDir { dir ->
-            writeScenario(dir, "hello", singleReply("hello", role = "override", text = "Directory scenario wins."))
-            writeScenario(dir, "local-only", singleReply("local-only", role = "local", text = "from the directory"))
+            writeScenario(dir, "hello", singleReply("hello", text = "Directory scenario wins."))
+            writeScenario(dir, "local-only", singleReply("local-only", text = "from the directory"))
 
             val overridden = ScenarioLoader.load("hello", dir)
             assertEquals("Directory scenario wins.", overridden.onlyText())
-            assertEquals("override", overridden.rules.single().role)
             assertEquals("from the directory", ScenarioLoader.load("local-only", dir).onlyText())
 
             val names = ScenarioLoader.availableNames(dir)
@@ -45,7 +71,7 @@ class ScenarioLoaderTest {
     @Test
     fun `a name missing from the scenario directory falls back to the classpath`() {
         withScenarioDir { dir ->
-            writeScenario(dir, "local-only", singleReply("local-only", role = "local", text = "from the directory"))
+            writeScenario(dir, "local-only", singleReply("local-only", text = "from the directory"))
             val classpath = ScenarioLoader.load("refusal", dir)
             assertEquals("refusal", classpath.name)
             assertEquals("I can't help with that request.", classpath.onlyText())
@@ -69,7 +95,7 @@ class ScenarioLoaderTest {
     @Test
     fun `a scenario file whose declared name differs from the file name is rejected`() {
         withScenarioDir { dir ->
-            writeScenario(dir, "hello", singleReply("not-hello", role = "r", text = "x"))
+            writeScenario(dir, "hello", singleReply("not-hello", text = "x"))
             val failure = assertFailsWith<IllegalStateException> { ScenarioLoader.load("hello", dir) }
             assertTrue(failure.message!!.contains("hello"))
             assertTrue(failure.message!!.contains("not-hello"))
@@ -100,11 +126,11 @@ class ScenarioLoaderTest {
             withProjectRoots(
                 // Each root is one entry on a project's classpath, holding scenarios/<name>.json.
                 mapOf(
-                    "hello.json" to singleReply("hello", role = "project", text = "project hello"),
-                    "refusal.json" to singleReply("refusal", role = "project", text = "project refusal"),
+                    "hello.json" to singleReply("hello", text = "project hello"),
+                    "refusal.json" to singleReply("refusal", text = "project refusal"),
                 ),
             ) { loader ->
-                writeScenario(dir, "refusal", singleReply("refusal", role = "directory", text = "directory refusal"))
+                writeScenario(dir, "refusal", singleReply("refusal", text = "directory refusal"))
 
                 assertEquals("directory refusal", ScenarioLoader.load("refusal", dir, loader).onlyText(), "the directory beats the project")
                 assertEquals("project hello", ScenarioLoader.load("hello", dir, loader).onlyText(), "the project beats the bundled file")
@@ -120,8 +146,8 @@ class ScenarioLoaderTest {
     @Test
     fun `the first project classpath root with the scenario wins`() {
         withProjectRoots(
-            mapOf("shared.json" to singleReply("shared", role = "first", text = "first root")),
-            mapOf("shared.json" to singleReply("shared", role = "second", text = "second root")),
+            mapOf("shared.json" to singleReply("shared", text = "first root")),
+            mapOf("shared.json" to singleReply("shared", text = "second root")),
         ) { loader ->
             assertEquals("first root", ScenarioLoader.load("shared", null, loader).onlyText())
         }
@@ -130,7 +156,7 @@ class ScenarioLoaderTest {
     @Test
     fun `the listing merges every project index with the bundled names and the directory`() {
         withScenarioDir { dir ->
-            writeScenario(dir, "from-directory", singleReply("from-directory", role = "d", text = "d"))
+            writeScenario(dir, "from-directory", singleReply("from-directory", text = "d"))
             withProjectRoots(
                 mapOf("index.txt" to "# one module's scenarios\nfirst-module\n\nshared\n"),
                 mapOf("index.txt" to "  second-module  \nshared\nhello\n"),
@@ -159,7 +185,7 @@ class ScenarioLoaderTest {
 
     @Test
     fun `without a project index the listing is the bundled names`() {
-        withProjectRoots(mapOf("hello.json" to singleReply("hello", role = "p", text = "p"))) { loader ->
+        withProjectRoots(mapOf("hello.json" to singleReply("hello", text = "p"))) { loader ->
             assertEquals(BUNDLED_NAMES.sorted(), ScenarioLoader.availableNames(null, loader))
         }
     }
@@ -178,9 +204,9 @@ class ScenarioLoaderTest {
     fun `servers in one JVM serve and list their own engine's directory`() {
         withScenarioDir { first ->
             withScenarioDir { second ->
-                writeScenario(first, "same", singleReply("same", role = "first", text = "from the first directory"))
-                writeScenario(first, "only-first", singleReply("only-first", role = "first", text = "x"))
-                writeScenario(second, "same", singleReply("same", role = "second", text = "from the second directory"))
+                writeScenario(first, "same", singleReply("same", text = "from the first directory"))
+                writeScenario(first, "only-first", singleReply("only-first", text = "x"))
+                writeScenario(second, "same", singleReply("same", text = "from the second directory"))
                 withServer(ScenarioEngine(scenarioDirectory = first)) { firstClient, _ ->
                     withServer(ScenarioEngine(scenarioDirectory = second)) { secondClient, _ ->
                         // Both servers load and answer at the same time, each from its own directory.
@@ -219,12 +245,7 @@ class ScenarioLoaderTest {
             .jsonArray
             .map { it.jsonPrimitive.content }
 
-    private fun Scenario.onlyText(): String? =
-        rules
-            .single()
-            .respond
-            .single()
-            .text
+    private fun Scenario.onlyText(): String? = steps.single().text
 
     /**
      * Runs [block] with a classpath of its own: one root per map, each holding `scenarios/<file>`
@@ -272,9 +293,8 @@ class ScenarioLoaderTest {
 
     private fun singleReply(
         name: String,
-        role: String,
         text: String,
-    ): String = """{ "name": "$name", "rules": [ { "role": "$role", "respond": [ { "text": "$text" } ] } ] }"""
+    ): String = """{ "name": "$name", "steps": [ { "text": "$text" } ] }"""
 
     private companion object {
         const val BUNDLED_HELLO = "Hello. I can help with the weather, a simple recipe, or a short how-to."

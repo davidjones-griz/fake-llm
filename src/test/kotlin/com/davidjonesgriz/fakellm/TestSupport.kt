@@ -27,23 +27,20 @@ internal class TestClient(
     fun post(
         path: String,
         body: String,
-        caller: String? = null,
         authorization: String? = null,
-    ): HttpResponse<String> = send(request(path).POST(HttpRequest.BodyPublishers.ofString(body)), caller, authorization)
+    ): HttpResponse<String> = send(request(path).POST(HttpRequest.BodyPublishers.ofString(body)), authorization)
 
     fun get(
         path: String,
         authorization: String? = null,
-    ): HttpResponse<String> = send(request(path).GET(), caller = null, authorization = authorization)
+    ): HttpResponse<String> = send(request(path).GET(), authorization)
 
     private fun request(path: String): HttpRequest.Builder = HttpRequest.newBuilder(URI("http://127.0.0.1:$port$path"))
 
     private fun send(
         builder: HttpRequest.Builder,
-        caller: String?,
         authorization: String?,
     ): HttpResponse<String> {
-        caller?.let { builder.header("X-Fake-LLM-Caller", it) }
         authorization?.let { builder.header("Authorization", it) }
         val response = http.send(builder.timeout(Duration.ofSeconds(15)).build(), HttpResponse.BodyHandlers.ofString())
         return response

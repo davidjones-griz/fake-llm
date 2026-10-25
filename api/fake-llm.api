@@ -1,23 +1,21 @@
 public final class com/davidjonesgriz/fakellm/CallRecord {
 	public static final field Companion Lcom/davidjonesgriz/fakellm/CallRecord$Companion;
 	public final fun component1 ()J
-	public final fun component10 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Ljava/lang/String;
 	public final fun component5 ()I
 	public final fun component6 ()Ljava/lang/String;
-	public final fun component7 ()I
+	public final fun component7 ()J
 	public final fun component8 ()Ljava/lang/String;
-	public final fun component9 ()J
+	public final fun component9 ()Ljava/lang/Integer;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getMessageCount ()I
 	public final fun getModel ()Ljava/lang/String;
-	public final fun getOccurrence ()I
 	public final fun getOutcome ()Ljava/lang/String;
 	public final fun getPromptSample ()Ljava/lang/String;
-	public final fun getRole ()Ljava/lang/String;
 	public final fun getSeq ()J
+	public final fun getStep ()Ljava/lang/Integer;
 	public final fun getSystemShape ()Ljava/lang/String;
 	public final fun getTimestampMs ()J
 	public final fun getVendor ()Ljava/lang/String;
@@ -130,75 +128,6 @@ public final class com/davidjonesgriz/fakellm/FakeLlmServer : java/lang/AutoClos
 	public final fun getPort ()I
 }
 
-public final class com/davidjonesgriz/fakellm/Match {
-	public static final field Companion Lcom/davidjonesgriz/fakellm/Match$Companion;
-	public fun <init> ()V
-	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/util/List;
-	public final fun component3 ()Ljava/util/List;
-	public final fun component4 ()Ljava/lang/String;
-	public final fun component5 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Match;
-	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/Match;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/Match;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getCaller ()Ljava/lang/String;
-	public final fun getModelContains ()Ljava/lang/String;
-	public final fun getPromptContainsAll ()Ljava/util/List;
-	public final fun getPromptContainsAny ()Ljava/util/List;
-	public final fun getSystemShape ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final synthetic class com/davidjonesgriz/fakellm/Match$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
-	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/Match$$serializer;
-	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
-	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/Match;
-	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
-	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
-	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/Match;)V
-	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
-	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
-}
-
-public final class com/davidjonesgriz/fakellm/Match$Companion {
-	public final fun serializer ()Lkotlinx/serialization/KSerializer;
-}
-
-public final class com/davidjonesgriz/fakellm/Rule {
-	public static final field Companion Lcom/davidjonesgriz/fakellm/Rule$Companion;
-	public fun <init> (Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Ljava/util/List;)V
-	public synthetic fun <init> (Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Lcom/davidjonesgriz/fakellm/Match;
-	public final fun component3 ()Ljava/util/List;
-	public final fun copy (Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Ljava/util/List;)Lcom/davidjonesgriz/fakellm/Rule;
-	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/Rule;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Ljava/util/List;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/Rule;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getMatch ()Lcom/davidjonesgriz/fakellm/Match;
-	public final fun getRespond ()Ljava/util/List;
-	public final fun getRole ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final synthetic class com/davidjonesgriz/fakellm/Rule$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
-	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/Rule$$serializer;
-	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
-	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/Rule;
-	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
-	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
-	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/Rule;)V
-	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
-	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
-}
-
-public final class com/davidjonesgriz/fakellm/Rule$Companion {
-	public final fun serializer ()Lkotlinx/serialization/KSerializer;
-}
-
 public final class com/davidjonesgriz/fakellm/Scenario {
 	public static final field Companion Lcom/davidjonesgriz/fakellm/Scenario$Companion;
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
@@ -211,7 +140,7 @@ public final class com/davidjonesgriz/fakellm/Scenario {
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDescription ()Ljava/lang/String;
 	public final fun getName ()Ljava/lang/String;
-	public final fun getRules ()Ljava/util/List;
+	public final fun getSteps ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

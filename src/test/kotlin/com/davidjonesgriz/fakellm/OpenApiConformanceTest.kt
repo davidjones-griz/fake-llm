@@ -99,10 +99,9 @@ class OpenApiConformanceTest {
     @Test
     fun `the Scenario schema and the server's decoder both accept explicit nulls`() {
         val withNulls =
-            """{"name":"nulls","rules":[
-              {"role":"a","match":{"modelContains":null,"systemShape":null,"caller":null},
-               "respond":[{"text":null,"thinking":null,"error":{"status":500}}]},
-              {"role":"b","respond":[{"text":"t","error":null,"streamErrorAfterChunks":null}]}
+            """{"name":"nulls","steps":[
+              {"text":null,"thinking":null,"error":{"status":500}},
+              {"text":"t","error":null,"streamErrorAfterChunks":null}
             ]}"""
         assertEquals(emptyList(), validate(SCENARIO, withNulls))
         ScenarioLoader.decode(
@@ -115,7 +114,7 @@ class OpenApiConformanceTest {
     fun `integers are written without a fraction, as the spec says`() {
         // JSON Schema treats 24.0 as an integer, so the rule is stated in the spec's description;
         // the server's decoder enforces it.
-        val integralFloat = """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamChunkChars":24.0}]}]}"""
+        val integralFloat = """{"name":"x","steps":[{"text":"t","streamChunkChars":24.0}]}"""
         assertContains(spec.path("info").path("description").asString(), "without a fraction or exponent")
         assertFails {
             ScenarioLoader.decode(
@@ -239,7 +238,7 @@ class OpenApiConformanceTest {
         const val TOKEN = "spec-token"
         const val MIN_SCENARIO_FILES = 12
         val HTTP_METHODS = setOf("get", "put", "post", "delete", "options", "head", "patch", "trace")
-        val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Rule", "Match", "Step", "ErrorStep")
+        val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Step", "ErrorStep")
 
         /** Documented, but reachable only from a broken build; FakeLlmServerTest covers openApiResponse(null). */
         val NOT_REACHABLE_OVER_HTTP = setOf(Triple("/openapi", "get", "500"))
@@ -364,7 +363,7 @@ class OpenApiConformanceTest {
 
         const val OPEN_AI = """{"model":"example-model","messages":[{"role":"user","content":"hi"}]}"""
         const val GEMINI = """{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}"""
-        const val INLINE = """{"name":"inline","rules":[{"role":"r","respond":[{"text":"t"}]}]}"""
+        const val INLINE = """{"name":"inline","steps":[{"text":"t"}]}"""
 
         fun callVendors(server: FakeLlmServer) {
             send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
@@ -462,11 +461,11 @@ class OpenApiConformanceTest {
                 Exchange("load malformed JSON", "POST", "/control/scenario", control, "{", requestValid = false, expectStatus = 400),
                 Exchange("load an empty body", "POST", "/control/scenario", control, "", requestValid = false, expectStatus = 400),
                 Exchange(
-                    "load an inline scenario with no rules",
+                    "load an inline scenario with no steps",
                     "POST",
                     "/control/scenario",
                     control,
-                    """{"scenario":{"name":"s","rules":[]}}""",
+                    """{"scenario":{"name":"s","steps":[]}}""",
                     requestValid = false,
                     expectStatus = 400,
                 ),
@@ -475,7 +474,7 @@ class OpenApiConformanceTest {
                     "POST",
                     "/control/scenario",
                     control,
-                    """{"scenario":{"name":"s","rules":[{"role":"r","respond":[{"text":"t"}]}],"extra":1}}""",
+                    """{"scenario":{"name":"s","steps":[{"text":"t"}],"extra":1}}""",
                     requestValid = false,
                     expectStatus = 400,
                 ),
@@ -484,7 +483,7 @@ class OpenApiConformanceTest {
                     "POST",
                     "/control/scenario",
                     control,
-                    """{"scenario":{"name":"s","rules":[{"role":"r","respond":[{"error":{"status":42}}]}]}}""",
+                    """{"scenario":{"name":"s","steps":[{"error":{"status":42}}]}}""",
                     requestValid = false,
                     expectStatus = 400,
                 ),
@@ -518,16 +517,16 @@ class OpenApiConformanceTest {
                 ),
                 Exchange("calls, empty", "GET", "/control/calls", Target.Operation("/control/calls"), expectStatus = 200),
                 Exchange(
-                    "calls after strict unmatched calls on every vendor",
+                    "calls after strict no-scenario calls on every vendor",
                     "GET",
                     "/control/calls",
                     Target.Operation("/control/calls"),
                     expectStatus = 200,
                     setup = ::callVendors,
-                    assertBody = { assertTrue(it.contains("\"UNMATCHED\"") && it.contains("\"unknown\""), it) },
+                    assertBody = { assertTrue(it.contains("\"no-scenario\"") && it.contains("\"unknown\""), it) },
                 ),
                 Exchange(
-                    "calls after matched and lenient calls",
+                    "calls after served, no-more-steps and lenient calls",
                     "GET",
                     "/control/calls",
                     Target.Operation("/control/calls"),
@@ -538,6 +537,7 @@ class OpenApiConformanceTest {
                         server.engine.load("fail-then-retry")
                         callVendors(server)
                     },
+                    assertBody = { assertTrue(it.contains("\"no-more-steps\"") && it.contains("\"error:500\""), it) },
                 ),
                 Exchange(
                     "calls without the token",
@@ -560,25 +560,119 @@ class OpenApiConformanceTest {
                     serverToken = TOKEN,
                 ),
                 Exchange(
-                    "anthropic, matched",
+                    "anthropic, served by a step",
                     "POST",
                     "/anthropic/v1/messages",
-                    Target.Operation(
-                        "/anthropic/v1/messages",
-                    ),
+                    Target.Operation("/anthropic/v1/messages"),
                     anthropic(),
                     expectStatus = 200,
-                    setup = {
-                        it.engine.load("hello")
-                    },
+                    setup = { it.engine.load("hello") },
                 ),
                 Exchange(
-                    "anthropic, unmatched",
+                    "anthropic, no scenario loaded",
                     "POST",
                     "/anthropic/v1/messages",
                     Target.Operation("/anthropic/v1/messages"),
                     anthropic(),
                     expectStatus = 400,
+                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
+                ),
+                Exchange(
+                    "anthropic, after the last step",
+                    "POST",
+                    "/anthropic/v1/messages",
+                    Target.Operation("/anthropic/v1/messages"),
+                    anthropic(),
+                    expectStatus = 400,
+                    setup = { server ->
+                        server.engine.load("hello")
+                        send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
+                    },
+                    assertBody = { assertContains(it, "\"no more steps\"") },
+                ),
+                Exchange(
+                    "openai, served by a step",
+                    "POST",
+                    "/openai/v1/chat/completions",
+                    Target.Operation("/openai/v1/chat/completions"),
+                    OPEN_AI,
+                    expectStatus = 200,
+                    setup = { it.engine.load("hello") },
+                ),
+                Exchange(
+                    "openai, no scenario loaded",
+                    "POST",
+                    "/openai/v1/chat/completions",
+                    Target.Operation("/openai/v1/chat/completions"),
+                    OPEN_AI,
+                    expectStatus = 400,
+                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
+                ),
+                Exchange(
+                    "openai, after the last step",
+                    "POST",
+                    "/openai/v1/chat/completions",
+                    Target.Operation("/openai/v1/chat/completions"),
+                    OPEN_AI,
+                    expectStatus = 400,
+                    setup = { server ->
+                        server.engine.load("hello")
+                        send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
+                    },
+                    assertBody = { assertContains(it, "\"no more steps\"") },
+                ),
+                Exchange(
+                    "gemini, served by a step",
+                    "POST",
+                    "/gemini/v1beta/models/example-model:generateContent",
+                    Target.Operation("/gemini/{version}/models/{model}:generateContent"),
+                    GEMINI,
+                    expectStatus = 200,
+                    setup = { it.engine.load("hello") },
+                ),
+                Exchange(
+                    "gemini, no scenario loaded",
+                    "POST",
+                    "/gemini/v1beta/models/example-model:generateContent",
+                    Target.Operation("/gemini/{version}/models/{model}:generateContent"),
+                    GEMINI,
+                    expectStatus = 400,
+                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
+                ),
+                Exchange(
+                    "gemini, after the last step",
+                    "POST",
+                    "/gemini/v1beta/models/example-model:generateContent",
+                    Target.Operation("/gemini/{version}/models/{model}:generateContent"),
+                    GEMINI,
+                    expectStatus = 400,
+                    setup = { server ->
+                        server.engine.load("hello")
+                        send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
+                    },
+                    assertBody = { assertContains(it, "\"no more steps\"") },
+                ),
+                Exchange(
+                    "anthropic, streamed after the last step",
+                    "POST",
+                    "/anthropic/v1/messages",
+                    Target.Operation("/anthropic/v1/messages"),
+                    """{"model":"example-model","max_tokens":16,"stream":true,"messages":[{"role":"user","content":"hi"}]}""",
+                    expectStatus = 400,
+                    setup = { server ->
+                        server.engine.load("hello")
+                        send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
+                    },
+                    assertBody = { assertContains(it, "\"no more steps\"") },
+                ),
+                Exchange(
+                    "anthropic, streamed with no scenario loaded",
+                    "POST",
+                    "/anthropic/v1/messages",
+                    Target.Operation("/anthropic/v1/messages"),
+                    """{"model":"example-model","max_tokens":16,"stream":true,"messages":[{"role":"user","content":"hi"}]}""",
+                    expectStatus = 400,
+                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
                 ),
                 Exchange(
                     "anthropic, unparseable",
@@ -588,44 +682,6 @@ class OpenApiConformanceTest {
                     "{",
                     requestValid = false,
                     expectStatus = 400,
-                ),
-                Exchange(
-                    "openai, unmatched",
-                    "POST",
-                    "/openai/v1/chat/completions",
-                    Target.Operation("/openai/v1/chat/completions"),
-                    OPEN_AI,
-                    expectStatus = 400,
-                ),
-                Exchange(
-                    "openai, matched",
-                    "POST",
-                    "/openai/v1/chat/completions",
-                    Target.Operation(
-                        "/openai/v1/chat/completions",
-                    ),
-                    OPEN_AI,
-                    expectStatus = 200,
-                    setup = {
-                        it.engine.load("hello")
-                    },
-                ),
-                Exchange(
-                    "gemini, unmatched",
-                    "POST",
-                    "/gemini/v1beta/models/example-model:generateContent",
-                    Target.Operation("/gemini/{version}/models/{model}:generateContent"),
-                    GEMINI,
-                    expectStatus = 400,
-                ),
-                Exchange(
-                    "gemini, matched",
-                    "POST",
-                    "/gemini/v1beta/models/example-model:generateContent",
-                    Target.Operation("/gemini/{version}/models/{model}:generateContent"),
-                    GEMINI,
-                    expectStatus = 200,
-                    setup = { it.engine.load("hello") },
                 ),
                 Exchange(
                     "batches, list",
@@ -654,45 +710,36 @@ class OpenApiConformanceTest {
         /** Each must be rejected by both the Scenario schema and ScenarioLoader.decode. */
         val invalidScenarios =
             listOf(
-                "no rules" to """{"name":"x","rules":[]}""",
-                "no name" to """{"rules":[{"role":"r","respond":[{"text":"t"}]}]}""",
-                "an unknown field" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t"}]}],"extra":1}""",
-                "a rule with no steps" to """{"name":"x","rules":[{"role":"r","respond":[]}]}""",
-                "a rule with no role" to """{"name":"x","rules":[{"respond":[{"text":"t"}]}]}""",
-                "a step with text and error" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","error":{"status":500}}]}]}""",
-                "a step with neither" to """{"name":"x","rules":[{"role":"r","respond":[{}]}]}""",
-                "a step with both null" to """{"name":"x","rules":[{"role":"r","respond":[{"text":null,"error":null}]}]}""",
+                "no steps" to """{"name":"x","steps":[]}""",
+                "no name" to """{"steps":[{"text":"t"}]}""",
+                "an unknown field" to """{"name":"x","steps":[{"text":"t"}],"extra":1}""",
+                "the removed rules format" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t"}]}]}""",
+                "a null steps list" to """{"name":"x","steps":null}""",
+                "a step with text and error" to """{"name":"x","steps":[{"text":"t","error":{"status":500}}]}""",
+                "a step with neither" to """{"name":"x","steps":[{}]}""",
+                "a step with both null" to """{"name":"x","steps":[{"text":null,"error":null}]}""",
                 "thinking on an error step" to
-                    """{"name":"x","rules":[{"role":"r","respond":[{"thinking":"h","error":{"status":500}}]}]}""",
+                    """{"name":"x","steps":[{"thinking":"h","error":{"status":500}}]}""",
                 "streamErrorAfterChunks on a text step" to
-                    """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamErrorAfterChunks":2}]}]}""",
+                    """{"name":"x","steps":[{"text":"t","streamErrorAfterChunks":2}]}""",
                 "streamErrorAfterChunks of 0" to
-                    """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500},"streamErrorAfterChunks":0}]}]}""",
-                "streamChunkChars of 0" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamChunkChars":0}]}]}""",
+                    """{"name":"x","steps":[{"error":{"status":500},"streamErrorAfterChunks":0}]}""",
+                "streamChunkChars of 0" to """{"name":"x","steps":[{"text":"t","streamChunkChars":0}]}""",
                 "streamChunkChars past Int" to
-                    """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamChunkChars":3000000000}]}]}""",
-                "a negative delay" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamInterChunkDelayMs":-1}]}]}""",
-                "an unknown field in a step" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","extra":1}]}]}""",
-                "an unknown field in a match" to """{"name":"x","rules":[{"role":"r","match":{"extra":1},"respond":[{"text":"t"}]}]}""",
-                "a null prompt list" to
-                    """{"name":"x","rules":[{"role":"r","match":{"promptContainsAll":null},"respond":[{"text":"t"}]}]}""",
-                "systemShape unknown" to
-                    """{"name":"x","rules":[{"role":"r","match":{"systemShape":"unknown"},"respond":[{"text":"t"}]}]}""",
-                "an error status of 42" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":42}}]}]}""",
-                "an error status of 600" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":600}}]}]}""",
-                "an error with no status" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"body":"b"}}]}]}""",
-                "an unknown field in a rule" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t"}],"extra":1}]}""",
-                "an unknown field in an error" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500,"extra":1}}]}]}""",
-                "a null description" to """{"name":"x","description":null,"rules":[{"role":"r","respond":[{"text":"t"}]}]}""",
-                "a null match" to """{"name":"x","rules":[{"role":"r","match":null,"respond":[{"text":"t"}]}]}""",
-                "a null stopReason" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","stopReason":null}]}]}""",
-                "a null promptContainsAny" to
-                    """{"name":"x","rules":[{"role":"r","match":{"promptContainsAny":null},"respond":[{"text":"t"}]}]}""",
-                "a null delay" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t","streamInterChunkDelayMs":null}]}]}""",
-                "a null error body" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500,"body":null}}]}]}""",
-                "null error headers" to """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500,"headers":null}}]}]}""",
+                    """{"name":"x","steps":[{"text":"t","streamChunkChars":3000000000}]}""",
+                "a negative delay" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":-1}]}""",
+                "an unknown field in a step" to """{"name":"x","steps":[{"text":"t","extra":1}]}""",
+                "an error status of 42" to """{"name":"x","steps":[{"error":{"status":42}}]}""",
+                "an error status of 600" to """{"name":"x","steps":[{"error":{"status":600}}]}""",
+                "an error with no status" to """{"name":"x","steps":[{"error":{"body":"b"}}]}""",
+                "an unknown field in an error" to """{"name":"x","steps":[{"error":{"status":500,"extra":1}}]}""",
+                "a null description" to """{"name":"x","description":null,"steps":[{"text":"t"}]}""",
+                "a null stopReason" to """{"name":"x","steps":[{"text":"t","stopReason":null}]}""",
+                "a null delay" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":null}]}""",
+                "a null error body" to """{"name":"x","steps":[{"error":{"status":500,"body":null}}]}""",
+                "null error headers" to """{"name":"x","steps":[{"error":{"status":500,"headers":null}}]}""",
                 "a non-string error header" to
-                    """{"name":"x","rules":[{"role":"r","respond":[{"error":{"status":500,"headers":{"a":1}}}]}]}""",
+                    """{"name":"x","steps":[{"error":{"status":500,"headers":{"a":1}}}]}""",
             )
     }
 }

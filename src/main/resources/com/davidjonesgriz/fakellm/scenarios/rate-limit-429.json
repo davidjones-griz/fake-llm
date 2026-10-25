@@ -1,24 +1,18 @@
 {
   "name": "rate-limit-429",
-  "description": "The first call returns HTTP 429 with a rate_limit_error body and a retry-after header of 2 seconds. The next call returns a normal weather reply, and that success step then repeats.",
-  "rules": [
+  "description": "Two steps. Call 1 returns HTTP 429 with a rate_limit_error body and a retry-after header of 2 seconds. Call 2 returns a normal weather reply.",
+  "steps": [
     {
-      "role": "weather",
-      "match": {},
-      "respond": [
-        {
-          "error": {
-            "status": 429,
-            "body": "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"Rate limit reached. Please retry after a short wait.\"}}",
-            "headers": {
-              "retry-after": "2"
-            }
-          }
-        },
-        {
-          "text": "Tomorrow will be mild and dry, with a high near 18 C and a light breeze."
+      "error": {
+        "status": 429,
+        "body": "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"Rate limit reached. Please retry after a short wait.\"}}",
+        "headers": {
+          "retry-after": "2"
         }
-      ]
+      }
+    },
+    {
+      "text": "Tomorrow will be mild and dry, with a high near 18 C and a light breeze."
     }
   ]
 }

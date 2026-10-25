@@ -32,9 +32,8 @@ class FakeLlmClientTest {
             TestClient(server.port).post("/anthropic/v1/messages", anthropicBody("hi"))
             val call = client.calls().single()
             assertEquals("anthropic", call.vendor)
-            assertEquals("assistant", call.role)
             assertEquals("text", call.outcome)
-            assertEquals(1, call.occurrence)
+            assertEquals(1, call.step)
 
             client.reset()
             assertTrue(client.calls().isEmpty())
@@ -44,30 +43,23 @@ class FakeLlmClientTest {
 
     @Test
     fun `loadInline sends only the fields that are set`() {
-        val scenario = Scenario(name = "inline", rules = listOf(Rule(role = "r", respond = listOf(Step(text = "from the client")))))
-        // No "description", "match", "stopReason" or other defaults that a server without those fields would reject.
+        val scenario = Scenario(name = "inline", steps = listOf(Step(text = "from the client")))
+        // No "description", "stopReason" or other defaults that a server without those fields would reject.
         assertEquals(
-            """{"scenario":{"name":"inline","rules":[{"role":"r","respond":[{"text":"from the client"}]}]}}""",
+            """{"scenario":{"name":"inline","steps":[{"text":"from the client"}]}}""",
             encodeLoadInline(scenario),
         )
     }
 
     @Test
-    fun `loadInline round-trips matches, error steps, headers and stop reasons`() {
+    fun `loadInline round-trips error steps, headers and stop reasons`() {
         val scenario =
             Scenario(
                 name = "rich",
-                rules =
+                steps =
                     listOf(
-                        Rule(
-                            role = "special",
-                            match = Match(modelContains = "special", promptContainsAll = listOf("hi")),
-                            respond =
-                                listOf(
-                                    Step(error = ErrorStep(status = 429, body = "slow down", headers = mapOf("retry-after" to "3"))),
-                                    Step(text = "cut short", stopReason = "max_tokens"),
-                                ),
-                        ),
+                        Step(error = ErrorStep(status = 429, body = "slow down", headers = mapOf("retry-after" to "3"))),
+                        Step(text = "cut short", stopReason = "max_tokens"),
                     ),
             )
         withClient { client, server ->
@@ -83,7 +75,7 @@ class FakeLlmClientTest {
             assertEquals("cut short", anthropicText(reply))
             assertEquals("max_tokens", anthropicStopReason(reply))
 
-            assertEquals(400, http.post("/anthropic/v1/messages", anthropicBody("hi", model = "other")).statusCode(), "the match was sent")
+            assertEquals(400, http.post("/anthropic/v1/messages", anthropicBody("hi")).statusCode(), "both steps were sent, and no more")
         }
     }
 
@@ -132,11 +124,11 @@ class FakeLlmClientTest {
                     client.send(
                         "POST",
                         "/control/scenario",
-                        """{"scenario":{"name":"x","rules":[]}}""",
+                        """{"scenario":{"name":"x","steps":[]}}""",
                     )
                 }
             assertEquals(400, invalid.statusCode)
-            assertContains(invalid.serverMessage!!, "scenario 'x' has no rules")
+            assertContains(invalid.serverMessage!!, "scenario 'x' has no steps")
 
             val noRoute = assertFailsWith<FakeLlmClientException> { client.send("GET", "/nope") }
             assertEquals(404, noRoute.statusCode)
@@ -225,10 +217,20 @@ class FakeLlmClientTest {
     @Test
     fun `call records with fields this client does not know still decode`() {
         val record =
-            """[{"seq":1,"vendor":"openai","model":"m","systemShape":"absent","messageCount":1,"role":"r",""" +
-                """"occurrence":1,"outcome":"text","timestampMs":5,"promptSample":"p","addedLater":true}]"""
+            """[{"seq":1,"step":1,"vendor":"openai","model":"m","systemShape":"absent","messageCount":1,""" +
+                """"outcome":"text","timestampMs":5,"promptSample":"p","addedLater":true}]"""
         withStub({ ex -> respondRaw(ex, 200, record) }) { url ->
             FakeLlmClient(url).use { client -> assertEquals("openai", client.calls().single().vendor) }
+        }
+    }
+
+    @Test
+    fun `a call record without step, from an older server, decodes with a null step`() {
+        val record =
+            """[{"seq":1,"vendor":"openai","model":"m","systemShape":"absent","messageCount":1,""" +
+                """"outcome":"text","timestampMs":5,"promptSample":"p"}]"""
+        withStub({ ex -> respondRaw(ex, 200, record) }) { url ->
+            FakeLlmClient(url).use { client -> assertNull(client.calls().single().step) }
         }
     }
 
