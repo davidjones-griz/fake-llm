@@ -75,9 +75,10 @@ public class ScenarioEngine(
     /** Unmatched requests get the canned reply when true, and HTTP 400 when false. */
     public val lenient: Boolean = false,
     /**
-     * Searched before the classpath when [load] reads a scenario by name, as
-     * `<scenarioDirectory>/<name>.json`. Null searches the classpath only. A relative path resolves
-     * against the JVM's working directory. `GET /control/scenarios` lists the `*.json` files in it.
+     * Searched first when [load] reads a scenario by name, as `<scenarioDirectory>/<name>.json`,
+     * before the project's classpath scenarios and the bundled ones. Null skips this step. A
+     * relative path resolves against the JVM's working directory. `GET /control/scenarios` lists
+     * the `*.json` files in it.
      */
     public val scenarioDirectory: Path? = null,
 ) {
@@ -98,10 +99,10 @@ public class ScenarioEngine(
 
     /**
      * Loads the scenario [name] and installs it as [loadInline] does. Reads
-     * `<scenarioDirectory>/<name>.json` when [scenarioDirectory] is set and that file exists, and
-     * otherwise the classpath resource `/scenarios/<name>.json`. Throws when the name is not
-     * `[A-Za-z0-9_-]+`, no such scenario exists, the file does not decode, or its declared name
-     * differs from [name].
+     * `<scenarioDirectory>/<name>.json` when [scenarioDirectory] is set and that file exists, then
+     * the project's classpath resource `/scenarios/<name>.json`, then the bundled scenario. Throws
+     * when the name is not `[A-Za-z0-9_-]+`, no such scenario exists, the file does not decode, or
+     * its declared name differs from [name].
      */
     public fun load(name: String): Scenario = loadInline(ScenarioLoader.load(name, scenarioDirectory))
 

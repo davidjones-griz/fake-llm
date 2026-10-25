@@ -211,7 +211,10 @@ private val logJson = Json { encodeDefaults = true }
 
 /** The OpenAPI document bundled in the jar (see openapi/fake-llm.yaml), or null if it is missing. */
 private val bundledOpenApiSpec: String? by lazy {
-    FakeLlmServer::class.java.getResourceAsStream("/openapi/fake-llm.yaml")?.use { it.readBytes().decodeToString() }
+    FakeLlmServer::class.java
+        .getResourceAsStream(
+            "/com/davidjonesgriz/fakellm/openapi/fake-llm.yaml",
+        )?.use { it.readBytes().decodeToString() }
 }
 
 /** `GET /openapi`: the bundled document, or HTTP 500 when the jar was built without it. */

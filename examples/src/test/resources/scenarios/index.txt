@@ -1,0 +1,2 @@
+# This project's own classpath scenarios, listed by GET /control/scenarios alongside the bundled ones.
+summarizer

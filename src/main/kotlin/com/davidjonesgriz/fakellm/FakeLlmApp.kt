@@ -33,8 +33,9 @@ import kotlin.system.exitProcess
  *    open, including when a control token is configured.
  *  - `POST /control/scenario` with exactly one of `{"name": "..."}` or `{"scenario": { ... }}` —
  *    load that scenario and reset counters and the call log. A name is resolved from the scenario
- *    directory (`--scenario-dir` or `FAKE_LLM_SCENARIO_DIR`) before the bundled classpath file.
- *  - `GET /control/scenarios` — `{"scenarios": [names]}` from the directory and the classpath index.
+ *    directory (`--scenario-dir` or `FAKE_LLM_SCENARIO_DIR`), then the classpath `/scenarios/`, then
+ *    the bundled scenarios.
+ *  - `GET /control/scenarios` — `{"scenarios": [names]}` from the directory and the indexes.
  *  - `POST /control/reset` — reset counters and the call log; keep the loaded scenario.
  *  - `GET /control/calls` — the call log.
  *

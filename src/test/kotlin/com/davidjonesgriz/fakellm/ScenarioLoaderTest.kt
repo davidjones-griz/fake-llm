@@ -82,12 +82,86 @@ class ScenarioLoaderTest {
         withScenarioDir { dir ->
             val withDir = assertFailsWith<IllegalStateException> { ScenarioLoader.load("missing", dir) }
             assertEquals(
-                "unknown scenario 'missing' — no missing.json in ${dir.toFile().path} and no /scenarios/missing.json on the classpath",
+                "unknown scenario 'missing' — no missing.json in ${dir.toFile().path}, " +
+                    "no /scenarios/missing.json on the classpath and no bundled scenario 'missing'",
                 withDir.message,
             )
         }
         val classpathOnly = assertFailsWith<IllegalStateException> { ScenarioLoader.load("missing", directory = null) }
-        assertEquals("unknown scenario 'missing' — no /scenarios/missing.json on the classpath", classpathOnly.message)
+        assertEquals(
+            "unknown scenario 'missing' — no /scenarios/missing.json on the classpath and no bundled scenario 'missing'",
+            classpathOnly.message,
+        )
+    }
+
+    @Test
+    fun `lookup by name tries the directory, then the project's classpath, then the bundled scenarios`() {
+        withScenarioDir { dir ->
+            withProjectRoots(
+                // Each root is one entry on a project's classpath, holding scenarios/<name>.json.
+                mapOf(
+                    "hello.json" to singleReply("hello", role = "project", text = "project hello"),
+                    "refusal.json" to singleReply("refusal", role = "project", text = "project refusal"),
+                ),
+            ) { loader ->
+                writeScenario(dir, "refusal", singleReply("refusal", role = "directory", text = "directory refusal"))
+
+                assertEquals("directory refusal", ScenarioLoader.load("refusal", dir, loader).onlyText(), "the directory beats the project")
+                assertEquals("project hello", ScenarioLoader.load("hello", dir, loader).onlyText(), "the project beats the bundled file")
+                assertEquals("project refusal", ScenarioLoader.load("refusal", null, loader).onlyText())
+                assertEquals(BUNDLED_HELLO, ScenarioLoader.load("hello", null).onlyText(), "without the project, the bundled file")
+                assertEquals("hello", ScenarioLoader.load("hello", null, loader).name)
+                // The project's loader sees no bundled files, which are read through ScenarioLoader itself.
+                assertEquals("rate-limit-429", ScenarioLoader.load("rate-limit-429", null, loader).name)
+            }
+        }
+    }
+
+    @Test
+    fun `the first project classpath root with the scenario wins`() {
+        withProjectRoots(
+            mapOf("shared.json" to singleReply("shared", role = "first", text = "first root")),
+            mapOf("shared.json" to singleReply("shared", role = "second", text = "second root")),
+        ) { loader ->
+            assertEquals("first root", ScenarioLoader.load("shared", null, loader).onlyText())
+        }
+    }
+
+    @Test
+    fun `the listing merges every project index with the bundled names and the directory`() {
+        withScenarioDir { dir ->
+            writeScenario(dir, "from-directory", singleReply("from-directory", role = "d", text = "d"))
+            withProjectRoots(
+                mapOf("index.txt" to "# one module's scenarios\nfirst-module\n\nshared\n"),
+                mapOf("index.txt" to "  second-module  \nshared\nhello\n"),
+            ) { loader ->
+                val names = ScenarioLoader.availableNames(dir, loader)
+                assertEquals(names.sorted(), names)
+                assertEquals(names.distinct(), names)
+                assertTrue(names.containsAll(BUNDLED_NAMES), "bundled names are always listed: $names")
+                assertTrue(names.containsAll(listOf("first-module", "second-module", "shared", "from-directory")), "$names")
+                assertEquals(BUNDLED_NAMES.size + 4, names.size, "$names")
+            }
+        }
+    }
+
+    @Test
+    fun `names that are not legal scenario names are not listed`() {
+        withScenarioDir { dir ->
+            dir.resolve("has space.json").writeText("{}")
+            withProjectRoots(mapOf("index.txt" to "fine\n../escape\nhas space\n")) { loader ->
+                val names = ScenarioLoader.availableNames(dir, loader)
+                assertTrue("fine" in names, "$names")
+                assertEquals(emptyList(), names.filter { !it.matches(Regex("[A-Za-z0-9_-]+")) })
+            }
+        }
+    }
+
+    @Test
+    fun `without a project index the listing is the bundled names`() {
+        withProjectRoots(mapOf("hello.json" to singleReply("hello", role = "p", text = "p"))) { loader ->
+            assertEquals(BUNDLED_NAMES.sorted(), ScenarioLoader.availableNames(null, loader))
+        }
     }
 
     @Test
@@ -152,6 +226,32 @@ class ScenarioLoaderTest {
             .single()
             .text
 
+    /**
+     * Runs [block] with a classpath of its own: one root per map, each holding `scenarios/<file>`
+     * for every entry. The loader has no parent, so it sees nothing else; the bundled scenarios are
+     * still read through ScenarioLoader's own class.
+     */
+    @OptIn(kotlin.io.path.ExperimentalPathApi::class)
+    private fun withProjectRoots(
+        vararg roots: Map<String, String>,
+        block: (ClassLoader) -> Unit,
+    ) {
+        val dirs = roots.map { files -> createTempDirectory("fake-llm-root").also { root -> writeRoot(root, files) } }
+        try {
+            java.net.URLClassLoader(dirs.map { it.toUri().toURL() }.toTypedArray(), null).use(block)
+        } finally {
+            dirs.forEach { it.deleteRecursively() }
+        }
+    }
+
+    private fun writeRoot(
+        root: Path,
+        files: Map<String, String>,
+    ) {
+        val scenarios = Files.createDirectories(root.resolve("scenarios"))
+        files.forEach { (file, text) -> scenarios.resolve(file).writeText(text) }
+    }
+
     @OptIn(kotlin.io.path.ExperimentalPathApi::class)
     private fun withScenarioDir(block: (Path) -> Unit) {
         val dir = createTempDirectory("fake-llm-scenarios")
@@ -178,5 +278,17 @@ class ScenarioLoaderTest {
 
     private companion object {
         const val BUNDLED_HELLO = "Hello. I can help with the weather, a simple recipe, or a short how-to."
+        val BUNDLED_NAMES =
+            listOf(
+                "fail-then-retry",
+                "hello",
+                "malformed-json",
+                "max-tokens-cutoff",
+                "overloaded-529",
+                "rate-limit-429",
+                "refusal",
+                "stream-error-midway",
+                "thinking-stream",
+            )
     }
 }

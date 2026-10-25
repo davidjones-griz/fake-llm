@@ -68,13 +68,15 @@ class OpenApiConformanceTest {
 
     @Test
     fun `every scenario file in the repository conforms to the Scenario schema`() {
-        val files =
+        val byDirectory =
             listOf(
-                "src/main/resources/scenarios",
+                "src/main/resources/com/davidjonesgriz/fakellm/scenarios",
                 "examples/src/test/resources/scenarios",
                 "examples/src/test/scenarios",
                 "junit-jupiter/src/test/fixture-scenarios",
-            ).flatMap { dir -> File(dir).listFiles { f -> f.extension == "json" }.orEmpty().toList() }
+            ).associateWith { dir -> File(dir).listFiles { f -> f.extension == "json" }.orEmpty().toList() }
+        byDirectory.forEach { (dir, found) -> assertTrue(found.isNotEmpty(), "no scenario files in $dir") }
+        val files = byDirectory.values.flatten()
         assertTrue(files.size >= MIN_SCENARIO_FILES, "found only ${files.map { it.path }}")
         files.forEach { file ->
             assertEquals(emptyList(), validate(SCENARIO, file.readText()), file.path)
