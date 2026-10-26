@@ -111,16 +111,19 @@ class OpenApiConformanceTest {
     }
 
     @Test
-    fun `integers are written without a fraction, as the spec says`() {
-        // JSON Schema treats 24.0 as an integer, so the rule is stated in the spec's description;
-        // the server's decoder enforces it.
-        val integralFloat = """{"name":"x","steps":[{"text":"t","streamChunkChars":24.0}]}"""
-        assertContains(spec.path("info").path("description").asString(), "without a fraction or exponent")
-        assertFails {
-            ScenarioLoader.decode(
-                kotlinx.serialization.json.Json
-                    .parseToJsonElement(integralFloat),
-            )
+    fun `integers are written without a fraction or exponent, as the spec says`() {
+        // JSON Schema treats 24.0 and 2e1 as integers, so the rule is stated in the spec's
+        // description; the server's decoder enforces it.
+        assertContains(spec.path("info").path("description").asString(), "without quotes, a fraction or an exponent")
+        listOf("24.0", "2e1", "2E+1").forEach { value ->
+            val scenario = """{"name":"x","steps":[{"text":"t","streamChunkChars":$value}]}"""
+            assertEquals(emptyList(), validate(SCENARIO, scenario), value)
+            assertFails(value) {
+                ScenarioLoader.decode(
+                    kotlinx.serialization.json.Json
+                        .parseToJsonElement(scenario),
+                )
+            }
         }
     }
 
@@ -1017,6 +1020,11 @@ class OpenApiConformanceTest {
                 "null error headers" to """{"name":"x","steps":[{"error":{"status":500,"headers":null}}]}""",
                 "a non-string error header" to
                     """{"name":"x","steps":[{"error":{"status":500,"headers":{"a":1}}}]}""",
+                "a quoted integer" to """{"name":"x","steps":[{"text":"t","streamChunkChars":"24"}]}""",
+                "a quoted error status" to """{"name":"x","steps":[{"error":{"status":"500"}}]}""",
+                "a null \$schema" to """{"${'$'}schema":null,"name":"x","steps":[{"text":"t"}]}""",
+                "a numeric \$schema" to """{"${'$'}schema":1,"name":"x","steps":[{"text":"t"}]}""",
+                "\$schema in a step" to """{"name":"x","steps":[{"${'$'}schema":"s","text":"t"}]}""",
             )
     }
 }

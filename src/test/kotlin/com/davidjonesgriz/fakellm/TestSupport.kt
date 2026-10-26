@@ -12,7 +12,12 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.file.Path
 import java.time.Duration
+import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.createTempDirectory
+import kotlin.io.path.deleteRecursively
+import kotlin.io.path.writeText
 
 internal class TestClient(
     private val port: Int,
@@ -106,3 +111,23 @@ internal fun errorDetail(body: String): String =
         .jsonObject
         .getValue("detail")
         .jsonPrimitive.content
+
+/** Runs [block] with a new temporary directory, deleted afterwards. */
+@OptIn(ExperimentalPathApi::class)
+internal fun withScenarioDir(block: (Path) -> Unit) {
+    val dir = createTempDirectory("fake-llm-scenarios")
+    try {
+        block(dir)
+    } finally {
+        dir.deleteRecursively()
+    }
+}
+
+/** Writes [json] to `<dir>/<name>.json`. */
+internal fun writeScenario(
+    dir: Path,
+    name: String,
+    json: String,
+) {
+    dir.resolve("$name.json").writeText(json)
+}
