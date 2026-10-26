@@ -7,14 +7,19 @@ import pytest
 
 MESSAGES = [{"role": "user", "content": "Hello"}]
 FAST_RETRY = {"retry-after-ms": "10"}
+TOOLS = [{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}}}]
 
 
-def create(client):
-    return client.chat.completions.create(model="example-gpt", messages=MESSAGES)
+def create(client, messages=MESSAGES, **extra):
+    return client.chat.completions.create(model="example-gpt", messages=messages, **extra)
 
 
 def stream(client, **extra):
     return client.chat.completions.create(model="example-gpt", messages=MESSAGES, stream=True, **extra)
+
+
+def tool_calls(message):
+    return [(t.id, t.type, t.function.name, t.function.arguments) for t in message.tool_calls]
 
 
 def call(seq, outcome, step):
@@ -176,3 +181,55 @@ def test_stream_call_after_last_step(fake, openai_client):
         stream(openai_client)
     assert raised.value.body["fake_llm_error"] == "no more steps"
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
+
+
+def test_tool_calls(fake, openai_client):
+    fake.load(
+        [{"toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}, {"name": "get_time", "rawArguments": "{\"tz\": Europe/Paris}", "id": "call_custom"}]}]
+    )
+    (choice,) = create(openai_client, tools=TOOLS).choices
+    assert choice.message.content is None
+    assert tool_calls(choice.message) == [
+        ("call_fake_1_1", "function", "get_weather", '{"city":"Paris"}'),
+        ("call_custom", "function", "get_time", '{"tz": Europe/Paris}'),
+    ]
+    assert choice.finish_reason == "tool_calls"
+    assert fake.log() == [call(1, "tool-calls", 1)]
+    assert fake.calls()[0]["toolCalls"] == [{"id": "call_fake_1_1", "name": "get_weather"}, {"id": "call_custom", "name": "get_time"}]
+
+
+def test_tool_loop(fake, openai_client):
+    fake.load([{"toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}]}, {"text": "It is 18 degrees in Paris."}])
+    message = create(openai_client, tools=TOOLS).choices[0].message
+    result = {"role": "tool", "tool_call_id": message.tool_calls[0].id, "content": "18 degrees"}
+    second = create(openai_client, messages=MESSAGES + [message, result])
+    assert (second.choices[0].message.content, second.choices[0].finish_reason, second.id) == ("It is 18 degrees in Paris.", "stop", "fake-openai-2")
+    assert fake.log() == [call(1, "tool-calls", 1), call(2, "text", 2)]
+    record = fake.calls()[1]
+    # The SDK sends the assistant message back with "content": null, which adds no prompt text.
+    assert (record["messageCount"], record["promptSample"]) == (3, "Hello\n18 degrees\n")
+    assert record["toolResults"] == [{"id": "call_fake_1_1", "name": "get_weather", "content": "18 degrees", "isError": False}]
+
+
+def test_stream_tool_calls(fake, openai_client):
+    fake.load([{"text": "Checking.", "toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}], "streamChunkChars": 8}])
+    # No tools: the stream() helper accepts only strict function tools, and the server ignores tools anyway.
+    with openai_client.chat.completions.stream(model="example-gpt", messages=MESSAGES) as events:
+        deltas = [event.arguments_delta for event in events if event.type == "tool_calls.function.arguments.delta"]
+        completion = events.get_final_completion()
+    assert deltas == ["", '{"city":', '"Paris"}']
+    (choice,) = completion.choices
+    assert choice.message.content == "Checking."
+    assert tool_calls(choice.message) == [("call_fake_1_1", "function", "get_weather", '{"city":"Paris"}')]
+    assert choice.finish_reason == "tool_calls"
+    assert fake.log() == [call(1, "tool-calls", 1)]
+
+
+def test_stream_raw_arguments(fake, openai_client):
+    fake.load([{"toolCalls": [{"name": "get_weather", "rawArguments": "{\"city\": Paris}"}], "streamChunkChars": 8}])
+    chunks = list(stream(openai_client))
+    pieces = [c.choices[0].delta.tool_calls[0].function.arguments for c in chunks if c.choices[0].delta.tool_calls]
+    assert pieces == ["", '{"city":', " Paris}"]
+    assert chunks[0].choices[0].delta.content is None
+    assert chunks[-1].choices[0].finish_reason == "tool_calls"
+    assert fake.log() == [call(1, "tool-calls", 1)]

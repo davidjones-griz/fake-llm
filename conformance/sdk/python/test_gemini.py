@@ -8,8 +8,8 @@ from google.genai import errors, types
 FAST_RETRY = {"retry-after-ms": "10"}
 
 
-def generate(client):
-    return client.models.generate_content(model="example-gemini", contents="Hello")
+def generate(client, contents="Hello"):
+    return client.models.generate_content(model="example-gemini", contents=contents)
 
 
 def call(seq, outcome, step):
@@ -90,3 +90,37 @@ def test_call_after_last_step(fake, gemini_client):
     assert raised.value.code == 400
     assert raised.value.details["fake_llm_error"] == "no more steps"
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
+
+
+def test_function_call(fake, gemini_client):
+    fake.load([{"toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}, {"name": "get_time", "id": "t2"}]}])
+    response = generate(gemini_client)
+    assert [(fc.id, fc.name, fc.args) for fc in response.function_calls] == [(None, "get_weather", {"city": "Paris"}), ("t2", "get_time", {})]
+    assert response.candidates[0].finish_reason == types.FinishReason.STOP
+    assert response.text is None
+    assert fake.log() == [call(1, "tool-calls", 1)]
+    assert fake.calls()[0]["toolCalls"] == [{"id": None, "name": "get_weather"}, {"id": "t2", "name": "get_time"}]
+
+
+def test_function_loop(fake, gemini_client):
+    fake.load([{"toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}]}, {"text": "It is 18 degrees in Paris."}])
+    first = generate(gemini_client)
+    contents = [
+        types.Content(role="user", parts=[types.Part.from_text(text="Hello")]),
+        first.candidates[0].content,
+        types.Content(role="user", parts=[types.Part.from_function_response(name="get_weather", response={"temperature": 18})]),
+    ]
+    assert generate(gemini_client, contents).text == "It is 18 degrees in Paris."
+    assert fake.log() == [call(1, "tool-calls", 1), call(2, "text", 2)]
+    record = fake.calls()[1]
+    assert (record["messageCount"], record["promptSample"]) == (3, "Hello\n")
+    assert record["toolResults"] == [{"id": None, "name": "get_weather", "content": {"temperature": 18}, "isError": False}]
+
+
+def test_raw_arguments_not_a_call(fake, gemini_client):
+    fake.load([{"toolCalls": [{"name": "get_weather", "rawArguments": "{}"}]}])
+    with pytest.raises(errors.ClientError) as raised:
+        generate(gemini_client)
+    assert raised.value.code == 400
+    assert raised.value.details["fake_llm_error"] == "exception"
+    assert fake.log() == []
