@@ -137,7 +137,19 @@ internal object ScenarioLoader {
         projectLoader: ClassLoader = defaultLoader,
     ): Scenario {
         require(name.matches(SCENARIO_NAME)) { "illegal scenario name '$name'" }
-        val text = readScenarioText(name, directory?.toFile(), projectLoader)
+        return decodeFile(name, readScenarioText(name, directory?.toFile(), projectLoader))
+    }
+
+    /**
+     * Decodes [text], the content of the file `<name>.json`, with the checks a load by name makes:
+     * [name] must be a legal scenario name, and the scenario must declare it. Used by [load] and by
+     * the `validate` command.
+     */
+    fun decodeFile(
+        name: String,
+        text: String,
+    ): Scenario {
+        require(name.matches(SCENARIO_NAME)) { "'$name' is not a legal scenario name ([A-Za-z0-9_-]+)" }
         val scenario = decode(ScenarioShape.parse(json, text))
         check(scenario.name == name) {
             "scenario file $name.json declares name '${scenario.name}' — file name and declared name must match"

@@ -38,6 +38,9 @@ import kotlin.system.exitProcess
  *  - `POST /control/reset` — start the loaded scenario over: empty call log, next call is call 1.
  *  - `GET /control/calls` — the call log.
  *
+ * `fake-llm validate <file|dir>...` checks scenario files instead of starting a server (see
+ * [validateScenarios]).
+ *
  * Startup flags override the matching environment variable when both are set: `--port <n>` (`PORT`,
  * default 8080), `--scenario <name>` (`FAKE_LLM_SCENARIO`), `--scenario-dir <path>`
  * (`FAKE_LLM_SCENARIO_DIR`). `--lenient` (no value) turns lenient mode on; without it,
@@ -55,6 +58,11 @@ import kotlin.system.exitProcess
  * host can bind.
  */
 public fun main(args: Array<String>) {
+    if (args.firstOrNull() == "validate") {
+        val code = validateScenarios(args.drop(1), System.out, System.err)
+        if (code != 0) exitProcess(code)
+        return
+    }
     val config =
         try {
             parseStartupConfig(args)
@@ -316,5 +324,6 @@ private fun optionValue(
 
 private fun usage(detail: String): Nothing =
     throw StartupUsageException(
-        "fake-llm: $detail\nUsage: fake-llm [--port <n>] [--scenario <name>] [--scenario-dir <path>] [--lenient]",
+        "fake-llm: $detail\nUsage: fake-llm [--port <n>] [--scenario <name>] [--scenario-dir <path>] [--lenient]\n" +
+            "       fake-llm validate <file|dir>...",
     )

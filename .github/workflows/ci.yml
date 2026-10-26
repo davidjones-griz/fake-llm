@@ -161,6 +161,21 @@ jobs:
           # The image serves the OpenAPI document bundled in the jar.
           curl -fsS -o "$RUNNER_TEMP/openapi.yaml" http://127.0.0.1:8080/openapi
           grep -q '^openapi: 3\.1\.' "$RUNNER_TEMP/openapi.yaml"
+      - name: Validate scenario files with the image
+        run: |
+          set -eu
+          # The bundled scenarios are valid: exit 0.
+          docker run --rm -v "$PWD/src/main/resources/com/davidjonesgriz/fakellm/scenarios:/scenarios:ro" fake-llm:ci validate /scenarios
+          # A scenario with a misspelt field is not: exit 1 (2 would be a usage error), naming the file and the field.
+          mkdir "$RUNNER_TEMP/bad-scenarios"
+          cat > "$RUNNER_TEMP/bad-scenarios/misspelt.json" <<'JSON'
+          {"name": "misspelt", "steps": [{"text": "a"}, {"text": "b", "stopReasn": "max_tokens"}]}
+          JSON
+          rc=0
+          docker run --rm -v "$RUNNER_TEMP/bad-scenarios:/scenarios:ro" fake-llm:ci validate /scenarios 2>"$RUNNER_TEMP/validate.err" || rc=$?
+          cat "$RUNNER_TEMP/validate.err"
+          [ "$rc" -eq 1 ]
+          grep -q "misspelt.json: step 2: \$.steps\[1\]: unknown field 'stopReasn'" "$RUNNER_TEMP/validate.err"
 
   # Runs the HTTP conformance suite (conformance/cases) against the fat jar and the Docker image,
   # both built from this commit. Nothing should be skipped with a command target, so a skip fails.
