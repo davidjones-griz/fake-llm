@@ -159,3 +159,60 @@ them, exactly. That includes the values fake-llm fixes:
    which checks the case against the spec. A vendor 400 must list its body: one with
    `fake_llm_error` is fake-llm's own and is checked against the spec; any other is a scripted
    error step.
+
+## SDK suite
+
+`conformance/sdk/python/` checks that the official client libraries accept what the server sends:
+the `anthropic`, `openai` and `google-genai` Python SDKs, at the versions pinned in
+`requirements.txt`. Each test loads its own scenario, makes calls through an SDK, and asserts on
+what the SDK parsed or raised and on the exact call log (`GET /control/calls`). It covers what the
+server supports today: Anthropic Messages buffered and streaming, OpenAI Chat Completions buffered,
+and Gemini `generateContent` buffered. The HTTP cases above say what the server sends; this suite
+says a real client can read it. CI's `conformance` job runs both against the same fat jar and
+Docker image.
+
+```
+conformance/sdk/python/
+  .python-version    3.13
+  requirements.in    the four top-level packages, unpinned
+  requirements.txt   the lock: every package pinned, with hashes (pip-compile output)
+  pytest.ini
+  conftest.py        the server and client fixtures
+  test_anthropic.py  test_openai.py  test_gemini.py
+```
+
+From the repository root:
+
+```bash
+python3.13 -m venv .venv && . .venv/bin/activate
+python -m pip install --require-hashes -r conformance/sdk/python/requirements.txt
+./gradlew shadowJar
+FAKE_LLM_COMMAND="java -jar build/libs/fake-llm-all.jar" python -m pytest conformance/sdk/python
+# or against a running strict server with no control token:
+FAKE_LLM_BASE_URL=http://localhost:8080 python -m pytest conformance/sdk/python
+```
+
+`FAKE_LLM_COMMAND` has the same contract as the runner's `-Pfakellm.command`: it runs through
+`sh -c` with `PORT`, `FAKE_LLM_LENIENT` and `FAKE_LLM_CONTROL_TOKEN` set, so the Docker command
+above works here too. Set exactly one of the two variables; with neither or both, every test fails
+rather than skipping.
+
+**Retries.** The Anthropic and OpenAI clients keep their default retries (2, so up to 3 calls),
+because that is what users get. They retry 408, 409, 429 and 5xx (529 included), so a test that
+scripts one of those scripts one step per attempt, and gives each retryable error a
+`retry-after-ms: 10` header so the run stays fast. `google-genai` does not retry by default, and
+`test_default_client_does_not_retry` pins that down; its retry tests use a client set to 3
+attempts. A "retries exhausted" test scripts exactly 3 errors, so an extra retry gets the
+`no more steps` 400 and fails the test.
+
+**Bumping a pin.** Edit nothing by hand. From `conformance/sdk/python/`, with Python 3.13 and
+pip-tools 7.6.2, rerun
+`pip-compile --generate-hashes --strip-extras --allow-unsafe --upgrade-package <name> requirements.in`
+and commit `requirements.txt` as written. Dependabot does this weekly for all four packages in one
+pull request.
+
+**Latest releases.** The [SDK latest](../.github/workflows/sdk-latest.yml) workflow runs the suite
+daily against the newest releases, unpinned, and lists their versions in the run's summary. A
+failure there means a new SDK release breaks against fake-llm before Dependabot proposes it.
+
+A new SDK test needs a feature the server already supports; a missing feature is its own issue.
