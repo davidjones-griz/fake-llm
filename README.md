@@ -155,9 +155,9 @@ The client ignores response fields it does not know, so a server that has gained
 
 ```kotlin
 @FakeLlmTest
-@FakeLlmScenario("rate-limit-429")
 class MyClientTest {
     @Test
+    @FakeLlmScenario("rate-limit-429")
     fun `retries after a rate limit`(server: FakeLlmServer) {
         val client = MyClient(baseUrl = "${server.baseUrl}/anthropic")
         // ... exercise the code under test ...
@@ -180,7 +180,7 @@ class MyClientTest {
 ```
 
 - **One server per class.** The server starts on an ephemeral port when the class first needs it, and stops when the class finishes. `@Nested` classes share it, and subclasses inherit `@FakeLlmTest`.
-- **A scenario per test.** Before each test, the nearest `@FakeLlmScenario` is loaded: the method's, then the class's (its own, then its interfaces', then its superclasses'), then each enclosing class's, the same way. Loading starts the scenario over, so every test's first call gets step 1 and the call log holds only that test's calls. A test with no `@FakeLlmScenario` anywhere runs with no scenario loaded (`ScenarioEngine.unload()`), so a scenario loaded by hand in `@BeforeAll` is gone again by the first test; put a shared scenario on the class instead. The extension runs before your own `@BeforeEach` methods, so they see the scenario and can replace it.
+- **A scenario per test.** Before each test, the nearest `@FakeLlmScenario` is loaded: the method's, then the class's (its own, then its interfaces', then its superclasses'), then each enclosing class's, the same way. Loading starts the scenario over, so every test's first call gets step 1 and the call log holds only that test's calls. A test with no `@FakeLlmScenario` anywhere runs with no scenario loaded (`ScenarioEngine.unload()`), so a scenario loaded by hand in `@BeforeAll` is gone again by the first test; put the scenario on each test method; a class-level `@FakeLlmScenario` is supported, but it shares one scenario between tests (see Writing scenarios for tests). The extension runs before your own `@BeforeEach` methods, so they see the scenario and can replace it.
 - **Every call must get a step.** Right after the test method, before your `@AfterEach` methods, the test fails if a call made during `@BeforeEach` or the test got no step: a call after the scenario's last step, or a call with no scenario loaded in strict mode. The failure lists those calls. An app can catch the 400 and carry on, so without this check such a test could pass. A test that makes such a call on purpose, to test how the app handles it, opts out with `@FakeLlmAllowUnservedCalls` on the method or the class (found the same way as `@FakeLlmScenario`). An aborted test (a failed assumption) is not checked. For a `@TestFactory`, the check runs once around the whole factory. A `reset()` or `load()` in the middle of a test erases the calls made before it from the log, so the check does not see those.
 - **Injection.** Constructors, `@BeforeAll`, `@BeforeEach` and test methods can take a `FakeLlmServer` (`baseUrl`, `port`, `engine`) or the `ScenarioEngine` itself.
 - **Configuration.** `@FakeLlmTest(scenarioDirectory = "src/test/scenarios", lenient = true)` sets the engine's scenario directory (searched first; relative to the working directory) and lenient mode. The server ignores `FAKE_LLM_CONTROL_TOKEN`. Both annotations also work inside your own composed annotation or on an interface the test class implements. When the outer class runs the extension, a `@Nested` class uses the outer class's server, so options on the nested class's own `@FakeLlmTest` have no effect.
@@ -269,6 +269,37 @@ The combined prompt text, used by `promptSample` and `prompt_preview`, depends o
 - OpenAI: every message whose `content` is a JSON string, including a system message. Array content is skipped. A message with role `system` sets `systemShape` to `blocks`; otherwise it is `absent`. OpenAI requests never record `string`.
 - Gemini: each `contents[].parts[].text`. `systemInstruction` is not read, and `systemShape` is always `absent`. The model id comes from the URL, not the body.
 
+### Writing scenarios for tests
+
+- Each test owns its scenario, even when that means repeating steps another scenario also has. Changing a scenario then affects only the test that owns it. Name a scenario file after its test, or build it inline with `loadInline`.
+- Script one step per call, in the order the app makes its calls, including every retry and error. A call the scenario has no step for fails with `no more steps`, so a missing or extra call shows up in the test.
+- Load the scenario, or reset it, at the start of each test, so its first call gets step 1 and the call log holds only its calls. The JUnit extension does this before each test.
+
+For example, a test whose app retries once after a rate limit scripts both calls, then checks the app's reply and that the app made exactly those two calls:
+
+```kotlin
+@FakeLlmTest
+class MyClientTest {
+    @Test
+    fun `retries once after a rate limit`(engine: ScenarioEngine, server: FakeLlmServer) {
+        engine.loadInline(
+            Scenario(
+                name = "retries-once-after-a-rate-limit",
+                steps =
+                    listOf(
+                        Step(error = ErrorStep(status = 429, headers = mapOf("retry-after" to "0"))),
+                        Step(text = "Recovered."),
+                    ),
+            ),
+        )
+        val client = MyClient(baseUrl = "${server.baseUrl}/anthropic")
+
+        assertEquals("Recovered.", client.ask("Summarize this."))
+        assertEquals(listOf("error:429", "text"), engine.calls().map { it.outcome })
+    }
+}
+```
+
 ### Scenario schema and `validate`
 
 [schema/scenario.schema.json](schema/scenario.schema.json) is a JSON Schema (2020-12) for scenario files, generated from the [OpenAPI spec](openapi/fake-llm.yaml)'s `Scenario` schema. A top-level `"$schema"` key pointing at it, as in the example above, lets VS Code and IntelliJ check a scenario file and complete its field names as you type. The server ignores the key; it is allowed only at the top level, not in a step. JSON Schema counts `24.0` and `2e1` as integers, so an editor accepts them; the server and `validate` reject them. The URL follows `main`; inside a repository that has a copy of the schema, a relative path such as `"../schema/scenario.schema.json"` also works, offline too.
@@ -295,6 +326,8 @@ Each valid file gets an `ok <path>` line, and each invalid one a `<path>: <probl
 | `stream-error-midway` | Anthropic streaming writes three 8-code-point filler deltas, then an `overloaded_error` event. A non-streaming client, including OpenAI and Gemini, receives that error as HTTP 529. |
 | `thinking-stream` | A text reply with a thinking trace. Anthropic streaming splits both into 8-code-point chunks and waits 20 ms between chunks. |
 | `fail-then-retry` | Call 1 is HTTP 500. Call 2 is a normal text reply. |
+
+The bundled scenarios are for trying the server and for the examples in this README. A test suite should keep its own scenarios, as above.
 
 ### Loading a scenario
 
