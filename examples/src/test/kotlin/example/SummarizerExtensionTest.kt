@@ -8,16 +8,17 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 /**
- * Tests [Summarizer] with the JUnit Jupiter extension: one server for the class, the scenario
- * loaded (and the call log cleared) before each test, and the server injected as a parameter.
+ * Tests [Summarizer] with the JUnit Jupiter extension: one server for the class, each test's own
+ * scenario (from src/test/scenarios) loaded before it, which also clears the call log, and the
+ * server injected as a parameter.
  */
-@FakeLlmTest
-@FakeLlmScenario("summarizer")
+@FakeLlmTest(scenarioDirectory = "src/test/scenarios")
 class SummarizerExtensionTest {
     private fun summarizer(server: FakeLlmServer) =
         Summarizer(baseUrl = "${server.baseUrl}/anthropic", apiKey = "not-used", model = "example-model")
 
     @Test
+    @FakeLlmScenario("extension-returns-summary")
     fun `returns the scripted summary`(server: FakeLlmServer) {
         val summary = summarizer(server).summarize("Revenue for the quarter was ...")
 
@@ -25,9 +26,12 @@ class SummarizerExtensionTest {
     }
 
     @Test
+    @FakeLlmScenario("extension-sees-own-calls")
     fun `sees only its own calls`(server: FakeLlmServer) {
         // Whichever of these two tests runs second still finds exactly one call: its own.
-        summarizer(server).summarize("Churn for the quarter ...")
+        val summary = summarizer(server).summarize("Churn for the quarter ...")
+
+        assertEquals("Churn fell to 2% after the onboarding redesign.", summary.text)
 
         assertContains(
             server.engine
