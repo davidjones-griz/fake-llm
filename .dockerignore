@@ -5,3 +5,5 @@ junit-jupiter/build/
 examples/build/
 examples/.gradle/
 conformance/runner/build/
+# The SDK conformance suite is a test client, and a local .venv there must not enter the build context.
+conformance/sdk/
