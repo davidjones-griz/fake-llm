@@ -678,7 +678,7 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 
 A release is published from a `vX.Y.Z` tag on `main` by the [Release](.github/workflows/release.yml) workflow.
 
-1. In a pull request, set `version` in `gradle.properties` to `X.Y.Z` and change the CHANGELOG heading from `## [X.Y.Z] - Unreleased` to `## [X.Y.Z] - YYYY-MM-DD`.
+1. In a pull request, set `version` in `gradle.properties` and `info.version` in `openapi/fake-llm.yaml` to `X.Y.Z` (a test checks that the two match), and change the CHANGELOG heading from `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`.
 2. After it merges, tag the merge commit and push the tag: `git tag vX.Y.Z <merge commit> && git push origin vX.Y.Z`.
 
 The workflow then runs four jobs:
