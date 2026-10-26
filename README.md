@@ -1,6 +1,6 @@
 # fake-llm
 
-A local HTTP stand-in for Anthropic Messages, OpenAI chat completions, and Gemini `generateContent`, driven by a JSON scenario. The server is the JDK `com.sun.net.httpserver` plus kotlinx-serialization.
+A local HTTP stand-in for Anthropic Messages, OpenAI chat completions, and Gemini `generateContent` and `streamGenerateContent`, driven by a JSON scenario. The server is the JDK `com.sun.net.httpserver` plus kotlinx-serialization.
 
 ## Why
 
@@ -66,7 +66,7 @@ completion = client.chat.completions.create(
 )
 ```
 
-Gemini `generateContent` is accepted on any `POST` whose path starts with `/gemini/` and contains `:generateContent`. The model id is the path segment between `/models/` and `:`, so both `/gemini/v1beta/models/gemini-2.0-flash:generateContent` and `/gemini/v1/models/example-gemini:generateContent` work. The `google-genai` client appends `/v1beta/models/<model>:generateContent` to `base_url`:
+Gemini is served on `POST /gemini/<version>/models/<model>:generateContent`, and streamed on `:streamGenerateContent?alt=sse`. The model id is the path segment between `/models/` and `:`, so both `/gemini/v1beta/models/gemini-2.0-flash:generateContent` and `/gemini/v1/models/example-gemini:generateContent` work. The `google-genai` client appends `/v1beta/models/<model>:generateContent` to `base_url`:
 
 ```python
 from google import genai
@@ -282,9 +282,9 @@ Each step is a reply (`text`, `toolCalls`, or both) or an `error`. When a step i
 | `thinking` | Optional thinking trace. Legal only on a reply step. Anthropic includes it as a thinking block (buffered) or as thinking deltas (streaming), before the text and tool calls, with signature `fake-thinking-signature`. OpenAI and Gemini ignore it. |
 | `stopReason` | Stop reason for a reply. Default `end_turn`. Anthropic copies it to `stop_reason`. `"max_tokens"` means the reply was truncated: OpenAI then reports `finish_reason` `length`, and Gemini reports `finishReason` `MAX_TOKENS`. Any other value becomes OpenAI `stop` and Gemini `STOP`. With `toolCalls` it must be `end_turn` or `tool_use`, and is sent as Anthropic `tool_use`, OpenAI `tool_calls` and Gemini `STOP`. |
 | `error` | A scripted HTTP error instead of a reply. `status` is the HTTP status, from 100 to 599. `body` is sent as given (default empty), and `headers` are added as given (for example `retry-after`). The response is `Content-Type: application/json` unless `headers` sets a `content-type`, which replaces it. |
-| `streamChunkChars` | SSE delta size in Unicode code points, not UTF-16 chars. Default 24. Must be positive. Used only for Anthropic and OpenAI streaming. A buffered request ignores it. |
-| `streamInterChunkDelayMs` | Milliseconds to wait between SSE deltas. Default 0. Must be zero or positive. Anthropic and OpenAI streaming. |
-| `streamErrorAfterChunks` | Legal only on an error step, and must be positive. Anthropic and OpenAI streaming. Null, the default, means the error is a plain HTTP response and no SSE bytes are written, including when the client asked for a stream. Setting it writes HTTP 200 and an event stream. Anthropic: `message_start`, a text block start, this many filler deltas, then `event: error` whose data is `error.body` (or a generic `api_error` body when `body` is blank); `content_block_stop`, `message_delta`, and `message_stop` are skipped. OpenAI: the role chunk, this many filler chunks, then a `data:` frame whose payload is `error.body` (or a generic `server_error` body when `body` is blank); no finish chunk, usage chunk or `[DONE]` follows. `error.status` and `error.headers` are not used on that path. A non-streaming client still receives `error.status` and `error.body`. The filler is fixed text, not the error body. |
+| `streamChunkChars` | SSE delta size in Unicode code points, not UTF-16 chars. Default 24. Must be positive. Used only for Anthropic, OpenAI and Gemini streaming. A buffered request ignores it. |
+| `streamInterChunkDelayMs` | Milliseconds to wait between SSE deltas. Default 0. Must be zero or positive. Anthropic, OpenAI and Gemini streaming. |
+| `streamErrorAfterChunks` | Legal only on an error step, and must be positive. Anthropic, OpenAI and Gemini streaming. Null, the default, means the error is a plain HTTP response and no SSE bytes are written, including when the client asked for a stream. Setting it writes HTTP 200 and an event stream. Anthropic: `message_start`, a text block start, this many filler deltas, then `event: error` whose data is `error.body` (or a generic `api_error` body when `body` is blank); `content_block_stop`, `message_delta`, and `message_stop` are skipped. OpenAI: the role chunk, this many filler chunks, then a `data:` frame whose payload is `error.body` (or a generic `server_error` body when `body` is blank); no finish chunk, usage chunk or `[DONE]` follows. Gemini: this many filler chunks, then a `data:` frame whose payload is `error.body`, or a generic `INTERNAL` body with `code` 500 when `body` is blank. No chunk with `finishReason` follows. The `google-genai` SDK raises on that frame only when the body's first key is `error`, and picks `ClientError` or `ServerError` from `error.code`, which must be an integer. `error.status` and `error.headers` are not used on that path. A non-streaming client still receives `error.status` and `error.body`. The filler is fixed text, not the error body. |
 | `toolCalls` | Tool calls the reply makes, in order, after any `text`. See [Tool calls](#tool-calls). |
 
 A call after the last step returns HTTP 400, in strict and lenient mode alike. The body is JSON:
@@ -303,9 +303,9 @@ A call after the last step returns HTTP 400, in strict and lenient mode alike. T
 }
 ```
 
-With no scenario loaded, strict mode (the default) returns HTTP 400 with the same fields except `scenario` and `steps`, and `"fake_llm_error": "no scenario loaded"`. `seq` is the call's number, as in the call log. `prompt_preview` is the first 200 characters of the combined prompt text. The call log records outcome `no-more-steps` or `no-scenario`, with `step` null. A streamed Anthropic or OpenAI request gets the same status and JSON body, and the server writes no SSE bytes.
+With no scenario loaded, strict mode (the default) returns HTTP 400 with the same fields except `scenario` and `steps`, and `"fake_llm_error": "no scenario loaded"`. `seq` is the call's number, as in the call log. `prompt_preview` is the first 200 characters of the combined prompt text. The call log records outcome `no-more-steps` or `no-scenario`, with `step` null. A streamed Anthropic, OpenAI or Gemini request gets the same status and JSON body, and the server writes no SSE bytes.
 
-Lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) answers a call with no scenario loaded with one canned assistant reply, `This is a canned response from fake-llm.`, logged with outcome `default`. It is a normal text reply, so a streamed Anthropic or OpenAI request streams it. Lenient mode changes nothing once a scenario is loaded.
+Lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) answers a call with no scenario loaded with one canned assistant reply, `This is a canned response from fake-llm.`, logged with outcome `default`. It is a normal text reply, so a streamed Anthropic, OpenAI or Gemini request streams it. Lenient mode changes nothing once a scenario is loaded.
 
 The combined prompt text, used by `promptSample` and `prompt_preview`, depends on the dialect:
 
@@ -328,7 +328,7 @@ Each format renders them as its API does:
 
 - Anthropic: one `tool_use` block per call, after the thinking and text blocks, with `input` set to `arguments`, and `stop_reason` `tool_use`. Streamed, each call is a `tool_use` block start with an empty `input`, the argument text as `input_json_delta` pieces of `streamChunkChars` code points, and a block stop.
 - OpenAI: `message.tool_calls`, each with `type` `function` and the argument text as `function.arguments`, and `finish_reason` `tool_calls`. `message.content` is the text, or `null` without text. Streamed, the tool calls come after the content chunks: per call a header chunk with its `index`, `id`, `type` and `name` and empty `arguments`, then its argument text in `streamChunkChars` pieces. Without text, the role chunk's `content` is `null`.
-- Gemini: one `functionCall` part per call, after the text part, with `args` set to `arguments`, and `finishReason` `STOP`. Gemini function calls are buffered only.
+- Gemini: one `functionCall` part per call, after the text part, with `args` set to `arguments`, and `finishReason` `STOP`. Streamed, each call is its own chunk whose only part is that `functionCall`, after the text chunks, and the last chunk carries `finishReason` `STOP`.
 
 `rawArguments` is sent verbatim by OpenAI, buffered or streamed, and by a streamed Anthropic reply. A buffered Anthropic `tool_use.input` and a Gemini `functionCall.args` must be JSON objects, so a buffered Anthropic request or a Gemini request whose next step sets `rawArguments` gets the `exception` 400. That request is not a call: the step is not used, and the next call gets it.
 
@@ -440,11 +440,11 @@ Each valid file gets an `ok <path>` line, and each invalid one a `<path>: <probl
 | --- | --- |
 | `hello` | One step: a short greeting. |
 | `rate-limit-429` | Call 1 is HTTP 429 with a `retry-after: 2` header. Call 2 is a weather sentence. |
-| `overloaded-529` | Call 1 is HTTP 529. Call 2 is a short support reply. A streamed Anthropic or OpenAI request still gets HTTP 529, because the error step leaves `streamErrorAfterChunks` unset. |
+| `overloaded-529` | Call 1 is HTTP 529. Call 2 is a short support reply. A streamed Anthropic, OpenAI or Gemini request still gets HTTP 529, because the error step leaves `streamErrorAfterChunks` unset. |
 | `refusal` | One text reply with `stopReason` `refusal`. |
 | `max-tokens-cutoff` | One text reply cut off inside a JSON value, with `stopReason` `max_tokens`. |
 | `malformed-json` | Call 1 is prose with a broken JSON fragment. Call 2 is a valid JSON object. |
-| `stream-error-midway` | Anthropic and OpenAI streaming write three 8-code-point filler deltas, then the error body: an `overloaded_error` event for Anthropic, a data frame for OpenAI (the `openai` SDK raises `APIError`, because the body has an `error` key). A non-streaming client, including Gemini, receives that error as HTTP 529. |
+| `stream-error-midway` | Anthropic and OpenAI streaming write three 8-code-point filler deltas, then the error body: an `overloaded_error` event for Anthropic, a data frame for OpenAI (the `openai` SDK raises `APIError`, because the body has an `error` key). Gemini streaming writes the same three filler chunks, then that body as a data frame. Its first key is not `error`, so the `google-genai` SDK does not raise: it yields one more chunk with no candidates, and the stream ends. A non-streaming client receives that error as HTTP 529. |
 | `thinking-stream` | A text reply with a thinking trace. Anthropic streaming splits both into 8-code-point chunks and waits 20 ms between chunks. |
 | `fail-then-retry` | Call 1 is HTTP 500. Call 2 is a normal text reply. |
 
@@ -530,7 +530,18 @@ With `"stream": true`, a reply step is answered as `text/event-stream` of data-o
 
 ### `POST /gemini/…:generateContent`
 
-One JSON `generateContent` body: one candidate whose parts are the text part, when the step has text, and one `functionCall` part per tool call (see [Tool calls](#tool-calls)), `finishReason` `STOP` or `MAX_TOKENS`, `usageMetadata`, and `fake_llm_seq`. The parser forces the call to be non-streaming. `:streamGenerateContent` does not contain `:generateContent`, so that path is a 404. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a `generateContent` body. With no scenario loaded, lenient mode returns the canned reply as one candidate.
+One JSON `generateContent` body: one candidate whose parts are the text part, when the step has text, and one `functionCall` part per tool call (see [Tool calls](#tool-calls)), `finishReason` `STOP` or `MAX_TOKENS`, `usageMetadata`, and `fake_llm_seq`. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a `generateContent` body. With no scenario loaded, lenient mode returns the canned reply as one candidate.
+
+### `POST /gemini/…:streamGenerateContent`
+
+The same reply as a server-sent event stream, served only with `alt=sse` in the query string, which the `google-genai` SDK always sends. Without `alt=sse` the request gets the `exception` 400 and is not a call: it takes no number, and the step stays next. The JSON-array form the real API sends without `alt=sse` is not served.
+
+The response is `text/event-stream` of data-only frames (`data: <payload>`, no `event:` line), with no `[DONE]`. Each frame is one `GenerateContentResponse` whose candidate has exactly one part: first one text part per `streamChunkChars` code points of the text (each after `streamInterChunkDelayMs`), then each tool call as a whole `functionCall` part, as in the buffered body. Only the last chunk carries `finishReason` and `usageMetadata`; every chunk carries `fake_llm_seq`. A step with no text and no tool calls is one last chunk with an empty text part. An error step with `streamErrorAfterChunks` set sends the filler chunks, then the error body as a data frame (a generic `INTERNAL` body when `body` is blank), with no chunk carrying `finishReason`. A call the scenario has no step for, and an error step that leaves `streamErrorAfterChunks` unset, get the JSON response, with no SSE bytes.
+
+```python
+for chunk in client.models.generate_content_stream(model="gemini-2.0-flash", contents="Hello"):
+    print(chunk.text, end="")
+```
 
 ### Control API
 
@@ -605,15 +616,15 @@ The process binds the IPv6 wildcard `::` when the host can, and otherwise the IP
 
 ## Limits
 
-Anthropic Messages and OpenAI Chat Completions stream. On `POST /anthropic/v1/messages` and `POST /openai/v1/chat/completions`, `"stream": true` is a server-sent event response for a reply step, and for an error step that sets `streamErrorAfterChunks`. An error step that leaves that field unset is a plain HTTP error instead. Gemini always returns one JSON `generateContent` body. The Gemini parser sets `stream` to false, and `:streamGenerateContent` is not a route.
+Anthropic Messages, OpenAI Chat Completions and Gemini all stream. On `POST /anthropic/v1/messages` and `POST /openai/v1/chat/completions` with `"stream": true`, and on `POST /gemini/…:streamGenerateContent?alt=sse`, the response is server-sent events for a reply step, and for an error step that sets `streamErrorAfterChunks`. An error step that leaves that field unset is a plain HTTP error instead.
 
-A call after the scenario's last step, and in strict mode (the default) a call with no scenario loaded, gets HTTP 400 and a JSON body on every vendor route. On `POST /anthropic/v1/messages` and `POST /openai/v1/chat/completions` that includes `"stream": true`: the response is `application/json`, and no server-sent events are written. With no scenario loaded, lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) returns the canned assistant reply instead. For a streamed Anthropic or OpenAI request, that reply is a normal text stream.
+A call after the scenario's last step, and in strict mode (the default) a call with no scenario loaded, gets HTTP 400 and a JSON body on every vendor route. On `POST /anthropic/v1/messages` and `POST /openai/v1/chat/completions` that includes `"stream": true`, and so does `POST /gemini/…:streamGenerateContent`: the response is `application/json`, and no server-sent events are written. With no scenario loaded, lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) returns the canned assistant reply instead. For a streamed Anthropic, OpenAI or Gemini request, that reply is a normal text stream.
 
 The Anthropic Batches API is not implemented. Every request under `/anthropic/v1/messages/batches` returns HTTP 501.
 
-Token counts are constants, not a count of the prompt or the reply. Anthropic reports `input_tokens` 100 and `output_tokens` 50. `cache_creation_input_tokens` is 20 and `cache_read_input_tokens` is 10 when the request carries a `cache_control` breakpoint, and both are 0 otherwise. A breakpoint is a `cache_control` object on a block in the `system` array or in a message `content` array. `type` must be `ephemeral`, and `ttl`, if present, must be `5m` or `1h`. On a stream, the input and cache figures are on `message_start`, and `output_tokens` 50 is on `message_delta`. OpenAI reports `prompt_tokens` 100, `completion_tokens` 50, and `total_tokens` 150. On an OpenAI stream, usage is sent only when `stream_options.include_usage` is true, in a final chunk with no choices. Gemini reports `promptTokenCount` 100, `candidatesTokenCount` 50, and `totalTokenCount` 150.
+Token counts are constants, not a count of the prompt or the reply. Anthropic reports `input_tokens` 100 and `output_tokens` 50. `cache_creation_input_tokens` is 20 and `cache_read_input_tokens` is 10 when the request carries a `cache_control` breakpoint, and both are 0 otherwise. A breakpoint is a `cache_control` object on a block in the `system` array or in a message `content` array. `type` must be `ephemeral`, and `ttl`, if present, must be `5m` or `1h`. On a stream, the input and cache figures are on `message_start`, and `output_tokens` 50 is on `message_delta`. OpenAI reports `prompt_tokens` 100, `completion_tokens` 50, and `total_tokens` 150. On an OpenAI stream, usage is sent only when `stream_options.include_usage` is true, in a final chunk with no choices. Gemini reports `promptTokenCount` 100, `candidatesTokenCount` 50, and `totalTokenCount` 150. On a Gemini stream, `usageMetadata` is only on the last chunk.
 
-Tool calls are scripted per step; request fields such as `tools`, `tool_choice` and Gemini `tools` and `toolConfig` are ignored, so a step's tool calls are sent whatever tools the request declares. Gemini has no streaming route yet, so Gemini function calls are buffered only.
+Tool calls are scripted per step; request fields such as `tools`, `tool_choice` and Gemini `tools` and `toolConfig` are ignored, so a step's tool calls are sent whatever tools the request declares.
 
 Each process holds one scenario and one call log in memory. Nothing is written to disk. Another process does not share that state.
 
