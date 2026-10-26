@@ -33,7 +33,9 @@ info:
     from 1) and one call-log entry, and call N after a load or reset gets step N, on any vendor
     route. Calls are numbered in arrival order. A call after the last step gets
     `NoMoreStepsError`; the last step does not repeat. A request that gets `ExceptionError`, a
-    404 and the Batches 501 are not calls.
+    404 and the Batches 501 are not calls. That includes a request whose next step has a tool call
+    with `rawArguments` that its format can't carry (a buffered Anthropic request, or a Gemini
+    request). That step is not used, and the next call gets it.
 
     **Vendor bodies.** The success bodies and event streams of the vendor routes follow each
     provider's API, and this document does not describe them field by field. The conformance
@@ -468,6 +470,8 @@ components:
         - outcome
         - timestampMs
         - promptSample
+        - toolCalls
+        - toolResults
       properties:
         seq:
           type: integer
@@ -495,9 +499,10 @@ components:
           description: The length of the request's `messages` (Anthropic, OpenAI) or `contents` (Gemini) array.
         outcome:
           type: string
-          pattern: "^(text|default|no-scenario|no-more-steps|error:[1-5][0-9]{2})$"
+          pattern: "^(text|tool-calls|default|no-scenario|no-more-steps|error:[1-5][0-9]{2})$"
           description: |
-            `text` or `error:<status>` (a step served it), `default` (the lenient canned reply),
+            `text` or `error:<status>` (a step served it), `tool-calls` (a step with `toolCalls`
+            served it), `default` (the lenient canned reply),
             `no-scenario` (`NoScenarioError`) or `no-more-steps` (`NoMoreStepsError`).
         timestampMs:
           type: integer
@@ -513,6 +518,46 @@ components:
             of text blocks (other blocks contribute nothing). OpenAI: each message `content` that
             is a JSON string, including a system message (array content is skipped). Gemini: each
             `contents[].parts[].text`.
+        toolCalls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCallRecord"
+          description: The tool calls the call's response carried, in order. Empty for any other response.
+        toolResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolResultRecord"
+          description: |
+            Every tool result in the request, in request order: Anthropic `tool_result` blocks, OpenAI
+            `tool` messages, Gemini `functionResponse` parts.
+    ToolCallRecord:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: [string, "null"]
+          description: The id sent, or null for a Gemini call with no scripted id.
+        name:
+          type: string
+    ToolResultRecord:
+      type: object
+      required: [id, name, content, isError]
+      properties:
+        id:
+          type: [string, "null"]
+          description: Anthropic `tool_use_id`, OpenAI `tool_call_id`, Gemini `functionResponse.id`; null when absent or not a string.
+        name:
+          type: [string, "null"]
+          description: |
+            Gemini: `functionResponse.name`. Anthropic and OpenAI: the name of the tool call in the
+            same request whose id matches (the first such call), or null when none does.
+        content:
+          description: |
+            The result as the request sent it, any JSON value: Anthropic `content`, OpenAI `content`,
+            Gemini `response`. Null when absent.
+        isError:
+          type: boolean
+          description: Anthropic `is_error` is `true`. Always false for OpenAI and Gemini.
     RequestSystemShape:
       type: string
       enum: [blocks, string, absent, unknown]
@@ -530,6 +575,11 @@ components:
           description: A human-readable explanation; not part of the contract.
     ExceptionError:
       type: object
+      description: |
+        A request fake-llm could not handle, such as an invalid body. It is not a call. That
+        includes a request whose next step has a tool call with `rawArguments` that its format
+        can't carry (a buffered Anthropic request, or a Gemini request). That step is not used,
+        and the next call gets it.
       required: [fake_llm_error, detail]
       properties:
         fake_llm_error:

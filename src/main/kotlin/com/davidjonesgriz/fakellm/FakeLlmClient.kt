@@ -212,8 +212,6 @@ private fun parseObjectOrNull(body: String): JsonObject? =
         null
     }
 
-private fun JsonObject.stringField(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
-
 internal fun httpFailure(
     method: String,
     path: String,

@@ -400,6 +400,56 @@ class ScenarioEngineTest {
     }
 
     @Test
+    fun `a tool-call step is logged with outcome tool-calls and the ids it sent`() {
+        val step =
+            Step(
+                toolCalls =
+                    listOf(
+                        ToolCall(name = "get_weather", arguments = JsonObject(emptyMap())),
+                        ToolCall(name = "get_time", id = "scripted"),
+                    ),
+            )
+        val records =
+            listOf("anthropic", "openai", "gemini").map { vendor ->
+                val engine = engineWith(Scenario(name = "tools-$vendor", steps = listOf(step)))
+                engine.handle(vendor, req())
+                engine.calls().single()
+            }
+        assertEquals(listOf("tool-calls", "tool-calls", "tool-calls"), records.map { it.outcome })
+        assertEquals(
+            listOf(
+                listOf(ToolCallRecord("toolu_fake_1_1", "get_weather"), ToolCallRecord("scripted", "get_time")),
+                listOf(ToolCallRecord("call_fake_1_1", "get_weather"), ToolCallRecord("scripted", "get_time")),
+                listOf(ToolCallRecord(null, "get_weather"), ToolCallRecord("scripted", "get_time")),
+            ),
+            records.map { it.toolCalls },
+        )
+    }
+
+    @Test
+    fun `a rawArguments step is not used by a buffered anthropic or a gemini call`() {
+        val raw = Step(toolCalls = listOf(ToolCall(name = "get_weather", rawArguments = "{\"city\": Paris}")))
+        val engine = engineWith(Scenario(name = "raw", steps = listOf(raw)))
+        val anthropic = assertFailsWith<IllegalArgumentException> { engine.resolve("anthropic", req()) }
+        val gemini = assertFailsWith<IllegalArgumentException> { engine.resolve("gemini", req()) }
+        assertEquals(
+            "step 1: tool call 1 sets rawArguments, which an Anthropic reply carries only when streamed " +
+                "(input_json_delta); a buffered tool_use input must be a JSON object",
+            anthropic.message,
+        )
+        assertEquals(
+            "step 1: tool call 1 sets rawArguments, which a Gemini reply cannot carry; functionCall.args must be a JSON object",
+            gemini.message,
+        )
+        assertEquals(emptyList(), engine.calls())
+        listOf(req(stream = true) to "anthropic", req() to "openai").forEach { (request, vendor) ->
+            engine.reset()
+            engine.resolve(vendor, request)
+            assertEquals(listOf(Triple(1L, 1, "tool-calls")), engine.calls().map { Triple(it.seq, it.step, it.outcome) }, vendor)
+        }
+    }
+
+    @Test
     fun `an error step's status must be an HTTP status`() {
         ErrorStep(100)
         ErrorStep(599)

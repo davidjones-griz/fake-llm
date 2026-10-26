@@ -168,7 +168,9 @@
               "$type": "integer"
             },
             "promptSample": "Hello\n",
-            "step": 1
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": []
           }
         ]
       }

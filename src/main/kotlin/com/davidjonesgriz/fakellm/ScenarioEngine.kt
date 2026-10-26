@@ -1,6 +1,7 @@
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -27,7 +28,10 @@ public data class CallRecord internal constructor(
     val model: String,
     val systemShape: String,
     val messageCount: Int,
-    /** `"text"`, `"error:<status>"`, `"default"`, `"no-scenario"`, or `"no-more-steps"`. */
+    /**
+     * `"text"`, `"tool-calls"` (a step with [Step.toolCalls] served it), `"error:<status>"`,
+     * `"default"`, `"no-scenario"`, or `"no-more-steps"`.
+     */
     val outcome: String,
     val timestampMs: Long,
     /**
@@ -40,6 +44,42 @@ public data class CallRecord internal constructor(
      * step served it: [outcome] is `"default"`, `"no-scenario"` or `"no-more-steps"`.
      */
     val step: Int? = null,
+    /** The tool calls the call's response carried, in order. Empty for any other response. */
+    val toolCalls: List<ToolCallRecord> = emptyList(),
+    /**
+     * Every tool result in the request, in request order: Anthropic `tool_result` blocks, OpenAI
+     * `tool` messages, Gemini `functionResponse` parts.
+     */
+    val toolResults: List<ToolResultRecord> = emptyList(),
+)
+
+/** One tool call a response carried, as [CallRecord.toolCalls] records it. */
+@ConsistentCopyVisibility
+@Serializable
+public data class ToolCallRecord internal constructor(
+    /** The id sent, or null for a Gemini call with no scripted id. */
+    val id: String?,
+    val name: String,
+)
+
+/** One tool result a request sent back, as [CallRecord.toolResults] records it. */
+@ConsistentCopyVisibility
+@Serializable
+public data class ToolResultRecord internal constructor(
+    /** Anthropic `tool_use_id`, OpenAI `tool_call_id`, Gemini `functionResponse.id`; null when absent or not a string. */
+    val id: String?,
+    /**
+     * Gemini: `functionResponse.name`. Anthropic and OpenAI: the name of the tool call in the same
+     * request whose id matches (the first such call), or null when none does.
+     */
+    val name: String?,
+    /**
+     * The result as the request sent it, any JSON value: Anthropic `content`, OpenAI `content`,
+     * Gemini `response`. Null when absent.
+     */
+    val content: JsonElement?,
+    /** Anthropic `is_error` is `true`. Always false for OpenAI and Gemini. */
+    val isError: Boolean,
 )
 
 /** One logged call and the [Step] that answers it. See [ScenarioEngine.resolve]. */
@@ -145,10 +185,7 @@ public class ScenarioEngine(
         return if (step.error != null) {
             FakeResponse(step.error.status, step.error.body, step.error.headers)
         } else {
-            FakeResponse(
-                HTTP_OK,
-                vendorEnvelope(vendor, step.text!!, step.stopReason, r.seq, req.hasCacheBreakpoint, step.thinking),
-            )
+            FakeResponse(HTTP_OK, vendorEnvelope(vendor, step, r.seq, req.hasCacheBreakpoint))
         }
     }
 
@@ -158,6 +195,10 @@ public class ScenarioEngine(
      * OpenAI SSE paths, so a request is counted and logged once whichever transport renders it. The
      * 400s are error steps with [Step.streamErrorAfterChunks] unset, so both streaming paths send
      * their JSON and write no SSE bytes.
+     *
+     * Throws [IllegalArgumentException] when the next step has a tool call with
+     * [ToolCall.rawArguments] that [vendor]'s reply can't carry (a buffered Anthropic or a Gemini
+     * request). The request then takes no number and no log entry, and the step stays next.
      */
     internal fun resolve(
         vendor: String,
@@ -165,17 +206,37 @@ public class ScenarioEngine(
     ): Resolution {
         val (n, loaded, served) =
             synchronized(lock) {
-                val n = ++callCount
                 val s = scenario
+                rawArgumentsProblem(vendor, req, s?.steps?.getOrNull(callCount.toInt()), callCount + 1)?.let {
+                    throw IllegalArgumentException(it)
+                }
+                val n = ++callCount
                 val step = s?.steps?.takeIf { n <= it.size }?.get((n - 1).toInt())
                 val outcome =
                     when {
-                        step != null -> if (step.error != null) "error:${step.error.status}" else "text"
-                        s != null -> "no-more-steps"
-                        lenient -> "default"
-                        else -> "no-scenario"
+                        step == null -> {
+                            if (s != null) {
+                                "no-more-steps"
+                            } else if (lenient) {
+                                "default"
+                            } else {
+                                "no-scenario"
+                            }
+                        }
+
+                        step.error != null -> {
+                            "error:${step.error.status}"
+                        }
+
+                        step.toolCalls != null -> {
+                            "tool-calls"
+                        }
+
+                        else -> {
+                            "text"
+                        }
                     }
-                log.add(callRecord(n, vendor, req, outcome, if (step != null) n.toInt() else null))
+                log.add(callRecord(n, vendor, req, outcome, step))
                 Triple(n, s, step)
             }
         val step =
@@ -185,6 +246,39 @@ public class ScenarioEngine(
                 else -> errorStep(noScenarioBody(n, vendor, req))
             }
         return Resolution(seq = n, step = step)
+    }
+}
+
+/**
+ * Why [step], the next step, can't answer a [vendor] request: one of its tool calls sets
+ * [ToolCall.rawArguments], which a buffered Anthropic `tool_use.input` and a Gemini
+ * `functionCall.args` can't carry, since both must be JSON objects. Null when it can.
+ */
+private fun rawArgumentsProblem(
+    vendor: String,
+    req: ParsedRequest,
+    step: Step?,
+    stepNumber: Long,
+): String? {
+    val i = step?.toolCalls?.indexOfFirst { it.rawArguments != null } ?: -1
+    val prefix = "step $stepNumber: tool call ${i + 1} sets rawArguments"
+    return when {
+        i < 0 -> {
+            null
+        }
+
+        vendor == "gemini" -> {
+            "$prefix, which a Gemini reply cannot carry; functionCall.args must be a JSON object"
+        }
+
+        vendor == "anthropic" && !req.stream -> {
+            "$prefix, which an Anthropic reply carries only when streamed (input_json_delta); " +
+                "a buffered tool_use input must be a JSON object"
+        }
+
+        else -> {
+            null
+        }
     }
 }
 
@@ -226,12 +320,13 @@ private fun JsonObjectBuilder.putCallFields(
     put("prompt_preview", req.promptText.take(PROMPT_PREVIEW_CHARS))
 }
 
+/** The log entry for call [n], served by [step] (null when no step served it). */
 private fun callRecord(
     n: Long,
     vendor: String,
     req: ParsedRequest,
     outcome: String,
-    step: Int?,
+    step: Step?,
 ): CallRecord =
     CallRecord(
         seq = n,
@@ -242,23 +337,25 @@ private fun callRecord(
         outcome = outcome,
         timestampMs = System.currentTimeMillis(),
         promptSample = req.promptText.takeLast(PROMPT_SAMPLE_CHARS),
-        step = step,
+        step = if (step != null) n.toInt() else null,
+        toolCalls = step?.let { sentToolCalls(vendor, it, n) }.orEmpty().map { ToolCallRecord(it.id, it.name) },
+        toolResults = req.toolResults,
     )
 
-@Suppress("LongParameterList") // the vendor-neutral reply fields, passed through to one dialect
+/** The buffered reply to call [seq] from [step], a reply step, in [vendor]'s format. */
 internal fun vendorEnvelope(
     vendor: String,
-    text: String,
-    stopReason: String,
+    step: Step,
     seq: Long,
     cacheable: Boolean = true,
-    thinking: String? = null,
-): String =
-    when (vendor) {
-        "openai" -> openAiEnvelope(text, stopReason, seq)
-        "gemini" -> geminiEnvelope(text, stopReason, seq)
-        else -> anthropicEnvelope(text, stopReason, seq, cacheable, thinking)
+): String {
+    val toolCalls = sentToolCalls(vendor, step, seq)
+    return when (vendor) {
+        "openai" -> openAiEnvelope(step.text, step.stopReason, seq, toolCalls)
+        "gemini" -> geminiEnvelope(step.text, step.stopReason, seq, toolCalls)
+        else -> anthropicEnvelope(step.text, step.stopReason, seq, cacheable, step.thinking, toolCalls)
     }
+}
 
 internal const val HTTP_OK = 200
 internal const val CANNED_ASSISTANT_TEXT = "This is a canned response from fake-llm."

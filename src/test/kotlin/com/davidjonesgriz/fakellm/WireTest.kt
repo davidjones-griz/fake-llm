@@ -1,6 +1,7 @@
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -226,5 +227,178 @@ class WireTest {
                     """"cache_control":{"type":"ephemeral","ttl":null}}]}]}""",
             )
         }
+    }
+
+    private fun args(json: String): JsonObject = Json.parseToJsonElement(json).jsonObject
+
+    @Test
+    fun `anthropic envelope puts thinking, text, then tool_use blocks, with stop_reason tool_use`() {
+        val step =
+            Step(
+                text = "Checking.",
+                thinking = "Look.",
+                toolCalls =
+                    listOf(
+                        ToolCall(name = "get_weather", arguments = args("""{"city":"Paris"}""")),
+                        ToolCall(name = "get_time", id = "toolu_custom"),
+                    ),
+            )
+        assertEquals(
+            """{"id":"fake-msg-1","type":"message","role":"assistant","content":[""" +
+                """{"type":"thinking","thinking":"Look.","signature":"fake-thinking-signature"},""" +
+                """{"type":"text","text":"Checking."},""" +
+                """{"type":"tool_use","id":"toolu_fake_1_1","name":"get_weather","input":{"city":"Paris"}},""" +
+                """{"type":"tool_use","id":"toolu_custom","name":"get_time","input":{}}],"stop_reason":"tool_use",""" +
+                """"usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}""",
+            vendorEnvelope("anthropic", step, seq = 1, cacheable = false),
+        )
+    }
+
+    @Test
+    fun `anthropic envelope without text has no text block`() {
+        val env = vendorEnvelope("anthropic", Step(toolCalls = listOf(ToolCall(name = "get_time"))), seq = 2)
+        val content = Json.parseToJsonElement(env).jsonObject["content"]!!.jsonArray
+        assertEquals(
+            listOf("""{"type":"tool_use","id":"toolu_fake_2_1","name":"get_time","input":{}}"""),
+            content.map { it.toString() },
+        )
+    }
+
+    @Test
+    fun `openai envelope has null content and tool_calls with argument text, and finish_reason tool_calls`() {
+        val step = Step(toolCalls = listOf(ToolCall(name = "get_time", rawArguments = """{"tz": Europe/Paris}""")))
+        assertEquals(
+            """{"id":"fake-openai-1","object":"chat.completion","model":"fake-openai","choices":[{"index":0,""" +
+                """"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_fake_1_1","type":"function",""" +
+                """"function":{"name":"get_time","arguments":"{\"tz\": Europe/Paris}"}}]},"finish_reason":"tool_calls"}],""" +
+                """"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}}""",
+            vendorEnvelope("openai", step, seq = 1),
+        )
+    }
+
+    @Test
+    fun `gemini envelope has functionCall parts, with an id only when scripted, and finishReason STOP`() {
+        val step =
+            Step(
+                toolCalls =
+                    listOf(
+                        ToolCall(name = "get_weather", arguments = args("""{"city":"Paris"}""")),
+                        ToolCall(name = "get_time", id = "t2"),
+                    ),
+                stopReason = "tool_use",
+            )
+        assertEquals(
+            """{"candidates":[{"content":{"role":"model","parts":[""" +
+                """{"functionCall":{"name":"get_weather","args":{"city":"Paris"}}},""" +
+                """{"functionCall":{"id":"t2","name":"get_time","args":{}}}]},"finishReason":"STOP"}],""" +
+                """"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":50,"totalTokenCount":150},"fake_llm_seq":1}""",
+            vendorEnvelope("gemini", step, seq = 1),
+        )
+    }
+
+    @Test
+    fun `anthropic tool_result blocks are recorded in order with the name of their tool_use`() {
+        val req =
+            parseAnthropicRequest(
+                """{"model":"m","messages":[
+                  {"role":"user","content":"Hello"},
+                  {"role":"assistant","content":[{"type":"text","text":"Checking."},
+                    {"type":"tool_use","id":"a","name":"get_weather","input":{}},
+                    {"type":"tool_use","id":"b","name":"get_time","input":{}},
+                    {"type":"tool_use","id":"c","name":"get_date","input":{}}]},
+                  {"role":"user","content":[
+                    {"type":"tool_result","tool_use_id":"a","content":"18 degrees"},
+                    {"type":"tool_result","tool_use_id":"b","content":[{"type":"text","text":"unknown timezone"}],"is_error":true},
+                    {"type":"tool_result","tool_use_id":"c","content":"today","is_error":false}]}
+                ]}""",
+            )
+        assertEquals(
+            listOf(
+                ToolResultRecord("a", "get_weather", JsonPrimitive("18 degrees"), isError = false),
+                ToolResultRecord(
+                    "b",
+                    "get_time",
+                    Json.parseToJsonElement("""[{"type":"text","text":"unknown timezone"}]"""),
+                    isError = true,
+                ),
+                ToolResultRecord("c", "get_date", JsonPrimitive("today"), isError = false),
+            ),
+            req.toolResults,
+        )
+        assertEquals("Hello\nChecking.\n", req.promptText)
+    }
+
+    @Test
+    fun `openai tool messages are recorded with the name of the matching assistant tool call`() {
+        val req =
+            parseOpenAiRequest(
+                """{"model":"m","messages":[
+                  {"role":"user","content":"Hello"},
+                  {"role":"assistant","content":null,"tool_calls":[
+                    {"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{}"}},
+                    {"id":"call_2","type":"function","function":{"name":"get_time","arguments":"{}"}}]},
+                  {"role":"tool","tool_call_id":"call_1","content":"18 degrees"},
+                  {"role":"tool","tool_call_id":"call_2","content":[{"type":"text","text":"noon"}]}
+                ]}""",
+            )
+        assertEquals(
+            listOf(
+                ToolResultRecord("call_1", "get_weather", JsonPrimitive("18 degrees"), isError = false),
+                ToolResultRecord("call_2", "get_time", Json.parseToJsonElement("""[{"type":"text","text":"noon"}]"""), isError = false),
+            ),
+            req.toolResults,
+        )
+    }
+
+    @Test
+    fun `gemini functionResponse parts are recorded with their name, id and response`() {
+        val req =
+            parseGeminiRequest(
+                """{"contents":[
+                  {"role":"user","parts":[{"text":"Hello"}]},
+                  {"role":"model","parts":[{"functionCall":{"name":"get_weather","args":{}}}]},
+                  {"role":"user","parts":[
+                    {"functionResponse":{"name":"get_weather","response":{"temperature":18}}},
+                    {"functionResponse":{"id":"t2","name":"get_time","response":{"error":"unknown timezone"}}}]}
+                ]}""",
+                "example-gemini",
+            )
+        assertEquals(
+            listOf(
+                ToolResultRecord(null, "get_weather", args("""{"temperature":18}"""), isError = false),
+                ToolResultRecord("t2", "get_time", args("""{"error":"unknown timezone"}"""), isError = false),
+            ),
+            req.toolResults,
+        )
+        assertEquals("Hello\n", req.promptText)
+    }
+
+    @Test
+    fun `a tool result with no matching call has a null name, and a non-string id is null`() {
+        val anthropic =
+            parseAnthropicRequest(
+                """{"model":"m","messages":[{"role":"user","content":[
+                  {"type":"tool_result","tool_use_id":"missing"},
+                  {"type":"tool_result","tool_use_id":7,"content":null,"is_error":"true"}]}]}""",
+            )
+        assertEquals(
+            listOf(ToolResultRecord("missing", null, null, isError = false), ToolResultRecord(null, null, null, isError = false)),
+            anthropic.toolResults,
+        )
+        val openAi = parseOpenAiRequest("""{"model":"m","messages":[{"role":"tool","tool_call_id":"missing","content":"x"}]}""")
+        assertEquals(listOf(ToolResultRecord("missing", null, JsonPrimitive("x"), isError = false)), openAi.toolResults)
+        val gemini =
+            parseGeminiRequest("""{"contents":[{"parts":[{"functionResponse":{"id":1,"name":false}}]}]}""", "example-gemini")
+        assertEquals(listOf(ToolResultRecord(null, null, null, isError = false)), gemini.toolResults)
+    }
+
+    @Test
+    fun `an openai message with null content adds no prompt text`() {
+        val req =
+            parseOpenAiRequest(
+                """{"model":"m","messages":[{"role":"user","content":"Hello"},
+                  {"role":"assistant","content":null,"tool_calls":[{"id":"c","type":"function","function":{"name":"f","arguments":"{}"}}]}]}""",
+            )
+        assertEquals("Hello\n", req.promptText)
     }
 }

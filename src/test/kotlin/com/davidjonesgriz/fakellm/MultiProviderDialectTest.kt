@@ -309,4 +309,209 @@ class MultiProviderDialectTest {
             assertEquals(listOf("text", "text"), calls.map { it.outcome })
         }
     }
+
+    private fun anthropicFrames(body: String): List<Pair<String, String>> =
+        body.split("\n\n").filter { it.isNotBlank() }.map { frame ->
+            val lines = frame.lines()
+            lines.single { it.startsWith("event: ") }.removePrefix("event: ") to
+                lines.single { it.startsWith("data: ") }.removePrefix("data: ")
+        }
+
+    private fun toolArgs(json: String) = Json.parseToJsonElement(json).jsonObject
+
+    private fun blockStart(
+        index: Int,
+        block: String,
+    ) = "content_block_start" to """{"type":"content_block_start","index":$index,"content_block":$block}"""
+
+    private fun blockDelta(
+        index: Int,
+        delta: String,
+    ) = "content_block_delta" to """{"type":"content_block_delta","index":$index,"delta":$delta}"""
+
+    private fun blockStop(index: Int) = "content_block_stop" to """{"type":"content_block_stop","index":$index}"""
+
+    private fun inputJson(piece: String) = """{"type":"input_json_delta","partial_json":${JsonPrimitive(piece)}}"""
+
+    @Test
+    fun `a streamed anthropic tool call is a tool_use block with input_json_delta pieces`() {
+        val step =
+            Step(
+                text = "Checking.",
+                thinking = "Look.",
+                toolCalls =
+                    listOf(
+                        ToolCall(name = "get_weather", arguments = toolArgs("""{"city":"Paris"}""")),
+                        ToolCall(name = "get_time", id = "toolu_custom"),
+                    ),
+                streamChunkChars = 8,
+            )
+        withServer(engineWith(step)) { client, _ ->
+            val frames = anthropicFrames(client.post("/anthropic/v1/messages", anthropicBody("Hello", stream = true)).body())
+            assertEquals("message_start", frames.first().first)
+            assertEquals(
+                listOf(
+                    blockStart(0, """{"type":"thinking","thinking":""}"""),
+                    blockDelta(0, """{"type":"thinking_delta","thinking":"Look."}"""),
+                    blockDelta(0, """{"type":"signature_delta","signature":"fake-thinking-signature"}"""),
+                    blockStop(0),
+                    blockStart(1, """{"type":"text","text":""}"""),
+                    blockDelta(1, """{"type":"text_delta","text":"Checking"}"""),
+                    blockDelta(1, """{"type":"text_delta","text":"."}"""),
+                    blockStop(1),
+                    blockStart(2, """{"type":"tool_use","id":"toolu_fake_1_1","name":"get_weather","input":{}}"""),
+                    blockDelta(2, inputJson("""{"city":""")),
+                    blockDelta(2, inputJson(""""Paris"}""")),
+                    blockStop(2),
+                    blockStart(3, """{"type":"tool_use","id":"toolu_custom","name":"get_time","input":{}}"""),
+                    blockDelta(3, inputJson("{}")),
+                    blockStop(3),
+                    "message_delta" to
+                        """{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":50}}""",
+                    "message_stop" to """{"type":"message_stop"}""",
+                ),
+                frames.drop(1),
+            )
+        }
+    }
+
+    @Test
+    fun `a streamed anthropic tool call sends rawArguments verbatim`() {
+        val step = Step(toolCalls = listOf(ToolCall(name = "get_weather", rawArguments = """{"city": Paris}""")), streamChunkChars = 8)
+        withServer(engineWith(step)) { client, _ ->
+            val frames = anthropicFrames(client.post("/anthropic/v1/messages", anthropicBody("Hello", stream = true)).body())
+            assertEquals(
+                listOf(
+                    blockStart(0, """{"type":"tool_use","id":"toolu_fake_1_1","name":"get_weather","input":{}}"""),
+                    blockDelta(0, inputJson("""{"city":""")),
+                    blockDelta(0, inputJson(" Paris}")),
+                    blockStop(0),
+                ),
+                frames.drop(1).dropLast(2),
+            )
+        }
+    }
+
+    @Test
+    fun `a streamed openai tool call is a header chunk and argument chunks per call, then finish_reason tool_calls`() {
+        val step =
+            Step(
+                toolCalls =
+                    listOf(
+                        ToolCall(name = "get_weather", arguments = toolArgs("""{"city":"Paris"}""")),
+                        ToolCall(name = "get_time", rawArguments = """{"tz": Europe/Paris}""", id = "call_custom"),
+                    ),
+                streamChunkChars = 8,
+            )
+
+        fun header(
+            index: Int,
+            id: String,
+            name: String,
+        ) = """{"tool_calls":[{"index":$index,"id":"$id","type":"function","function":{"name":"$name","arguments":""}}]}"""
+
+        fun arguments(
+            index: Int,
+            piece: String,
+        ) = """{"tool_calls":[{"index":$index,"function":{"arguments":${JsonPrimitive(piece)}}}]}"""
+        withServer(engineWith(step)) { client, _ ->
+            val resp = client.post("/openai/v1/chat/completions", openAiStreamBody(includeUsage = true))
+            assertEquals(
+                listOf(
+                    chunk("""{"role":"assistant","content":null}""", usage = true),
+                    chunk(header(0, "call_fake_1_1", "get_weather"), usage = true),
+                    chunk(arguments(0, """{"city":"""), usage = true),
+                    chunk(arguments(0, """"Paris"}"""), usage = true),
+                    chunk(header(1, "call_custom", "get_time"), usage = true),
+                    chunk(arguments(1, """{"tz": E"""), usage = true),
+                    chunk(arguments(1, "urope/Pa"), usage = true),
+                    chunk(arguments(1, "ris}"), usage = true),
+                    chunk("{}", "tool_calls", usage = true),
+                    """{"id":"fake-openai-1","object":"chat.completion.chunk","model":"fake-openai","choices":[],""" +
+                        """"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}}""",
+                    "[DONE]",
+                ),
+                openAiFrames(resp.body()),
+            )
+        }
+    }
+
+    @Test
+    fun `a tool loop runs over each format`() {
+        val steps =
+            arrayOf(
+                Step(toolCalls = listOf(ToolCall(name = "get_weather", arguments = toolArgs("""{"city":"Paris"}""")))),
+                Step(text = "It is 18 degrees in Paris."),
+            )
+        val anthropicResult =
+            """{"model":"example-model","max_tokens":64,"messages":[{"role":"user","content":"Hello"},""" +
+                """{"role":"assistant","content":[""" +
+                """{"type":"tool_use","id":"toolu_fake_1_1","name":"get_weather","input":{"city":"Paris"}}]},""" +
+                """{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_fake_1_1","content":"18 degrees"}]}]}"""
+        val openAiResult =
+            """{"model":"example-gpt","messages":[{"role":"user","content":"Hello"},""" +
+                """{"role":"assistant","content":null,"tool_calls":[{"id":"call_fake_1_1","type":"function",""" +
+                """"function":{"name":"get_weather","arguments":"{\"city\":\"Paris\"}"}}]},""" +
+                """{"role":"tool","tool_call_id":"call_fake_1_1","content":"18 degrees"}]}"""
+        val geminiResult =
+            """{"contents":[{"role":"user","parts":[{"text":"Hello"}]},""" +
+                """{"role":"model","parts":[{"functionCall":{"name":"get_weather","args":{"city":"Paris"}}}]},""" +
+                """{"role":"user","parts":[{"functionResponse":{"name":"get_weather","response":{"temperature":18}}}]}]}"""
+        val geminiText = { body: String ->
+            Json
+                .parseToJsonElement(body)
+                .jsonObject
+                .getValue("candidates")
+                .jsonArray[0]
+                .jsonObject
+                .getValue("content")
+                .jsonObject
+                .getValue("parts")
+                .jsonArray[0]
+                .jsonObject
+                .getValue("text")
+                .jsonPrimitive.content
+        }
+        val loops =
+            listOf(
+                ToolLoop(
+                    "/anthropic/v1/messages",
+                    anthropicBody("Hello"),
+                    anthropicResult,
+                    ::anthropicText,
+                    ToolResultRecord("toolu_fake_1_1", "get_weather", JsonPrimitive("18 degrees"), isError = false),
+                ),
+                ToolLoop(
+                    "/openai/v1/chat/completions",
+                    """{"model":"example-gpt","messages":[{"role":"user","content":"Hello"}]}""",
+                    openAiResult,
+                    ::openAiText,
+                    ToolResultRecord("call_fake_1_1", "get_weather", JsonPrimitive("18 degrees"), isError = false),
+                ),
+                ToolLoop(
+                    "/gemini/v1beta/models/example-gemini:generateContent",
+                    """{"contents":[{"parts":[{"text":"Hello"}]}]}""",
+                    geminiResult,
+                    geminiText,
+                    ToolResultRecord(null, "get_weather", toolArgs("""{"temperature":18}"""), isError = false),
+                ),
+            )
+        loops.forEach { loop ->
+            withServer(engineWith(*steps)) { client, engine ->
+                assertEquals(200, client.post(loop.path, loop.first).statusCode(), loop.path)
+                val reply = client.post(loop.path, loop.second)
+                assertEquals("It is 18 degrees in Paris.", loop.text(reply.body()), loop.path)
+                assertEquals(listOf("tool-calls", "text"), engine.calls().map { it.outcome }, loop.path)
+                assertEquals(listOf(loop.result), engine.calls()[1].toolResults, loop.path)
+            }
+        }
+    }
+
+    private class ToolLoop(
+        val path: String,
+        val first: String,
+        val second: String,
+        val text: (String) -> String,
+        val result: ToolResultRecord,
+    )
 }

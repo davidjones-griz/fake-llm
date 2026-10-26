@@ -168,7 +168,9 @@ internal fun handleGemini(
  * [ScenarioEngine.resolve] that [ScenarioEngine.handle] uses, so the call log records the request
  * once whichever transport answers it.
  *
- * A text step is written as Anthropic's SSE sequence. An error step whose
+ * A reply step is written as Anthropic's SSE sequence: the thinking block, the text block, then
+ * one `tool_use` block per tool call, whose argument text is sent as `input_json_delta` pieces
+ * (`rawArguments` verbatim), with `stop_reason` `tool_use` when there are tool calls. An error step whose
  * [Step.streamErrorAfterChunks] is null is a plain HTTP error, and no SSE bytes are written
  * first: that is how a provider rejects before generation starts (the usual timing for rate-limit
  * and overload errors). Setting [Step.streamErrorAfterChunks] opts into the other timing — some
@@ -197,18 +199,24 @@ private fun streamAnthropicMessages(
             emitDeltas(out, prefix, step.streamInterChunkDelayMs)
             writeSse(out, "error", error.body.ifBlank { GENERIC_STREAM_ERROR_BODY })
         } else {
-            val text = step.text!!
-            val textIndex = if (step.thinking != null) 1 else 0
+            var index = 0
             step.thinking?.let { thinking ->
-                writeSse(out, "content_block_start", thinkingBlockStartJson(0))
-                emitThinkingDeltas(out, chunkText(thinking, step.streamChunkChars), step.streamInterChunkDelayMs, 0)
-                writeSse(out, "content_block_delta", signatureDeltaJson(FAKE_THINKING_SIGNATURE, 0))
-                writeSse(out, "content_block_stop", contentBlockStopJson(0))
+                writeSse(out, "content_block_start", thinkingBlockStartJson(index))
+                emitThinkingDeltas(out, chunkText(thinking, step.streamChunkChars), step.streamInterChunkDelayMs, index)
+                writeSse(out, "content_block_delta", signatureDeltaJson(FAKE_THINKING_SIGNATURE, index))
+                writeSse(out, "content_block_stop", contentBlockStopJson(index++))
             }
-            writeSse(out, "content_block_start", contentBlockStartJson(textIndex))
-            emitDeltas(out, chunkText(text, step.streamChunkChars), step.streamInterChunkDelayMs, textIndex)
-            writeSse(out, "content_block_stop", contentBlockStopJson(textIndex))
-            writeSse(out, "message_delta", messageDeltaJson(step.stopReason))
+            step.text?.let { text ->
+                writeSse(out, "content_block_start", contentBlockStartJson(index))
+                emitDeltas(out, chunkText(text, step.streamChunkChars), step.streamInterChunkDelayMs, index)
+                writeSse(out, "content_block_stop", contentBlockStopJson(index++))
+            }
+            sentToolCalls("anthropic", step, resolution.seq).forEach { call ->
+                writeSse(out, "content_block_start", toolUseBlockStartJson(index, call.id!!, call.name))
+                emitInputJsonDeltas(out, chunkText(call.argumentText, step.streamChunkChars), step.streamInterChunkDelayMs, index)
+                writeSse(out, "content_block_stop", contentBlockStopJson(index++))
+            }
+            writeSse(out, "message_delta", messageDeltaJson(if (step.toolCalls == null) step.stopReason else "tool_use"))
             writeSse(out, "message_stop", messageStopJson())
         }
     } finally {
