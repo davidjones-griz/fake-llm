@@ -98,7 +98,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set VERSION
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+        run: |
+          set -euo pipefail
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
@@ -132,7 +134,7 @@ jobs:
             healthy=0
             deadline=$((SECONDS + 90))
             while [ "$SECONDS" -lt "$deadline" ]; do
-              if [ "$(curl -fsS http://127.0.0.1:8080/health 2>/dev/null || true)" = "$expected" ]; then
+              if [ "$(curl -fsS --max-time 5 http://127.0.0.1:8080/health 2>/dev/null || true)" = "$expected" ]; then
                 healthy=1
                 break
               fi
@@ -167,15 +169,17 @@ jobs:
     needs: [verify, image]
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-      MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-      SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+    # Each step gets only the secrets it uses.
     steps:
       - name: Check the Maven Central secrets
         id: secrets
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
           if [ -z "$MAVEN_CENTRAL_USERNAME" ] || [ -z "$MAVEN_CENTRAL_PASSWORD" ] || [ -z "$SIGNING_KEY" ] || [ -z "$SIGNING_KEY_PASSWORD" ]; then
             message="Maven Central secrets are not set; the image and GitHub Release are published without it."
             echo "::notice title=Maven Central skipped::$message"
@@ -197,6 +201,9 @@ jobs:
           cache-provider: basic
       - name: Build the signed bundle
         if: steps.secrets.outputs.present == 'true'
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: ./gradlew publishAllPublicationsToCentralBundleRepository --no-daemon
       - name: Check and zip the bundle
         if: steps.secrets.outputs.present == 'true'
@@ -225,6 +232,9 @@ jobs:
       - name: Upload to Maven Central
         id: upload
         if: steps.secrets.outputs.present == 'true'
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
@@ -234,13 +244,20 @@ jobs:
             -F bundle=@central-bundle.zip \
             "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC&name=fake-llm-$version" || {
             echo "::error::the upload to Maven Central failed:"
-            cat upload.txt
+            cat upload.txt 2> /dev/null || true
             exit 1
           }
-          echo "id=$(cat upload.txt)" >> "$GITHUB_OUTPUT"
+          id=$(tr -d '[:space:]' < upload.txt)
+          if [ -z "$id" ]; then
+            echo "::error::Maven Central returned an empty deployment id"
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
       - name: Wait for Maven Central to publish
         if: steps.secrets.outputs.present == 'true'
         env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           DEPLOYMENT_ID: ${{ steps.upload.outputs.id }}
         run: |
           set -euo pipefail
@@ -249,7 +266,7 @@ jobs:
           deadline=$((SECONDS + 1800))
           failures=0
           while :; do
-            code=$(curl -sS -o status.json -w '%{http_code}' -X POST -H "Authorization: Bearer $token" \
+            code=$(curl -sS --max-time 60 -o status.json -w '%{http_code}' -X POST -H "Authorization: Bearer $token" \
               "https://central.sonatype.com/api/v1/publisher/status?id=$DEPLOYMENT_ID") || code=000
             if [ "$code" = 200 ]; then
               failures=0
@@ -290,6 +307,7 @@ jobs:
   release:
     needs: [verify, maven, image]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

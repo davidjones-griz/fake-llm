@@ -19,9 +19,7 @@ docker build -t fake-llm .
 docker run -p 8080:8080 fake-llm --scenario hello
 ```
 
-Building the image needs BuildKit, `docker build`'s default since Docker 23.
-
-`GET /health` then returns `{"status":"ok","scenario":"hello","lenient":false}`.
+`GET /health` then returns `{"status":"ok","scenario":"hello","lenient":false}`. Building the image needs BuildKit, `docker build`'s default since Docker 23.
 
 The same process from a checkout:
 
@@ -575,7 +573,7 @@ The workflow then runs four jobs:
 - `maven` runs after `image`, because a Maven Central publish cannot be undone. It signs both artifacts, checks that every file in the bundle is signed, uploads the bundle to the Central Portal, and waits up to 30 minutes for it to publish. It needs four repository secrets: `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD` (a Central Portal user token), `SIGNING_KEY` (the ASCII-armored private key) and `SIGNING_KEY_PASSWORD`. If any is missing, the job passes with a "Maven Central skipped" notice in its log and summary, and the image and GitHub Release are still published.
 - `release` creates the GitHub Release `vX.Y.Z` with the release notes, the fat jar and its `.sha256`. It runs only when the other three jobs succeeded.
 
-If a job fails for a reason outside the code, such as a missing secret, a key that hasn't reached the keyservers, or an outage, fix the cause and re-run the failed jobs. A problem in the code, the POM or the signatures needs a new tag, because a re-run uses the same commit. Central does not accept the same version twice: if Central published after the `maven` job gave up waiting, re-running that job fails, so check the deployment on central.sonatype.com and create the Release by hand. After the first release, set the `fake-llm` package on GHCR to public.
+Because `maven` runs after `image`, a failed `maven` job leaves the image tags pushed with no GitHub Release yet; the Release is created when the re-run succeeds. If a job fails for a reason outside the code, such as a missing secret, a key that hasn't reached the keyservers, or an outage, fix the cause and re-run the failed jobs. A problem in the code, the POM or the signatures needs a new tag, because a re-run uses the same commit. Central does not accept the same version twice: if Central published after the `maven` job gave up waiting, re-running that job fails, so check the deployment on central.sonatype.com and create the Release by hand. After the first release, set the `fake-llm` package on GHCR to public.
 
 ## Roadmap
 
