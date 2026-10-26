@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "stream-error-midway",
   "description": "One step: a streaming failure after generation has started. Streamed, it emits 3 text chunks of 8 characters, then an overloaded_error event. A non-streaming client receives the same error as HTTP 529.",
   "steps": [

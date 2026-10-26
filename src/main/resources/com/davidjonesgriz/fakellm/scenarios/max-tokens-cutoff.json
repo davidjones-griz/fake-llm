@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "max-tokens-cutoff",
   "description": "One step: a text reply cut off mid-sentence inside a JSON value, with stop reason max_tokens, as if the token limit ended the answer early.",
   "steps": [

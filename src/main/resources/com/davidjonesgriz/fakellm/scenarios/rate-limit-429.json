@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "rate-limit-429",
   "description": "Two steps. Call 1 returns HTTP 429 with a rate_limit_error body and a retry-after header of 2 seconds. Call 2 returns a normal weather reply.",
   "steps": [

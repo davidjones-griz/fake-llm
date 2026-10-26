@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "overloaded-529",
   "description": "Two steps. Call 1 returns HTTP 529 with an overloaded_error body. Call 2 returns a normal support reply.",
   "steps": [

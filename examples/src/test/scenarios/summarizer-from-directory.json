@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "summarizer-from-directory",
   "description": "One step: a one-sentence summary. Loaded by name from this project's src/test/scenarios directory.",
   "steps": [{ "text": "Churn fell to 2% after the onboarding redesign." }]

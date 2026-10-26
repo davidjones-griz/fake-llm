@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "hello",
   "description": "One step: a short greeting from a general assistant for weather, recipes, and everyday how-to questions.",
   "steps": [
