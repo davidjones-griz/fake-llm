@@ -209,10 +209,10 @@ internal fun repositoryScenarioFiles(): List<File> {
 }
 
 /**
- * The data payloads of an OpenAI Chat Completions stream, in order. Fails unless every frame is
- * exactly one `data:` line, as the OpenAI stream sends them (no `event:` line).
+ * The data payloads of a data-only stream (OpenAI, Gemini), in order. Fails unless every frame is
+ * exactly one `data:` line (no `event:` line).
  */
-internal fun openAiFrames(body: String): List<String> {
+internal fun dataFrames(body: String): List<String> {
     val frames = body.split("\n\n").filter { it.isNotEmpty() }
     return frames.map { frame ->
         val lines = frame.split("\n")

@@ -65,11 +65,12 @@ public data class Step(
      */
     val streamInterChunkDelayMs: Long = 0,
     /**
-     * Streaming only (Anthropic and OpenAI), and only valid on an error step ([error] set): emit
-     * this many text deltas, then an in-stream error. On the Anthropic stream that is an
+     * Streaming only (Anthropic, OpenAI and Gemini), and only valid on an error step ([error] set):
+     * emit this many text deltas, then an in-stream error. On the Anthropic stream that is an
      * `event: error` frame, with no `content_block_stop`, `message_delta` or `message_stop`; on the
      * OpenAI stream it is a `data:` frame with the error body, with no finish chunk, usage chunk
-     * or `[DONE]`.
+     * or `[DONE]`; on the Gemini stream it is a `data:` frame with the error body, with no chunk
+     * carrying `finishReason`.
      *
      * Null (the default): the step's error is a plain HTTP response, and no SSE bytes are written.
      * That matches a provider that rejects before generation starts — the usual timing for

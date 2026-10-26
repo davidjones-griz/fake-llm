@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0, a minor version may
 change the public API.
 
+## [Unreleased]
+
+### Added
+
+- Gemini SSE streaming: `POST /gemini/…:streamGenerateContent?alt=sse` returns one
+  `GenerateContentResponse` per data frame, with text split and paced by `streamChunkChars` and
+  `streamInterChunkDelayMs`, each tool call as a whole `functionCall` part, `finishReason` and
+  `usageMetadata` on the last chunk, and an in-stream error after `streamErrorAfterChunks`
+  chunks. Without `alt=sse` the request is the `exception` 400.
+
+### Changed
+
+- `:streamGenerateContent` is now a route; it was a 404.
+
 ## [0.2.0] - 2026-10-26
 
 ### Added

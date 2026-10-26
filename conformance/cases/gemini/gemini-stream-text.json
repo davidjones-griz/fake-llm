@@ -1,0 +1,134 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-stream-text",
+  "description": "A streamed text step is data-only frames, one text part per chunk; only the last chunk carries finishReason and usageMetadata, and the call is logged once.",
+  "scenario": {
+    "name": "gemini-stream-text",
+    "steps": [
+      {
+        "text": "Mild and dry tomorrow.",
+        "streamChunkChars": 8
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:streamGenerateContent?alt=sse",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "text": "Mild and"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "fake_llm_seq": 1
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "text": " dry tom"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "fake_llm_seq": 1
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "text": "orrow."
+                      }
+                    ]
+                  },
+                  "finishReason": "STOP"
+                }
+              ],
+              "usageMetadata": {
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 50,
+                "totalTokenCount": 150
+              },
+              "fake_llm_seq": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "gemini",
+            "model": "example-gemini",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": []
+          }
+        ]
+      }
+    }
+  ]
+}

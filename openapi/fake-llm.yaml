@@ -35,14 +35,15 @@ info:
     `NoMoreStepsError`; the last step does not repeat. A request that gets `ExceptionError`, a
     404 and the Batches 501 are not calls. That includes a request whose next step has a tool call
     with `rawArguments` that its format can't carry (a buffered Anthropic request, or a Gemini
-    request). That step is not used, and the next call gets it.
+    request). That step is not used, and the next call gets it. A Gemini `streamGenerateContent`
+    request without `alt=sse` is not a call either.
 
     **Vendor bodies.** The success bodies and event streams of the vendor routes follow each
     provider's API, and this document does not describe them field by field. The conformance
     cases in `conformance/cases` define them exactly, including the values fake-llm fixes: the
     token counts, the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`), OpenAI's
     `model`, the thinking signature, the streamed-error filler text and generic error body, the
-    OpenAI generic stream error body, and the lenient canned reply.
+    OpenAI and Gemini generic stream error bodies, and the lenient canned reply.
 
     **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
     cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.
@@ -329,6 +330,54 @@ paths:
           $ref: "#/components/responses/VendorBadRequest"
         default:
           $ref: "#/components/responses/ScriptedError"
+  /gemini/{version}/models/{model}:streamGenerateContent:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The API version segment, such as `v1beta`.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: streamGeminiContent
+      summary: Gemini streamGenerateContent API stand-in
+      description: |
+        Request follows the Gemini `streamGenerateContent` API
+        (https://ai.google.dev/api/generate-content), and the success response is its server-sent
+        events form: one `GenerateContentResponse` per `data:` frame, the last with `finishReason`
+        and `usageMetadata`. Requires `alt=sse`; without it the request gets `ExceptionError` and
+        is not a call. A step's scripted error can return any status and body.
+      security: []
+      parameters:
+        - name: alt
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [sse]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A Gemini SSE stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/VendorBadRequest"
+        default:
+          $ref: "#/components/responses/ScriptedError"
 components:
   securitySchemes:
     controlToken:
@@ -380,7 +429,8 @@ components:
         fake-llm's own 400s, not the provider's. A call after the loaded scenario's last step gets
         `NoMoreStepsError`, in strict and lenient mode. A call when no scenario is loaded gets
         `NoScenarioError` in strict mode (the default); lenient mode serves the canned reply. On
-        the Anthropic and OpenAI routes both are JSON even when the request sets `"stream": true`. A request body that is not valid JSON, or lacks the `messages`
+        the Anthropic and OpenAI routes with `"stream": true`, and on Gemini `streamGenerateContent`,
+        both are JSON, with no SSE bytes. A request body that is not valid JSON, or lacks the `messages`
         (Anthropic, OpenAI) or `contents` (Gemini) array, gets `ExceptionError`. A step's scripted
         error is outside these schemas, even when its status is 400: see `ScriptedError`.
       content:
@@ -579,7 +629,8 @@ components:
         A request fake-llm could not handle, such as an invalid body. It is not a call. That
         includes a request whose next step has a tool call with `rawArguments` that its format
         can't carry (a buffered Anthropic request, or a Gemini request). That step is not used,
-        and the next call gets it.
+        and the next call gets it. A Gemini `streamGenerateContent` request without `alt=sse`
+        gets it too.
       required: [fake_llm_error, detail]
       properties:
         fake_llm_error:
@@ -751,19 +802,21 @@ components:
           minimum: 1
           maximum: 2147483647
           default: 24
-          description: Size of each streamed delta, in Unicode code points (Anthropic and OpenAI streams).
+          description: Size of each streamed delta, in Unicode code points (Anthropic, OpenAI and Gemini streams).
         streamInterChunkDelayMs:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
           default: 0
-          description: Milliseconds to wait before each streamed delta (Anthropic and OpenAI streams).
+          description: |
+            Milliseconds to wait before each streamed delta (Anthropic, OpenAI and Gemini streams;
+            a Gemini functionCall chunk has no wait).
         streamErrorAfterChunks:
           type: [integer, "null"]
           minimum: 1
           maximum: 2147483647
           description: |
-            Only on an error step, and only when streamed (Anthropic or OpenAI): send this many text
+            Only on an error step, and only when streamed (Anthropic, OpenAI or Gemini): send this many text
             deltas, then an in-stream error.
         toolCalls:
           type: [array, "null"]

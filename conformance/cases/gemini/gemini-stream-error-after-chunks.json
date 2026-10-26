@@ -1,0 +1,95 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-stream-error-after-chunks",
+  "description": "streamErrorAfterChunks sends that many filler chunks, then the error body as a data frame, with no chunk carrying finishReason.",
+  "scenario": {
+    "name": "gemini-stream-error-after-chunks",
+    "steps": [
+      {
+        "error": {
+          "status": 500,
+          "body": "{\"error\":{\"code\":500,\"message\":\"server error\",\"status\":\"INTERNAL\"}}"
+        },
+        "streamErrorAfterChunks": 2,
+        "streamChunkChars": 10
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:streamGenerateContent?alt=sse",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "text": "Thinking t"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "fake_llm_seq": 1
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "text": "his throug"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "fake_llm_seq": 1
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "error": {
+                "code": 500,
+                "message": "server error",
+                "status": "INTERNAL"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

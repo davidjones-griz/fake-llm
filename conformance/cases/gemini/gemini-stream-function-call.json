@@ -1,0 +1,182 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-stream-function-call",
+  "description": "A streamed tool call is its own chunk with a whole functionCall part, after the text chunks; the last chunk finishes with STOP.",
+  "scenario": {
+    "name": "gemini-stream-function-call",
+    "steps": [
+      {
+        "text": "Checking.",
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "arguments": {
+              "city": "Paris"
+            }
+          },
+          {
+            "name": "get_time",
+            "id": "t2"
+          }
+        ],
+        "streamChunkChars": 8
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:streamGenerateContent?alt=sse",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "text": "Checking"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "fake_llm_seq": 1
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "text": "."
+                      }
+                    ]
+                  }
+                }
+              ],
+              "fake_llm_seq": 1
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "functionCall": {
+                          "name": "get_weather",
+                          "args": {
+                            "city": "Paris"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "fake_llm_seq": 1
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "functionCall": {
+                          "id": "t2",
+                          "name": "get_time",
+                          "args": {}
+                        }
+                      }
+                    ]
+                  },
+                  "finishReason": "STOP"
+                }
+              ],
+              "usageMetadata": {
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 50,
+                "totalTokenCount": 150
+              },
+              "fake_llm_seq": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "gemini",
+            "model": "example-gemini",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "tool-calls",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [
+              {
+                "id": null,
+                "name": "get_weather"
+              },
+              {
+                "id": "t2",
+                "name": "get_time"
+              }
+            ],
+            "toolResults": []
+          }
+        ]
+      }
+    }
+  ]
+}

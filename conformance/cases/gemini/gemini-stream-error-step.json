@@ -1,0 +1,56 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-stream-error-step",
+  "description": "An error step without streamErrorAfterChunks is a plain HTTP error even on the stream route.",
+  "scenario": {
+    "name": "gemini-stream-error-step",
+    "steps": [
+      {
+        "error": {
+          "status": 429,
+          "body": "{\"error\":{\"code\":429,\"message\":\"slow down\",\"status\":\"RESOURCE_EXHAUSTED\"}}",
+          "headers": {
+            "retry-after": "1"
+          }
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:streamGenerateContent?alt=sse",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json",
+          "retry-after": "1"
+        },
+        "body": {
+          "error": {
+            "code": 429,
+            "message": "slow down",
+            "status": "RESOURCE_EXHAUSTED"
+          }
+        }
+      }
+    }
+  ]
+}

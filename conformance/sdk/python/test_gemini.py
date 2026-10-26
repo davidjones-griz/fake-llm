@@ -1,4 +1,4 @@
-"""The official google-genai SDK against fake-llm's Gemini generateContent route (buffered)."""
+"""The official google-genai SDK against fake-llm's Gemini generateContent and streamGenerateContent routes (buffered and streaming)."""
 
 import json
 
@@ -10,6 +10,15 @@ FAST_RETRY = {"retry-after-ms": "10"}
 
 def generate(client, contents="Hello"):
     return client.models.generate_content(model="example-gemini", contents=contents)
+
+
+def stream(client, contents="Hello"):
+    return client.models.generate_content_stream(model="example-gemini", contents=contents)
+
+
+def texts_until_raised(chunks, received):
+    for chunk in chunks:
+        received.append(chunk.text)
 
 
 def call(seq, outcome, step):
@@ -121,6 +130,92 @@ def test_raw_arguments_not_a_call(fake, gemini_client):
     fake.load([{"toolCalls": [{"name": "get_weather", "rawArguments": "{}"}]}])
     with pytest.raises(errors.ClientError) as raised:
         generate(gemini_client)
+    assert raised.value.code == 400
+    assert raised.value.details["fake_llm_error"] == "exception"
+    assert fake.log() == []
+
+
+def test_stream_text(fake, gemini_client):
+    fake.load([{"text": "Streaming text that is long enough.", "streamChunkChars": 8}])
+    chunks = list(stream(gemini_client))
+    assert [c.text for c in chunks] == ["Streamin", "g text t", "hat is l", "ong enou", "gh."]
+    assert all(c.candidates[0].content.role == "model" for c in chunks)
+    assert [c.candidates[0].finish_reason for c in chunks] == [None] * 4 + [types.FinishReason.STOP]
+    assert [c.usage_metadata for c in chunks[:-1]] == [None] * 4
+    usage = chunks[-1].usage_metadata
+    assert (usage.prompt_token_count, usage.candidates_token_count, usage.total_token_count) == (100, 50, 150)
+    assert fake.log() == [call(1, "text", 1)]
+    record = fake.calls()[0]
+    assert (record["messageCount"], record["promptSample"]) == (1, "Hello\n")
+
+
+def test_stream_max_tokens(fake, gemini_client):
+    fake.load([{"text": "The summary stops in the mid", "stopReason": "max_tokens", "streamChunkChars": 8}])
+    reasons = [c.candidates[0].finish_reason for c in stream(gemini_client)]
+    assert reasons == [None, None, None, types.FinishReason.MAX_TOKENS]
+    assert fake.log() == [call(1, "text", 1)]
+
+
+def test_stream_thinking_ignored(fake, gemini_client):
+    fake.load([{"text": "Billing.", "thinking": "hidden"}])
+    (chunk,) = list(stream(gemini_client))
+    assert len(chunk.candidates[0].content.parts) == 1
+    assert chunk.text == "Billing."
+    assert fake.log() == [call(1, "text", 1)]
+
+
+def test_stream_function_call(fake, gemini_client):
+    fake.load(
+        [
+            {
+                "text": "Checking.",
+                "toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}, {"name": "get_time", "id": "t2"}],
+                "streamChunkChars": 8,
+            }
+        ]
+    )
+    chunks = list(stream(gemini_client))
+    assert [c.text for c in chunks] == ["Checking", ".", None, None]
+    calls = [[(fc.id, fc.name, fc.args) for fc in c.function_calls or []] for c in chunks]
+    assert calls == [[], [], [(None, "get_weather", {"city": "Paris"})], [("t2", "get_time", {})]]
+    assert chunks[-1].candidates[0].finish_reason == types.FinishReason.STOP
+    assert fake.log() == [call(1, "tool-calls", 1)]
+    assert fake.calls()[0]["toolCalls"] == [{"id": None, "name": "get_weather"}, {"id": "t2", "name": "get_time"}]
+
+
+def test_stream_error_after_chunks(fake, gemini_retry_client):
+    body = {"error": {"code": 500, "message": "server error", "status": "INTERNAL"}}
+    fake.load([{"error": {"status": 500, "body": json.dumps(body)}, "streamErrorAfterChunks": 2, "streamChunkChars": 8}, {"text": "never"}])
+    received = []
+    with pytest.raises(errors.ServerError) as raised:
+        texts_until_raised(stream(gemini_retry_client), received)
+    assert received == ["Thinking", " this th"]
+    assert (raised.value.code, raised.value.status, raised.value.message) == (500, "INTERNAL", "server error")
+    assert raised.value.details == body
+    # An in-stream error is raised to the caller, not retried.
+    assert fake.log() == [call(1, "error:500", 1)]
+
+
+def test_stream_error_before_stream_retried(fake, gemini_retry_client):
+    fake.load([error_step(429, "slow down", "RESOURCE_EXHAUSTED", FAST_RETRY), {"text": "after"}])
+    assert "".join(c.text for c in stream(gemini_retry_client)) == "after"
+    assert fake.log() == [call(1, "error:429", 1), call(2, "text", 2)]
+
+
+def test_stream_call_after_last_step(fake, gemini_client):
+    fake.load([{"text": "once"}])
+    assert [c.text for c in stream(gemini_client)] == ["once"]
+    with pytest.raises(errors.ClientError) as raised:
+        list(stream(gemini_client))
+    assert raised.value.code == 400
+    assert raised.value.details["fake_llm_error"] == "no more steps"
+    assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
+
+
+def test_stream_raw_arguments_not_a_call(fake, gemini_client):
+    fake.load([{"toolCalls": [{"name": "get_weather", "rawArguments": "{}"}]}])
+    with pytest.raises(errors.ClientError) as raised:
+        list(stream(gemini_client))
     assert raised.value.code == 400
     assert raised.value.details["fake_llm_error"] == "exception"
     assert fake.log() == []
