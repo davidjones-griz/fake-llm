@@ -1,0 +1,249 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-function-call",
+  "description": "A tool-call step is functionCall parts, with an id only when scripted, and finishReason STOP; the functionResponse parts the next request sends back are logged.",
+  "scenario": {
+    "name": "gemini-function-call",
+    "steps": [
+      {
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "arguments": {
+              "city": "Paris"
+            }
+          },
+          {
+            "name": "get_time",
+            "id": "t2"
+          }
+        ]
+      },
+      {
+        "text": "It is 18 degrees in Paris."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:generateContent",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "functionCall": {
+                      "name": "get_weather",
+                      "args": {
+                        "city": "Paris"
+                      }
+                    }
+                  },
+                  {
+                    "functionCall": {
+                      "id": "t2",
+                      "name": "get_time",
+                      "args": {}
+                    }
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 100,
+            "candidatesTokenCount": 50,
+            "totalTokenCount": 150
+          },
+          "fake_llm_seq": 1
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:generateContent",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            },
+            {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "name": "get_weather",
+                    "args": {
+                      "city": "Paris"
+                    }
+                  }
+                },
+                {
+                  "functionCall": {
+                    "id": "t2",
+                    "name": "get_time",
+                    "args": {}
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "functionResponse": {
+                    "name": "get_weather",
+                    "response": {
+                      "temperature": 18
+                    }
+                  }
+                },
+                {
+                  "functionResponse": {
+                    "id": "t2",
+                    "name": "get_time",
+                    "response": {
+                      "error": "unknown timezone"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "It is 18 degrees in Paris."
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 100,
+            "candidatesTokenCount": 50,
+            "totalTokenCount": 150
+          },
+          "fake_llm_seq": 2
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "gemini",
+            "model": "example-gemini",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "tool-calls",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [
+              {
+                "id": null,
+                "name": "get_weather"
+              },
+              {
+                "id": "t2",
+                "name": "get_time"
+              }
+            ],
+            "toolResults": []
+          },
+          {
+            "seq": 2,
+            "vendor": "gemini",
+            "model": "example-gemini",
+            "systemShape": "absent",
+            "messageCount": 3,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 2,
+            "toolCalls": [],
+            "toolResults": [
+              {
+                "id": null,
+                "name": "get_weather",
+                "content": {
+                  "temperature": 18
+                },
+                "isError": false
+              },
+              {
+                "id": "t2",
+                "name": "get_time",
+                "content": {
+                  "error": "unknown timezone"
+                },
+                "isError": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

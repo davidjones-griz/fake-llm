@@ -91,7 +91,9 @@ class OpenApiConformanceTest {
         val withNulls =
             """{"name":"nulls","steps":[
               {"text":null,"thinking":null,"error":{"status":500}},
-              {"text":"t","error":null,"streamErrorAfterChunks":null}
+              {"text":"t","error":null,"streamErrorAfterChunks":null},
+              {"text":"t","toolCalls":null},
+              {"toolCalls":[{"name":"f","arguments":null,"rawArguments":null,"id":null}]}
             ]}"""
         assertEquals(emptyList(), validate(SCENARIO, withNulls))
         ScenarioLoader.decode(

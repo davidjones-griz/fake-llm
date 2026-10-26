@@ -350,12 +350,104 @@ class ScenarioEngineTest {
     }
 
     @Test
-    fun `a scenario needs at least one step, and a step exactly one of text and error`() {
+    fun `a step is an error or a reply of text, tool calls or both`() {
+        val call = listOf(ToolCall(name = "f"))
         assertFailsWith<IllegalArgumentException> { Scenario(name = "empty", steps = emptyList()) }
         assertFailsWith<IllegalArgumentException> { Step(text = "x", error = ErrorStep(500)) }
         assertFailsWith<IllegalArgumentException> { Step() }
         Step(text = "x")
         Step(error = ErrorStep(500))
+        Step(toolCalls = call)
+        Step(text = "x", toolCalls = call)
+        Step(thinking = "t", toolCalls = call)
+        Step(toolCalls = call, stopReason = "tool_use")
+        val failures =
+            listOf(
+                assertFailsWith<IllegalArgumentException> { Step(toolCalls = call, error = ErrorStep(500)) },
+                assertFailsWith<IllegalArgumentException> { Step(toolCalls = emptyList()) },
+                assertFailsWith<IllegalArgumentException> { Step(toolCalls = call, stopReason = "max_tokens") },
+            )
+        assertEquals(
+            listOf(
+                "a step must set either error or a reply: text, toolCalls or both",
+                "toolCalls must not be empty",
+                "stopReason must be end_turn or tool_use on a step with toolCalls, got 'max_tokens'",
+            ),
+            failures.map { it.message },
+        )
+    }
+
+    @Test
+    fun `a tool call needs a name, a non-empty id and at most one of arguments and rawArguments`() {
+        ToolCall(name = "f", id = "x", arguments = JsonObject(emptyMap()))
+        ToolCall(name = "f", rawArguments = "not json")
+        val failures =
+            listOf(
+                assertFailsWith<IllegalArgumentException> { ToolCall(name = "") },
+                assertFailsWith<IllegalArgumentException> { ToolCall(name = "f", id = "") },
+                assertFailsWith<IllegalArgumentException> {
+                    ToolCall(name = "f", arguments = JsonObject(emptyMap()), rawArguments = "{}")
+                },
+            )
+        assertEquals(
+            listOf(
+                "a tool call's name must not be empty",
+                "a tool call's id must not be empty",
+                "a tool call sets at most one of arguments and rawArguments",
+            ),
+            failures.map { it.message },
+        )
+    }
+
+    @Test
+    fun `a tool-call step is logged with outcome tool-calls and the ids it sent`() {
+        val step =
+            Step(
+                toolCalls =
+                    listOf(
+                        ToolCall(name = "get_weather", arguments = JsonObject(emptyMap())),
+                        ToolCall(name = "get_time", id = "scripted"),
+                    ),
+            )
+        val records =
+            listOf("anthropic", "openai", "gemini").map { vendor ->
+                val engine = engineWith(Scenario(name = "tools-$vendor", steps = listOf(step)))
+                engine.handle(vendor, req())
+                engine.calls().single()
+            }
+        assertEquals(listOf("tool-calls", "tool-calls", "tool-calls"), records.map { it.outcome })
+        assertEquals(
+            listOf(
+                listOf(ToolCallRecord("toolu_fake_1_1", "get_weather"), ToolCallRecord("scripted", "get_time")),
+                listOf(ToolCallRecord("call_fake_1_1", "get_weather"), ToolCallRecord("scripted", "get_time")),
+                listOf(ToolCallRecord(null, "get_weather"), ToolCallRecord("scripted", "get_time")),
+            ),
+            records.map { it.toolCalls },
+        )
+    }
+
+    @Test
+    fun `a rawArguments step is not used by a buffered anthropic or a gemini call`() {
+        val raw = Step(toolCalls = listOf(ToolCall(name = "get_weather", rawArguments = "{\"city\": Paris}")))
+        val engine = engineWith(Scenario(name = "raw", steps = listOf(raw)))
+        val anthropic = assertFailsWith<IllegalArgumentException> { engine.resolve("anthropic", req()) }
+        val gemini = assertFailsWith<IllegalArgumentException> { engine.resolve("gemini", req()) }
+        assertEquals(
+            "step 1: tool call 1 sets rawArguments, which an Anthropic reply carries only when streamed " +
+                "(input_json_delta); a buffered tool_use input must be a JSON object",
+            anthropic.message,
+        )
+        assertEquals(
+            "step 1: tool call 1 sets rawArguments, which a Gemini reply cannot carry; functionCall.args must be a JSON object",
+            gemini.message,
+        )
+        assertEquals(emptyList(), engine.calls())
+        // Neither rejected request took a number, so the step is still next: the first call gets it.
+        engine.resolve("anthropic", req(stream = true))
+        assertEquals(listOf(Triple(1L, 1, "tool-calls")), engine.calls().map { Triple(it.seq, it.step, it.outcome) })
+        engine.reset()
+        engine.resolve("openai", req())
+        assertEquals(listOf(Triple(1L, 1, "tool-calls")), engine.calls().map { Triple(it.seq, it.step, it.outcome) })
     }
 
     @Test

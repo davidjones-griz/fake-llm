@@ -13,11 +13,25 @@ change the public API.
   and `data: [DONE]`, split and paced by `streamChunkChars` and `streamInterChunkDelayMs`, with a
   usage chunk when `stream_options.include_usage` is true and an in-stream error after
   `streamErrorAfterChunks` chunks.
+- Scripted tool calls: a step's `toolCalls` (`name`, `arguments` or verbatim `rawArguments`,
+  optional `id`) are sent as Anthropic `tool_use` blocks, OpenAI `tool_calls` and Gemini
+  `functionCall` parts, streamed as Anthropic `input_json_delta` events and OpenAI tool-call
+  deltas. A step can carry text and tool calls together.
+- The call log records the tool calls each response carried (`toolCalls`) and the tool results
+  each request sent back (`toolResults`), and outcome `tool-calls` for a step with tool calls.
+  `ToolCall`, `ToolCallRecord` and `ToolResultRecord` are public.
 
 ### Changed
 
 - An OpenAI request with `"stream": true` is now answered as a stream; it was answered with one
   JSON completion.
+- A step is an `error` or a reply: `text`, `toolCalls` or both. `thinking` is allowed on any
+  reply. `Step` has a new last parameter, `toolCalls`, and `CallRecord` has two new fields.
+
+### Fixed
+
+- An OpenAI message with `"content": null`, such as an assistant tool-call message sent back, no
+  longer adds `null` to the prompt sample.
 
 ## [0.1.0] - 2026-10-26
 

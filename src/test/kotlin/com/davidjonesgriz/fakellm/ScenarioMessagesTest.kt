@@ -100,10 +100,37 @@ class ScenarioMessagesTest {
             messageFor("""{"name":"x","steps":[{"error":{"status":700}}]}"""),
         )
         assertEquals(
-            "step 2: a step must set exactly one of text and error",
+            "step 2: a step must set either error or a reply: text, toolCalls or both",
             messageFor("""{"name":"x","steps":[{"text":"a"},{}]}"""),
         )
         assertEquals("scenario 'x' has no steps", messageFor("""{"name":"x","steps":[]}"""))
+    }
+
+    @Test
+    fun `tool call arguments must be a JSON object, named with its path`() {
+        assertEquals(
+            "step 1: \$.steps[0].toolCalls[0].arguments: expected an object, got [1]",
+            messageFor("""{"name":"x","steps":[{"toolCalls":[{"name":"f","arguments":[1]}]}]}"""),
+        )
+    }
+
+    @Test
+    fun `any JSON is accepted inside arguments`() {
+        val scenario =
+            ScenarioLoader.decode(
+                Json.parseToJsonElement(
+                    """{"name":"x","steps":[{"toolCalls":[{"name":"f","arguments":{"a":null,"b":[1,{"c":true}]}}]}]}""",
+                ),
+            )
+        assertEquals("""{"a":null,"b":[1,{"c":true}]}""", scenario.steps[0].toolCalls!![0].argumentText())
+    }
+
+    @Test
+    fun `a tool call rule keeps its own message`() {
+        assertEquals(
+            "step 1: a tool call sets at most one of arguments and rawArguments",
+            messageFor("""{"name":"x","steps":[{"toolCalls":[{"name":"f","arguments":{},"rawArguments":"{}"}]}]}"""),
+        )
     }
 
     @Test

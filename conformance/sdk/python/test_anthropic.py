@@ -8,14 +8,24 @@ import pytest
 MESSAGES = [{"role": "user", "content": "Hello"}]
 FAST_RETRY = {"retry-after-ms": "10"}
 OVERLOADED = {"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}}
+TOOLS = [{"name": "get_weather", "description": "Current weather", "input_schema": {"type": "object", "properties": {"city": {"type": "string"}}}}]
+RAW = {"toolCalls": [{"name": "get_weather", "rawArguments": "{\"city\": Paris}"}], "streamChunkChars": 8}
 
 
-def create(client, **extra):
-    return client.messages.create(model="example-model", max_tokens=64, messages=MESSAGES, **extra)
+def create(client, messages=MESSAGES, **extra):
+    return client.messages.create(model="example-model", max_tokens=64, messages=messages, **extra)
 
 
-def stream(client):
-    return client.messages.stream(model="example-model", max_tokens=64, messages=MESSAGES)
+def stream(client, **extra):
+    return client.messages.stream(model="example-model", max_tokens=64, messages=MESSAGES, **extra)
+
+
+def blocks(message):
+    return [(b.type, b.text) if b.type == "text" else (b.type, b.id, b.name, b.input) for b in message.content]
+
+
+def tool_loop(client, first, result):
+    return create(client, messages=MESSAGES + [{"role": "assistant", "content": first.content}, {"role": "user", "content": [result]}])
 
 
 def call(seq, outcome, step):
@@ -174,3 +184,73 @@ def test_stream_error_before_stream_retried(fake, anthropic_client):
     assert message.content[0].text == "after"
     assert message.id == "fake-msg-2"
     assert fake.log() == [call(1, "error:529", 1), call(2, "text", 2)]
+
+
+def test_tool_use(fake, anthropic_client):
+    fake.load([{"text": "Checking.", "toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}]}])
+    message = create(anthropic_client, tools=TOOLS)
+    assert blocks(message) == [("text", "Checking."), ("tool_use", "toolu_fake_1_1", "get_weather", {"city": "Paris"})]
+    assert message.stop_reason == "tool_use"
+    assert fake.log() == [call(1, "tool-calls", 1)]
+    record = fake.calls()[0]
+    assert (record["toolCalls"], record["toolResults"]) == ([{"id": "toolu_fake_1_1", "name": "get_weather"}], [])
+
+
+def test_tool_loop(fake, anthropic_client):
+    fake.load([{"toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}]}, {"text": "It is 18 degrees in Paris."}])
+    first = create(anthropic_client, tools=TOOLS)
+    result = {"type": "tool_result", "tool_use_id": first.content[0].id, "content": "18 degrees"}
+    second = tool_loop(anthropic_client, first, result)
+    assert blocks(second) == [("text", "It is 18 degrees in Paris.")]
+    assert (second.stop_reason, second.id) == ("end_turn", "fake-msg-2")
+    assert fake.log() == [call(1, "tool-calls", 1), call(2, "text", 2)]
+    record = fake.calls()[1]
+    assert record["messageCount"] == 3
+    assert record["toolResults"] == [{"id": "toolu_fake_1_1", "name": "get_weather", "content": "18 degrees", "isError": False}]
+
+
+def test_tool_error_result(fake, anthropic_client):
+    fake.load([{"toolCalls": [{"name": "get_time", "id": "toolu_custom"}]}, {"text": "I could not get the time."}])
+    first = create(anthropic_client, tools=TOOLS)
+    assert blocks(first) == [("tool_use", "toolu_custom", "get_time", {})]
+    content = [{"type": "text", "text": "unknown timezone"}]
+    result = {"type": "tool_result", "tool_use_id": "toolu_custom", "content": content, "is_error": True}
+    assert tool_loop(anthropic_client, first, result).content[0].text == "I could not get the time."
+    assert fake.log() == [call(1, "tool-calls", 1), call(2, "text", 2)]
+    assert fake.calls()[1]["toolResults"] == [{"id": "toolu_custom", "name": "get_time", "content": content, "isError": True}]
+
+
+def test_stream_tool_use(fake, anthropic_client):
+    fake.load([{"text": "Checking.", "toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}], "streamChunkChars": 8}])
+    with stream(anthropic_client, tools=TOOLS) as events:
+        pieces = [event.partial_json for event in events if event.type == "input_json"]
+        message = events.get_final_message()
+    assert pieces == ['{"city":', '"Paris"}']
+    assert blocks(message) == [("text", "Checking."), ("tool_use", "toolu_fake_1_1", "get_weather", {"city": "Paris"})]
+    assert message.stop_reason == "tool_use"
+    assert fake.log() == [call(1, "tool-calls", 1)]
+
+
+def test_stream_tool_use_raw_arguments(fake, anthropic_client):
+    fake.load([RAW, RAW])
+    events = list(create(anthropic_client, stream=True))
+    deltas = [e.delta for e in events if e.type == "content_block_delta"]
+    assert [d.partial_json for d in deltas if d.type == "input_json_delta"] == ['{"city":', " Paris}"]
+    assert [e.delta.stop_reason for e in events if e.type == "message_delta"] == ["tool_use"]
+    # The stream helper parses the arguments as it accumulates them, so invalid JSON raises.
+    with pytest.raises(ValueError):
+        with stream(anthropic_client) as helper:
+            for _ in helper:
+                pass
+    assert fake.log() == [call(1, "tool-calls", 1), call(2, "tool-calls", 2)]
+
+
+def test_raw_arguments_buffered_not_a_call(fake, anthropic_client):
+    fake.load([RAW])
+    with pytest.raises(anthropic.BadRequestError) as raised:
+        create(anthropic_client)
+    assert raised.value.body["fake_llm_error"] == "exception"
+    assert fake.log() == []
+    starts = [e.content_block for e in create(anthropic_client, stream=True) if e.type == "content_block_start"]
+    assert [(block.type, block.id) for block in starts] == [("tool_use", "toolu_fake_1_1")]
+    assert fake.log() == [call(1, "tool-calls", 1)]

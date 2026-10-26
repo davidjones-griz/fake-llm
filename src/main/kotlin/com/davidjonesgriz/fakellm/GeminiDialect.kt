@@ -34,13 +34,29 @@ internal fun parseGeminiRequest(
         promptText = text,
         messageCount = contents.size,
         stream = false,
+        toolResults = geminiToolResults(contents),
     )
 }
 
+/** Every `functionResponse` part in [contents], in order. */
+private fun geminiToolResults(contents: JsonArray): List<ToolResultRecord> =
+    contents
+        .flatMap { c -> ((c as? JsonObject)?.get("parts") as? JsonArray).orEmpty() }
+        .mapNotNull { p -> (p as? JsonObject)?.get("functionResponse") as? JsonObject }
+        .map { r ->
+            ToolResultRecord(id = r.stringField("id"), name = r.stringField("name"), content = r.valueOrNull("response"), isError = false)
+        }
+
+/**
+ * The buffered `generateContent` reply: a text part when [text] is set, then one `functionCall`
+ * part per tool call, whose `id` is sent only when scripted. With tool calls, `finishReason` is
+ * `STOP`.
+ */
 internal fun geminiEnvelope(
-    text: String,
+    text: String?,
     stopReason: String,
     seq: Long,
+    toolCalls: List<SentToolCall> = emptyList(),
 ): String =
     buildJsonObject {
         put(
@@ -55,11 +71,13 @@ internal fun geminiEnvelope(
                                 put(
                                     "parts",
                                     buildJsonArray {
-                                        add(buildJsonObject { put("text", text) })
+                                        if (text != null) add(buildJsonObject { put("text", text) })
+                                        toolCalls.forEach { add(geminiFunctionCallPart(it)) }
                                     },
                                 )
                             },
                         )
+                        // A step with tool calls has stopReason end_turn or tool_use, both STOP.
                         put("finishReason", geminiFinishReason(stopReason))
                     },
                 )
@@ -75,6 +93,18 @@ internal fun geminiEnvelope(
         )
         put("fake_llm_seq", seq)
     }.toString()
+
+private fun geminiFunctionCallPart(call: SentToolCall): JsonObject =
+    buildJsonObject {
+        put(
+            "functionCall",
+            buildJsonObject {
+                if (call.id != null) put("id", call.id)
+                put("name", call.name)
+                put("args", call.arguments ?: JsonObject(emptyMap()))
+            },
+        )
+    }
 
 private fun geminiFinishReason(anthropicStopReason: String): String = if (anthropicStopReason == "max_tokens") "MAX_TOKENS" else "STOP"
 

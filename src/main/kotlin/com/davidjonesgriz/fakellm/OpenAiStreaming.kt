@@ -67,6 +67,60 @@ internal fun openAiUsageChunkJson(seq: Long): String =
         )
     }.toString()
 
+/** The `delta` of a tool call's header chunk: its index, id, type and name, with empty arguments. */
+internal fun openAiToolCallHeaderDelta(
+    index: Int,
+    call: SentToolCall,
+): JsonObject =
+    toolCallsDelta(
+        buildJsonObject {
+            put("index", index)
+            put("id", call.id)
+            put("type", "function")
+            put(
+                "function",
+                buildJsonObject {
+                    put("name", call.name)
+                    put("arguments", "")
+                },
+            )
+        },
+    )
+
+/** The `delta` of a chunk carrying one piece of a tool call's argument text. */
+internal fun openAiToolCallArgumentsDelta(
+    index: Int,
+    piece: String,
+): JsonObject =
+    toolCallsDelta(
+        buildJsonObject {
+            put("index", index)
+            put("function", buildJsonObject { put("arguments", piece) })
+        },
+    )
+
+private fun toolCallsDelta(entry: JsonObject): JsonObject = buildJsonObject { put("tool_calls", buildJsonArray { add(entry) }) }
+
+/**
+ * Writes each tool call's header chunk, then one chunk per [chunkChars] code points of its argument
+ * text, waiting [delayMs] before each argument chunk and not before the header.
+ */
+private fun emitOpenAiToolCallDeltas(
+    out: OutputStream,
+    seq: Long,
+    calls: List<SentToolCall>,
+    step: Step,
+    includeUsage: Boolean,
+) {
+    calls.forEachIndexed { i, call ->
+        writeSseData(out, openAiChunkJson(seq, openAiToolCallHeaderDelta(i, call), null, includeUsage))
+        chunkText(call.argumentText, step.streamChunkChars).forEach { piece ->
+            if (step.streamInterChunkDelayMs > 0) Thread.sleep(step.streamInterChunkDelayMs)
+            writeSseData(out, openAiChunkJson(seq, openAiToolCallArgumentsDelta(i, piece), null, includeUsage))
+        }
+    }
+}
+
 /** Writes one content chunk per piece of [chunks], waiting [delayMs] before each (0 = no wait), as `emitDeltas` does. */
 internal fun emitOpenAiContentDeltas(
     out: OutputStream,
@@ -87,9 +141,11 @@ internal fun emitOpenAiContentDeltas(
  *
  * An error step without `streamErrorAfterChunks`, and the no-more-steps and no-scenario 400s,
  * are sent as the plain JSON response, with no SSE bytes. Otherwise the response is an event
- * stream: the role chunk, then for a text step one content chunk per `streamChunkChars` code
+ * stream: the role chunk, then for a reply step one content chunk per `streamChunkChars` code
  * points (each after `streamInterChunkDelayMs`), the finish chunk, the usage chunk when the
- * request set `stream_options.include_usage`, and `data: [DONE]`. `thinking` is ignored. An error
+ * request set `stream_options.include_usage`, and `data: [DONE]`. Tool calls come after the
+ * content chunks: per call a header chunk, then its argument text in `streamChunkChars` pieces;
+ * the finish reason is then `tool_calls`. `thinking` is ignored. An error
  * step with `streamErrorAfterChunks` sends that many filler chunks, then the error body as a
  * data frame (or [GENERIC_OPENAI_STREAM_ERROR_BODY] when it is blank), and closes the stream
  * with no finish chunk, usage chunk or `[DONE]`.
@@ -110,10 +166,11 @@ internal fun streamOpenAiChatCompletion(
     val usage = req.includeUsage
     val out = startEventStream(ex)
     try {
+        // A step with tool calls and no text sends "content": null, as the API does.
         val role =
             buildJsonObject {
                 put("role", "assistant")
-                put("content", "")
+                put("content", if (step.toolCalls != null && step.text == null) null else "")
             }
         writeSseData(out, openAiChunkJson(seq, role, null, usage))
         if (error != null) {
@@ -121,8 +178,10 @@ internal fun streamOpenAiChatCompletion(
             emitOpenAiContentDeltas(out, seq, prefix, step.streamInterChunkDelayMs, usage)
             writeSseData(out, error.body.ifBlank { GENERIC_OPENAI_STREAM_ERROR_BODY })
         } else {
-            emitOpenAiContentDeltas(out, seq, chunkText(step.text!!, step.streamChunkChars), step.streamInterChunkDelayMs, usage)
-            writeSseData(out, openAiChunkJson(seq, buildJsonObject {}, openAiFinishReason(step.stopReason), usage))
+            step.text?.let { emitOpenAiContentDeltas(out, seq, chunkText(it, step.streamChunkChars), step.streamInterChunkDelayMs, usage) }
+            emitOpenAiToolCallDeltas(out, seq, sentToolCalls("openai", step, seq), step, usage)
+            val finishReason = if (step.toolCalls == null) openAiFinishReason(step.stopReason) else "tool_calls"
+            writeSseData(out, openAiChunkJson(seq, buildJsonObject {}, finishReason, usage))
             if (usage) writeSseData(out, openAiUsageChunkJson(seq))
             writeSseData(out, OPENAI_STREAM_DONE)
         }

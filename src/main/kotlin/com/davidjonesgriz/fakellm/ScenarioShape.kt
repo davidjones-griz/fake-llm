@@ -21,6 +21,8 @@ import kotlinx.serialization.json.JsonPrimitive
  *
  * The check is stricter than kotlinx in one way, as the OpenAPI spec says: an integer is a JSON
  * number written without quotes, a fraction or an exponent, within the field's range.
+ *
+ * A [JsonObject] field accepts any JSON object; its content is not checked.
  */
 internal object ScenarioShape {
     /** Throws [IllegalArgumentException] naming the first shape problem in [element], if there is one. */
@@ -39,11 +41,29 @@ internal object ScenarioShape {
         path: String,
     ): String? =
         when {
-            element is JsonNull -> if (descriptor.isNullable) null else "$path: must not be null"
-            descriptor.kind == StructureKind.CLASS -> objectProblem(element, descriptor, path)
-            descriptor.kind == StructureKind.LIST -> listProblem(element, descriptor, path)
-            descriptor.kind == StructureKind.MAP -> mapProblem(element, descriptor, path)
-            else -> primitiveProblem(element, descriptor.kind, path)
+            element is JsonNull -> {
+                if (descriptor.isNullable) null else "$path: must not be null"
+            }
+
+            descriptor.serialName.removeSuffix("?") == JSON_OBJECT_SERIAL_NAME -> {
+                if (element is JsonObject) null else expected("an object", element, path)
+            }
+
+            descriptor.kind == StructureKind.CLASS -> {
+                objectProblem(element, descriptor, path)
+            }
+
+            descriptor.kind == StructureKind.LIST -> {
+                listProblem(element, descriptor, path)
+            }
+
+            descriptor.kind == StructureKind.MAP -> {
+                mapProblem(element, descriptor, path)
+            }
+
+            else -> {
+                primitiveProblem(element, descriptor.kind, path)
+            }
         }
 
     private fun objectProblem(
@@ -181,6 +201,9 @@ internal object ScenarioShape {
             PrimitiveKind.LONG to "an integer from ${Long.MIN_VALUE} to ${Long.MAX_VALUE}",
         )
     private val OFFSET = Regex(" at offset (\\d+)")
+
+    /** The serial name of [JsonObject]'s descriptor, whose content the check does not follow. */
+    private val JSON_OBJECT_SERIAL_NAME = JsonObject.serializer().descriptor.serialName
 }
 
 /** [name] for a path, with `'` escaped, since paths quote names in `'`. */

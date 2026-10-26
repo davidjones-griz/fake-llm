@@ -33,18 +33,32 @@
   "$defs": {
     "Step": {
       "type": "object",
-      "description": "One scripted reply: assistant `text` (optionally with `thinking`), or a scripted `error`.\nExactly one of `text` and `error` is set (and not null).\n",
+      "description": "One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking`), or a\nscripted `error`. A step sets exactly one of a reply and `error`.\n",
       "additionalProperties": false,
       "oneOf": [
         {
-          "required": [
-            "text"
-          ],
-          "properties": {
-            "text": {
-              "type": "string"
+          "anyOf": [
+            {
+              "required": [
+                "text"
+              ],
+              "properties": {
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "required": [
+                "toolCalls"
+              ],
+              "properties": {
+                "toolCalls": {
+                  "type": "array"
+                }
+              }
             }
-          }
+          ]
         },
         {
           "required": [
@@ -70,12 +84,48 @@
             }
           },
           "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "toolCalls"
+                ],
+                "properties": {
+                  "toolCalls": {
+                    "type": "array"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
             "required": [
-              "text"
+              "toolCalls"
             ],
             "properties": {
-              "text": {
-                "type": "string"
+              "toolCalls": {
+                "type": "array"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "stopReason": {
+                "enum": [
+                  "end_turn",
+                  "tool_use"
+                ]
               }
             }
           }
@@ -115,12 +165,12 @@
             "string",
             "null"
           ],
-          "description": "An Anthropic thinking block, before the text. Only on a text step."
+          "description": "An Anthropic thinking block, before the text and tool calls. Only on a reply step."
         },
         "stopReason": {
           "type": "string",
           "default": "end_turn",
-          "description": "The `stop_reason` of a text step; `max_tokens` reports a truncated reply."
+          "description": "The `stop_reason` of a reply; `max_tokens` reports a truncated reply. On a step with\n`toolCalls` it must be `end_turn` or `tool_use`, and every format reports a tool-call stop.\n"
         },
         "error": {
           "oneOf": [
@@ -154,12 +204,23 @@
           "minimum": 1,
           "maximum": 2147483647,
           "description": "Only on an error step, and only when streamed (Anthropic or OpenAI): send this many text\ndeltas, then an in-stream error.\n"
+        },
+        "toolCalls": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/ToolCall"
+          },
+          "description": "Tool calls the reply makes, in order, after any `text`."
         }
       }
     },
     "ErrorStep": {
       "type": "object",
-      "description": "A scripted HTTP error in place of a text reply.",
+      "description": "A scripted HTTP error in place of a reply.",
       "required": [
         "status"
       ],
@@ -181,6 +242,57 @@
             "type": "string"
           },
           "description": "Extra response headers, such as `retry-after`, sent as given."
+        }
+      }
+    },
+    "ToolCall": {
+      "type": "object",
+      "description": "One scripted tool call.",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "not": {
+        "required": [
+          "arguments",
+          "rawArguments"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "object"
+          },
+          "rawArguments": {
+            "type": "string"
+          }
+        }
+      },
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The tool's name, sent as given."
+        },
+        "arguments": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "The arguments as a JSON object. With `rawArguments` also unset, `{}`."
+        },
+        "rawArguments": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI format and a\nstreamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step\nhas it gets `ExceptionError`, and the step is not used.\n"
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "The call's id. Default: `toolu_fake_<seq>_<n>` (Anthropic) and `call_fake_<seq>_<n>`\n(OpenAI), where `n` is the call's 1-based position in the step. Gemini sends an id only when\none is set.\n"
         }
       }
     }

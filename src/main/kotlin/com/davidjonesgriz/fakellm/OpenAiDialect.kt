@@ -28,8 +28,9 @@ internal fun parseOpenAiRequest(body: String): ParsedRequest {
     val text =
         buildString {
             messages.forEach { m ->
+                // Only string content is text: an assistant tool-call message sends "content": null.
                 val content = (m as? JsonObject)?.get("content") as? JsonPrimitive
-                if (content != null) append(content.content).append('\n')
+                if (content != null && content.isString) append(content.content).append('\n')
             }
         }
     val stream = (obj["stream"] as? JsonPrimitive)?.content?.toBoolean() ?: false
@@ -43,13 +44,36 @@ internal fun parseOpenAiRequest(body: String): ParsedRequest {
         messageCount = messages.size,
         stream = stream,
         includeUsage = includeUsage,
+        toolResults = openAiToolResults(messages.filterIsInstance<JsonObject>()),
     )
 }
 
+/**
+ * Every `tool` message in [messages], in order. Each is named after the first entry, in any
+ * message's `tool_calls`, with the same id.
+ */
+private fun openAiToolResults(messages: List<JsonObject>): List<ToolResultRecord> {
+    val names =
+        messages
+            .flatMap { (it["tool_calls"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>() }
+            .mapNotNull { call -> call.stringField("id")?.let { it to (call["function"] as? JsonObject)?.stringField("name") } }
+            .distinctBy { it.first }
+            .toMap()
+    return messages.filter { it.stringField("role") == "tool" }.map { m ->
+        val id = m.stringField("tool_call_id")
+        ToolResultRecord(id = id, name = id?.let { names[it] }, content = m.valueOrNull("content"), isError = false)
+    }
+}
+
+/**
+ * The buffered Chat Completions reply. With tool calls, `message.content` is [text] or null,
+ * `message.tool_calls` lists them, and `finish_reason` is `tool_calls`.
+ */
 internal fun openAiEnvelope(
-    text: String,
+    text: String?,
     stopReason: String,
     seq: Long,
+    toolCalls: List<SentToolCall> = emptyList(),
 ): String =
     buildJsonObject {
         put("id", "fake-openai-$seq")
@@ -66,9 +90,12 @@ internal fun openAiEnvelope(
                             buildJsonObject {
                                 put("role", "assistant")
                                 put("content", text)
+                                if (toolCalls.isNotEmpty()) {
+                                    put("tool_calls", buildJsonArray { toolCalls.forEach { add(openAiToolCallJson(it)) } })
+                                }
                             },
                         )
-                        put("finish_reason", openAiFinishReason(stopReason))
+                        put("finish_reason", if (toolCalls.isEmpty()) openAiFinishReason(stopReason) else "tool_calls")
                     },
                 )
             },
@@ -82,5 +109,19 @@ internal fun openAiEnvelope(
             },
         )
     }.toString()
+
+/** One entry of a buffered message's `tool_calls`. */
+private fun openAiToolCallJson(call: SentToolCall): JsonObject =
+    buildJsonObject {
+        put("id", call.id)
+        put("type", "function")
+        put(
+            "function",
+            buildJsonObject {
+                put("name", call.name)
+                put("arguments", call.argumentText)
+            },
+        )
+    }
 
 internal fun openAiFinishReason(anthropicStopReason: String): String = if (anthropicStopReason == "max_tokens") "length" else "stop"

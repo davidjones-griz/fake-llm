@@ -1,0 +1,66 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-function-call-raw-arguments",
+  "description": "A request whose next step has rawArguments gets the exception 400, because functionCall.args must be a JSON object, and is not a call.",
+  "scenario": {
+    "name": "gemini-function-call-raw-arguments",
+    "steps": [
+      {
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "rawArguments": "{}"
+          }
+        ]
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:generateContent",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

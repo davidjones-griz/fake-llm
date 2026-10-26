@@ -1,0 +1,231 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-stream-tool-calls",
+  "description": "A streamed tool call comes after the content chunks: a header chunk with the id and name, then the argument text in streamChunkChars pieces, then finish_reason tool_calls.",
+  "scenario": {
+    "name": "openai-stream-tool-calls",
+    "steps": [
+      {
+        "text": "Checking.",
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "arguments": {
+              "city": "Paris"
+            }
+          }
+        ],
+        "streamChunkChars": 8
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "role": "assistant",
+                    "content": ""
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "content": "Checking"
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "content": "."
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "tool_calls": [
+                      {
+                        "index": 0,
+                        "id": "call_fake_1_1",
+                        "type": "function",
+                        "function": {
+                          "name": "get_weather",
+                          "arguments": ""
+                        }
+                      }
+                    ]
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "tool_calls": [
+                      {
+                        "index": 0,
+                        "function": {
+                          "arguments": "{\"city\":"
+                        }
+                      }
+                    ]
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "tool_calls": [
+                      {
+                        "index": 0,
+                        "function": {
+                          "arguments": "\"Paris\"}"
+                        }
+                      }
+                    ]
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {},
+                  "finish_reason": "tool_calls"
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": "[DONE]"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "openai",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "tool-calls",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [
+              {
+                "id": "call_fake_1_1",
+                "name": "get_weather"
+              }
+            ],
+            "toolResults": []
+          }
+        ]
+      }
+    }
+  ]
+}
