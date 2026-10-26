@@ -1,0 +1,234 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-tool-calls",
+  "description": "A tool-call step is message.tool_calls with the argument text (rawArguments verbatim), content null and finish_reason tool_calls; the tool messages the next request sends back are logged, and the null content adds no prompt text.",
+  "scenario": {
+    "name": "openai-tool-calls",
+    "steps": [
+      {
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "arguments": {
+              "city": "Paris"
+            }
+          },
+          {
+            "name": "get_time",
+            "rawArguments": "{\"tz\": Europe/Paris}",
+            "id": "call_custom"
+          }
+        ]
+      },
+      {
+        "text": "It is 18 degrees in Paris."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-openai-1",
+          "object": "chat.completion",
+          "model": "fake-openai",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "tool_calls": [
+                  {
+                    "id": "call_fake_1_1",
+                    "type": "function",
+                    "function": {
+                      "name": "get_weather",
+                      "arguments": "{\"city\":\"Paris\"}"
+                    }
+                  },
+                  {
+                    "id": "call_custom",
+                    "type": "function",
+                    "function": {
+                      "name": "get_time",
+                      "arguments": "{\"tz\": Europe/Paris}"
+                    }
+                  }
+                ]
+              },
+              "finish_reason": "tool_calls"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_fake_1_1",
+                  "type": "function",
+                  "function": {
+                    "name": "get_weather",
+                    "arguments": "{\"city\":\"Paris\"}"
+                  }
+                },
+                {
+                  "id": "call_custom",
+                  "type": "function",
+                  "function": {
+                    "name": "get_time",
+                    "arguments": "{\"tz\": Europe/Paris}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "tool_call_id": "call_fake_1_1",
+              "content": "18 degrees"
+            },
+            {
+              "role": "tool",
+              "tool_call_id": "call_custom",
+              "content": "unknown timezone"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-openai-2",
+          "object": "chat.completion",
+          "model": "fake-openai",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "It is 18 degrees in Paris."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "openai",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "tool-calls",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [
+              {
+                "id": "call_fake_1_1",
+                "name": "get_weather"
+              },
+              {
+                "id": "call_custom",
+                "name": "get_time"
+              }
+            ],
+            "toolResults": []
+          },
+          {
+            "seq": 2,
+            "vendor": "openai",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 4,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n18 degrees\nunknown timezone\n",
+            "step": 2,
+            "toolCalls": [],
+            "toolResults": [
+              {
+                "id": "call_fake_1_1",
+                "name": "get_weather",
+                "content": "18 degrees",
+                "isError": false
+              },
+              {
+                "id": "call_custom",
+                "name": "get_time",
+                "content": "unknown timezone",
+                "isError": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

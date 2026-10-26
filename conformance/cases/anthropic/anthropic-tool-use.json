@@ -1,0 +1,253 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "anthropic-tool-use",
+  "description": "A tool-call step is tool_use blocks after the text, with stop_reason tool_use; the tool results the next request sends back are logged with their tool names.",
+  "scenario": {
+    "name": "anthropic-tool-use",
+    "steps": [
+      {
+        "text": "Checking.",
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "arguments": {
+              "city": "Paris"
+            }
+          },
+          {
+            "name": "get_time",
+            "id": "toolu_custom"
+          }
+        ]
+      },
+      {
+        "text": "It is 18 degrees in Paris."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "tools": [
+            {
+              "name": "get_weather",
+              "input_schema": {
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Checking."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_fake_1_1",
+              "name": "get_weather",
+              "input": {
+                "city": "Paris"
+              }
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_custom",
+              "name": "get_time",
+              "input": {}
+            }
+          ],
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Checking."
+                },
+                {
+                  "type": "tool_use",
+                  "id": "toolu_fake_1_1",
+                  "name": "get_weather",
+                  "input": {
+                    "city": "Paris"
+                  }
+                },
+                {
+                  "type": "tool_use",
+                  "id": "toolu_custom",
+                  "name": "get_time",
+                  "input": {}
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "toolu_fake_1_1",
+                  "content": "18 degrees"
+                },
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "toolu_custom",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "unknown timezone"
+                    }
+                  ],
+                  "is_error": true
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-2",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "It is 18 degrees in Paris."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "tool-calls",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [
+              {
+                "id": "toolu_fake_1_1",
+                "name": "get_weather"
+              },
+              {
+                "id": "toolu_custom",
+                "name": "get_time"
+              }
+            ],
+            "toolResults": []
+          },
+          {
+            "seq": 2,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 3,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\nChecking.\n",
+            "step": 2,
+            "toolCalls": [],
+            "toolResults": [
+              {
+                "id": "toolu_fake_1_1",
+                "name": "get_weather",
+                "content": "18 degrees",
+                "isError": false
+              },
+              {
+                "id": "toolu_custom",
+                "name": "get_time",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "unknown timezone"
+                  }
+                ],
+                "isError": true
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
