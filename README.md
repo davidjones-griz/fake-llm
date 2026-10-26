@@ -265,7 +265,7 @@ Lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) answers a call with no sce
 
 The combined prompt text, used by `promptSample` and `prompt_preview`, depends on the dialect:
 
-- Anthropic: the `system` field, when it is a string or an array of text blocks, then each message `content` that is a string or an array of text blocks. Non-text blocks contribute nothing. Each piece is followed by a newline.
+- Anthropic: the `system` field, when it is a string or an array of text blocks, then each message `content` that is a string or an array of text blocks. Non-text blocks contribute nothing. Each piece is followed by a newline. A `null`, number or boolean contributes nothing.
 - OpenAI: every message whose `content` is a JSON string, including a system message. Array content is skipped. A message with role `system` sets `systemShape` to `blocks`; otherwise it is `absent`. OpenAI requests never record `string`.
 - Gemini: each `contents[].parts[].text`. `systemInstruction` is not read, and `systemShape` is always `absent`. The model id comes from the URL, not the body.
 

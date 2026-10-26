@@ -58,8 +58,8 @@ internal fun parseAnthropicRequest(body: String): ParsedRequest {
     val system = obj["system"]
     val systemShape =
         when (system) {
-            null -> "absent"
-            is JsonPrimitive -> "string"
+            null, JsonNull -> "absent"
+            is JsonPrimitive -> if (system.isString) "string" else "unknown"
             is JsonArray -> "blocks"
             else -> "unknown"
         }
@@ -88,14 +88,17 @@ private fun StringBuilder.appendTexts(el: JsonElement?) {
     when (el) {
         null -> {}
 
+        JsonNull -> {}
+
+        // Only JSON strings are text: null, numbers and booleans add nothing.
         is JsonPrimitive -> {
-            append(el.content).append('\n')
+            if (el.isString) append(el.content).append('\n')
         }
 
         is JsonArray -> {
             el.forEach { block ->
                 val t = (block as? JsonObject)?.get("text") as? JsonPrimitive
-                if (t != null) append(t.content).append('\n')
+                if (t != null && t.isString) append(t.content).append('\n')
             }
         }
 
