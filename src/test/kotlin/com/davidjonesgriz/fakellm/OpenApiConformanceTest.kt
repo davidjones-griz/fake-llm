@@ -944,6 +944,28 @@ class OpenApiConformanceTest {
                     assertBody = { assertContains(it, "\"no scenario loaded\"") },
                 ),
                 Exchange(
+                    "openai, streamed after the last step",
+                    "POST",
+                    "/openai/v1/chat/completions",
+                    Target.Operation("/openai/v1/chat/completions"),
+                    """{"model":"example-gpt","stream":true,"messages":[{"role":"user","content":"hi"}]}""",
+                    expectStatus = 400,
+                    setup = { server ->
+                        server.engine.load("hello")
+                        send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
+                    },
+                    assertBody = { assertContains(it, "\"no more steps\"") },
+                ),
+                Exchange(
+                    "openai, streamed with no scenario loaded",
+                    "POST",
+                    "/openai/v1/chat/completions",
+                    Target.Operation("/openai/v1/chat/completions"),
+                    """{"model":"example-gpt","stream":true,"messages":[{"role":"user","content":"hi"}]}""",
+                    expectStatus = 400,
+                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
+                ),
+                Exchange(
                     "anthropic, unparseable",
                     "POST",
                     "/anthropic/v1/messages",
