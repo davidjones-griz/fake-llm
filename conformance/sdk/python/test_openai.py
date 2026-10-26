@@ -1,4 +1,4 @@
-"""The official openai SDK against fake-llm's Chat Completions route (buffered)."""
+"""The official openai SDK against fake-llm's Chat Completions route (buffered and streaming)."""
 
 import json
 
@@ -11,6 +11,10 @@ FAST_RETRY = {"retry-after-ms": "10"}
 
 def create(client):
     return client.chat.completions.create(model="example-gpt", messages=MESSAGES)
+
+
+def stream(client, **extra):
+    return client.chat.completions.create(model="example-gpt", messages=MESSAGES, stream=True, **extra)
 
 
 def call(seq, outcome, step):
@@ -86,5 +90,90 @@ def test_call_after_last_step(fake, openai_client):
     assert create(openai_client).choices[0].message.content == "once"
     with pytest.raises(openai.BadRequestError) as raised:
         create(openai_client)
+    assert raised.value.body["fake_llm_error"] == "no more steps"
+    assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
+
+
+
+def content(chunks):
+    return [chunk.choices[0].delta.content for chunk in chunks]
+
+
+def test_stream_text(fake, openai_client):
+    fake.load([{"text": "Streaming text that is long enough.", "streamChunkChars": 8}])
+    chunks = list(stream(openai_client))
+    assert content(chunks) == ["", "Streamin", "g text t", "hat is l", "ong enou", "gh.", None]
+    for chunk in chunks:
+        assert (chunk.id, chunk.object, chunk.model, chunk.usage) == ("fake-openai-1", "chat.completion.chunk", "fake-openai", None)
+    assert chunks[0].choices[0].delta.role == "assistant"
+    assert chunks[-1].choices[0].finish_reason == "stop"
+    assert fake.log() == [call(1, "text", 1)]
+    record = fake.calls()[0]
+    assert (record["messageCount"], record["promptSample"]) == (1, "Hello\n")
+
+
+def test_stream_final_completion(fake, openai_client):
+    fake.load([{"text": "Billing."}])
+    with openai_client.chat.completions.stream(model="example-gpt", messages=MESSAGES) as events:
+        for _ in events:
+            pass
+        completion = events.get_final_completion()
+    assert completion.id == "fake-openai-1"
+    (choice,) = completion.choices
+    assert (choice.message.role, choice.message.content) == ("assistant", "Billing.")
+    assert choice.finish_reason == "stop"
+    assert completion.usage is None
+    assert fake.log() == [call(1, "text", 1)]
+
+
+def test_stream_include_usage(fake, openai_client):
+    fake.load([{"text": "Billing."}])
+    *earlier, last = list(stream(openai_client, stream_options={"include_usage": True}))
+    assert last.choices == []
+    assert (last.usage.prompt_tokens, last.usage.completion_tokens, last.usage.total_tokens) == (100, 50, 150)
+    assert [chunk.usage for chunk in earlier] == [None] * len(earlier)
+    assert fake.log() == [call(1, "text", 1)]
+
+
+def test_stream_max_tokens(fake, openai_client):
+    fake.load([{"text": "cut off", "stopReason": "max_tokens"}])
+    assert list(stream(openai_client))[-1].choices[0].finish_reason == "length"
+    assert fake.log() == [call(1, "text", 1)]
+
+
+def test_stream_thinking_ignored(fake, openai_client):
+    fake.load([{"text": "Billing.", "thinking": "hidden"}])
+    assert "".join(piece or "" for piece in content(stream(openai_client))) == "Billing."
+    assert fake.log() == [call(1, "text", 1)]
+
+
+def test_stream_error_after_chunks(fake, openai_client):
+    error = {"message": "server error", "type": "server_error", "param": None, "code": None}
+    fake.load([{"error": {"status": 500, "body": json.dumps({"error": error})}, "streamErrorAfterChunks": 2, "streamChunkChars": 8}])
+    received = []
+    with pytest.raises(openai.APIError) as raised:
+        for chunk in stream(openai_client):
+            received.append(chunk.choices[0].delta.content)
+    assert received == ["", "Thinking", " this th"]
+    # The error arrives inside an HTTP 200 stream, so the SDK raises the base APIError.
+    assert not isinstance(raised.value, openai.APIStatusError)
+    assert (raised.value.body, raised.value.message) == (error, "server error")
+    assert fake.log() == [call(1, "error:500", 1)]
+
+
+def test_stream_error_before_stream_retried(fake, openai_client):
+    error = {"message": "slow down", "type": "requests", "param": None, "code": "rate_limit_exceeded"}
+    fake.load([error_step(429, error, FAST_RETRY), {"text": "after"}])
+    chunks = list(stream(openai_client))
+    assert "".join(piece or "" for piece in content(chunks)) == "after"
+    assert {chunk.id for chunk in chunks} == {"fake-openai-2"}
+    assert fake.log() == [call(1, "error:429", 1), call(2, "text", 2)]
+
+
+def test_stream_call_after_last_step(fake, openai_client):
+    fake.load([{"text": "once"}])
+    list(stream(openai_client))
+    with pytest.raises(openai.BadRequestError) as raised:
+        stream(openai_client)
     assert raised.value.body["fake_llm_error"] == "no more steps"
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
