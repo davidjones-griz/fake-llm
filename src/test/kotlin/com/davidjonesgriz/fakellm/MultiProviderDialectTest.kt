@@ -8,6 +8,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MultiProviderDialectTest {
@@ -176,7 +177,7 @@ class MultiProviderDialectTest {
                     chunk("{}", "stop"),
                     "[DONE]",
                 ),
-                openAiFrames(resp.body()),
+                dataFrames(resp.body()),
             )
             assertTrue(resp.body().endsWith("data: [DONE]\n\n"))
         }
@@ -195,7 +196,7 @@ class MultiProviderDialectTest {
                         """"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}}""",
                     "[DONE]",
                 ),
-                openAiFrames(resp.body()),
+                dataFrames(resp.body()),
             )
         }
     }
@@ -203,7 +204,7 @@ class MultiProviderDialectTest {
     @Test
     fun `max_tokens finishes an openai stream with length`() {
         withServer(engineWith(Step(text = "cut off", stopReason = "max_tokens"))) { client, _ ->
-            val frames = openAiFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
+            val frames = dataFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
             assertEquals(listOf(chunk("{}", "length"), "[DONE]"), frames.takeLast(2))
         }
     }
@@ -226,9 +227,9 @@ class MultiProviderDialectTest {
                     chunk(content(" this th"), usage = true),
                     body,
                 ),
-                openAiFrames(scripted.body()),
+                dataFrames(scripted.body()),
             )
-            val blank = openAiFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
+            val blank = dataFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
             assertEquals(GENERIC_OPENAI_STREAM_ERROR_BODY, blank.last())
             assertEquals(4, blank.size)
         }
@@ -280,7 +281,7 @@ class MultiProviderDialectTest {
     @Test
     fun `lenient mode streams the canned reply for a streamed openai request`() {
         withServer(ScenarioEngine(lenient = true)) { client, engine ->
-            val frames = openAiFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
+            val frames = dataFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
             assertEquals(CANNED_ASSISTANT_TEXT, contentPieces(frames).joinToString(""))
             assertEquals("[DONE]", frames.last())
             assertEquals("default", engine.calls().single().outcome)
@@ -291,7 +292,7 @@ class MultiProviderDialectTest {
     fun `streamInterChunkDelayMs waits before each openai delta`() {
         withServer(engineWith(Step(text = "abcdefghi", streamChunkChars = 3, streamInterChunkDelayMs = 100))) { client, _ ->
             val started = System.nanoTime()
-            val frames = openAiFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
+            val frames = dataFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
             val elapsedMs = (System.nanoTime() - started) / 1_000_000
             assertEquals(listOf("abc", "def", "ghi"), contentPieces(frames))
             assertTrue(elapsedMs >= 300, "took $elapsedMs ms")
@@ -301,7 +302,7 @@ class MultiProviderDialectTest {
     @Test
     fun `a streamed openai call is numbered and logged like a buffered one`() {
         withServer(engineWith(Step(text = "one"), Step(text = "two"))) { client, engine ->
-            val streamed = openAiFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
+            val streamed = dataFrames(client.post("/openai/v1/chat/completions", openAiStreamBody()).body())
             assertTrue(streamed.first().startsWith("""{"id":"fake-openai-1","""))
             assertEquals(200, client.post("/openai/v1/chat/completions", openAiBody("x")).statusCode())
             val calls = engine.calls()
@@ -431,7 +432,7 @@ class MultiProviderDialectTest {
                         """"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}}""",
                     "[DONE]",
                 ),
-                openAiFrames(resp.body()),
+                dataFrames(resp.body()),
             )
         }
     }
@@ -514,4 +515,223 @@ class MultiProviderDialectTest {
         val text: (String) -> String,
         val result: ToolResultRecord,
     )
+
+    private val geminiStreamPath = "/gemini/v1beta/models/example-gemini:streamGenerateContent?alt=sse"
+
+    private fun geminiBody(prompt: String = "Hello") = """{"contents":[{"role":"user","parts":[{"text":${JsonPrimitive(prompt)}}]}]}"""
+
+    /** One expected Gemini chunk payload, written out independently of the server's builders. */
+    private fun geminiChunk(
+        part: String,
+        finishReason: String? = null,
+        seq: Int = 1,
+    ): String {
+        val finish = finishReason?.let { ""","finishReason":"$it"""" } ?: ""
+        val usage =
+            if (finishReason != null) {
+                """"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":50,"totalTokenCount":150},"""
+            } else {
+                ""
+            }
+        return """{"candidates":[{"content":{"role":"model","parts":[$part]}$finish}],$usage"fake_llm_seq":$seq}"""
+    }
+
+    private fun geminiText(text: String) = """{"text":${JsonPrimitive(text)}}"""
+
+    private fun geminiTexts(frames: List<String>): List<String> =
+        frames.mapNotNull { frame ->
+            Json
+                .parseToJsonElement(frame)
+                .jsonObject["candidates"]
+                ?.jsonArray
+                ?.single()
+                ?.jsonObject
+                ?.getValue("content")
+                ?.jsonObject
+                ?.getValue("parts")
+                ?.jsonArray
+                ?.single()
+                ?.jsonObject
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.content
+        }
+
+    private fun contentType(resp: java.net.http.HttpResponse<String>) = resp.headers().firstValue("content-type").orElse("")
+
+    @Test
+    fun `a streamed gemini text step is one chunk per piece, the last with finishReason and usageMetadata`() {
+        withServer(engineWith(Step(text = "Mild and dry tomorrow.", streamChunkChars = 8))) { client, _ ->
+            val resp = client.post(geminiStreamPath, geminiBody())
+            assertEquals(200, resp.statusCode())
+            assertTrue(contentType(resp).startsWith("text/event-stream"))
+            assertEquals(
+                listOf(geminiChunk(geminiText("Mild and")), geminiChunk(geminiText(" dry tom")), geminiChunk(geminiText("orrow."), "STOP")),
+                dataFrames(resp.body()),
+            )
+            assertFalse(resp.body().contains("event:"))
+            assertTrue(resp.body().endsWith("}\n\n"))
+        }
+    }
+
+    @Test
+    fun `max_tokens finishes a gemini stream with MAX_TOKENS`() {
+        withServer(engineWith(Step(text = "cut off", stopReason = "max_tokens"))) { client, _ ->
+            assertEquals(
+                listOf(geminiChunk(geminiText("cut off"), "MAX_TOKENS")),
+                dataFrames(client.post(geminiStreamPath, geminiBody()).body()),
+            )
+        }
+    }
+
+    @Test
+    fun `an empty gemini text streams one last chunk with an empty text part`() {
+        withServer(engineWith(Step(text = ""))) { client, _ ->
+            assertEquals(listOf(geminiChunk(geminiText(""), "STOP")), dataFrames(client.post(geminiStreamPath, geminiBody()).body()))
+        }
+    }
+
+    @Test
+    fun `a streamed gemini step sends each tool call as a whole functionCall chunk after the text`() {
+        val step =
+            Step(
+                text = "Checking.",
+                toolCalls =
+                    listOf(
+                        ToolCall(name = "get_weather", arguments = Json.parseToJsonElement("""{"city":"Paris"}""").jsonObject),
+                        ToolCall(name = "get_time", id = "t2"),
+                    ),
+                streamChunkChars = 8,
+            )
+        withServer(engineWith(step)) { client, engine ->
+            assertEquals(
+                listOf(
+                    geminiChunk(geminiText("Checking")),
+                    geminiChunk(geminiText(".")),
+                    geminiChunk("""{"functionCall":{"name":"get_weather","args":{"city":"Paris"}}}"""),
+                    geminiChunk("""{"functionCall":{"id":"t2","name":"get_time","args":{}}}""", "STOP"),
+                ),
+                dataFrames(client.post(geminiStreamPath, geminiBody()).body()),
+            )
+            val record = engine.calls().single()
+            assertEquals("tool-calls", record.outcome)
+            assertEquals(listOf(ToolCallRecord(null, "get_weather"), ToolCallRecord("t2", "get_time")), record.toolCalls)
+        }
+    }
+
+    @Test
+    fun `a gemini stream error after chunks ends with the error body and no finishReason`() {
+        val body = """{"error":{"code":500,"message":"server error","status":"INTERNAL"}}"""
+        val scripted = Step(error = ErrorStep(status = 500, body = body), streamErrorAfterChunks = 2, streamChunkChars = 8)
+        val blank = Step(error = ErrorStep(status = 503), streamErrorAfterChunks = 2, streamChunkChars = 8)
+        listOf(scripted to body, blank to GENERIC_GEMINI_STREAM_ERROR_BODY).forEach { (step, last) ->
+            withServer(engineWith(step)) { client, _ ->
+                val resp = client.post(geminiStreamPath, geminiBody())
+                assertEquals(200, resp.statusCode())
+                assertEquals(
+                    listOf(geminiChunk(geminiText("Thinking")), geminiChunk(geminiText(" this th")), last),
+                    dataFrames(resp.body()),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a gemini error step without streamErrorAfterChunks is a plain HTTP error even when streamed`() {
+        val body = """{"error":{"code":429,"message":"slow down","status":"RESOURCE_EXHAUSTED"}}"""
+        withServer(engineWith(Step(error = ErrorStep(status = 429, body = body, headers = mapOf("retry-after" to "1"))))) { client, _ ->
+            val resp = client.post(geminiStreamPath, geminiBody())
+            assertEquals(429, resp.statusCode())
+            assertEquals(body, resp.body())
+            assertEquals("1", resp.headers().firstValue("retry-after").orElse(""))
+            assertTrue(contentType(resp).startsWith("application/json"))
+        }
+    }
+
+    @Test
+    fun `a streamed gemini call after the last step is the JSON 400 with no event stream`() {
+        withServer(engineWith(Step(text = "only"))) { client, _ ->
+            assertEquals(200, client.post("/gemini/v1beta/models/example-gemini:generateContent", geminiBody()).statusCode())
+            val resp = client.post(geminiStreamPath, geminiBody("Again"))
+            assertEquals(400, resp.statusCode())
+            assertTrue(contentType(resp).startsWith("application/json"))
+            assertEquals(
+                "no more steps",
+                Json
+                    .parseToJsonElement(resp.body())
+                    .jsonObject
+                    .getValue("fake_llm_error")
+                    .jsonPrimitive.content,
+            )
+            assertFalse(resp.body().contains("data:"))
+        }
+    }
+
+    @Test
+    fun `lenient mode streams the canned reply for a streamed gemini request`() {
+        withServer(ScenarioEngine(lenient = true)) { client, engine ->
+            val frames = dataFrames(client.post(geminiStreamPath, geminiBody()).body())
+            assertEquals(CANNED_ASSISTANT_TEXT, geminiTexts(frames).joinToString(""))
+            assertEquals("default", engine.calls().single().outcome)
+        }
+    }
+
+    @Test
+    fun `streamInterChunkDelayMs waits before each gemini text chunk`() {
+        withServer(engineWith(Step(text = "abcdefghi", streamChunkChars = 3, streamInterChunkDelayMs = 100))) { client, _ ->
+            val started = System.nanoTime()
+            val frames = dataFrames(client.post(geminiStreamPath, geminiBody()).body())
+            val elapsedMs = (System.nanoTime() - started) / 1_000_000
+            assertEquals(listOf("abc", "def", "ghi"), geminiTexts(frames))
+            assertTrue(elapsedMs >= 300, "took $elapsedMs ms")
+        }
+    }
+
+    @Test
+    fun `a streamed gemini call is numbered and logged like a buffered one`() {
+        withServer(engineWith(Step(text = "one two three", streamChunkChars = 4), Step(text = "four"))) { client, engine ->
+            val streamed = dataFrames(client.post(geminiStreamPath, geminiBody()).body())
+            assertEquals(4, streamed.size)
+            assertTrue(
+                streamed.all {
+                    Json
+                        .parseToJsonElement(it)
+                        .jsonObject
+                        .getValue("fake_llm_seq")
+                        .jsonPrimitive.content == "1"
+                },
+            )
+            assertEquals(200, client.post("/gemini/v1beta/models/example-gemini:generateContent", geminiBody()).statusCode())
+            val calls = engine.calls()
+            assertEquals(listOf(1, 2), calls.map { it.step })
+            assertEquals(listOf("text", "text"), calls.map { it.outcome })
+        }
+    }
+
+    @Test
+    fun `streamGenerateContent without alt=sse is the exception 400 and not a call`() {
+        withServer(engineWith(Step(text = "Hi."))) { client, engine ->
+            val resp = client.post(geminiStreamPath.substringBefore('?'), geminiBody())
+            assertEquals(400, resp.statusCode())
+            assertEquals(GEMINI_STREAM_NEEDS_ALT_SSE, errorDetail(resp.body()))
+            assertFalse(resp.body().contains("data:"))
+            assertEquals(emptyList(), engine.calls())
+            assertEquals(listOf(geminiChunk(geminiText("Hi."), "STOP")), dataFrames(client.post(geminiStreamPath, geminiBody()).body()))
+            assertEquals(listOf(1), engine.calls().map { it.step })
+        }
+    }
+
+    @Test
+    fun `a streamed gemini request whose next step has rawArguments is the exception 400 and not a call`() {
+        withServer(engineWith(Step(toolCalls = listOf(ToolCall(name = "get_weather", rawArguments = "{}"))))) { client, engine ->
+            val resp = client.post(geminiStreamPath, geminiBody())
+            assertEquals(400, resp.statusCode())
+            assertEquals(
+                "step 1: tool call 1 sets rawArguments, which a Gemini reply cannot carry; functionCall.args must be a JSON object",
+                errorDetail(resp.body()),
+            )
+            assertFalse(resp.body().contains("data:"))
+            assertEquals(emptyList(), engine.calls())
+        }
+    }
 }

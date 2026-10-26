@@ -4,7 +4,7 @@ import com.sun.net.httpserver.HttpExchange
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 
-// Server-sent events transport shared by the Anthropic and OpenAI streams.
+// Server-sent events transport shared by the Anthropic, OpenAI and Gemini streams.
 
 /**
  * Starts an event stream on [ex]: HTTP 200 with `Content-Type: text/event-stream`,

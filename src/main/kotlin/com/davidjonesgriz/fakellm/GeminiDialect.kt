@@ -15,6 +15,7 @@ private val geminiLenientJson = Json { ignoreUnknownKeys = true }
 internal fun parseGeminiRequest(
     body: String,
     modelFromPath: String,
+    stream: Boolean = false,
 ): ParsedRequest {
     val obj = geminiLenientJson.parseToJsonElement(body).jsonObject
     val contents = obj["contents"] as? JsonArray ?: error("request has no contents array")
@@ -33,7 +34,7 @@ internal fun parseGeminiRequest(
         systemShape = "absent",
         promptText = text,
         messageCount = contents.size,
-        stream = false,
+        stream = stream,
         toolResults = geminiToolResults(contents),
     )
 }
@@ -94,7 +95,7 @@ internal fun geminiEnvelope(
         put("fake_llm_seq", seq)
     }.toString()
 
-private fun geminiFunctionCallPart(call: SentToolCall): JsonObject =
+internal fun geminiFunctionCallPart(call: SentToolCall): JsonObject =
     buildJsonObject {
         put(
             "functionCall",
@@ -106,7 +107,7 @@ private fun geminiFunctionCallPart(call: SentToolCall): JsonObject =
         )
     }
 
-private fun geminiFinishReason(anthropicStopReason: String): String = if (anthropicStopReason == "max_tokens") "MAX_TOKENS" else "STOP"
+internal fun geminiFinishReason(anthropicStopReason: String): String = if (anthropicStopReason == "max_tokens") "MAX_TOKENS" else "STOP"
 
 internal fun geminiModelFromPath(path: String): String {
     val marker = "/models/"

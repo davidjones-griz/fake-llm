@@ -112,11 +112,19 @@ class FakeLlmServerTest {
                 client.post("/gemini/v1beta/models/gemini-2.0-flash:generateContent", """{"contents":[{"parts":[{"text":"Hello"}]}]}""")
             assertCallError(gemini, "no scenario loaded", 4, "gemini", "gemini-2.0-flash", "absent", 1, "Hello\n")
 
+            val geminiStream =
+                client.post(
+                    "/gemini/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse",
+                    """{"contents":[{"parts":[{"text":"Hello"}]}]}""",
+                )
+            assertCallError(geminiStream, "no scenario loaded", 5, "gemini", "gemini-2.0-flash", "absent", 1, "Hello\n")
+            assertFalse(geminiStream.body().contains("data:"))
+
             val log = calls(client)
-            assertEquals(listOf("anthropic", "anthropic", "openai", "gemini"), log.strings("vendor"))
+            assertEquals(listOf("anthropic", "anthropic", "openai", "gemini", "gemini"), log.strings("vendor"))
             assertTrue(log.all { it.getValue("outcome").jsonPrimitive.content == "no-scenario" })
             assertTrue(log.all { it.getValue("step") == JsonNull })
-            assertEquals(listOf(1L, 2L, 3L, 4L), log.longs("seq"))
+            assertEquals(listOf(1L, 2L, 3L, 4L, 5L), log.longs("seq"))
             assertEquals("sys\nHello \"there\"\n", log[0].getValue("promptSample").jsonPrimitive.content)
         }
     }
@@ -343,6 +351,10 @@ class FakeLlmServerTest {
             assertEquals(404, client.post("/gemini/m:generateContent", body).statusCode())
             assertEquals(404, client.post("/gemini/v1beta/models/m:generateContentXYZ", body).statusCode())
             assertEquals(404, client.post("/gemini/v1beta/models/m/extra:generateContent", body).statusCode())
+            val streamed = "/gemini/v1beta/models/m:streamGenerateContent?alt=sse"
+            assertEquals(400, client.post(streamed, body).statusCode(), "the documented stream path, no scenario")
+            assertEquals(404, client.post("/gemini/v1beta/models/m:streamGenerateContentXYZ?alt=sse", body).statusCode())
+            assertEquals(404, client.post("/gemini/v1beta/models/m/extra:streamGenerateContent?alt=sse", body).statusCode())
             assertEquals(501, client.get("/anthropic/v1/messages/batches/abc/results").statusCode())
             assertEquals(404, client.get("/anthropic/v1/messages/batchesXYZ").statusCode())
         }

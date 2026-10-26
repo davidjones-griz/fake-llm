@@ -28,7 +28,9 @@ import kotlin.system.exitProcess
  *    a Chat Completions SSE stream (`chat.completion.chunk` frames, then `data: [DONE]`). Any
  *    other request is one JSON chat completion. As on the Anthropic route, a call after the last
  *    step, or a call with no scenario loaded in strict mode, is the JSON 400 with no SSE bytes.
- *  - `POST /gemini/…:generateContent` — Gemini `generateContent`, as one JSON response. The model
+ *  - `POST /gemini/…:generateContent` — Gemini `generateContent`, as one JSON response.
+ *    `POST /gemini/…:streamGenerateContent?alt=sse` — the same reply as an SSE stream of
+ *    `GenerateContentResponse` data frames; without `alt=sse` it is the exception 400. The model
  *    id is the path segment between `/models/` and `:`.
  *  - The three vendor routes share the scenario's steps: call N, on whichever route, gets step N.
  *  - `GET /health` — liveness, the loaded scenario name, and whether lenient mode is on. Always
@@ -158,9 +160,15 @@ internal fun handleGemini(
     path: String,
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
-    val parsed = parseGeminiRequest(body, geminiModelFromPath(path))
-    val response = engine.handle(vendor = "gemini", req = parsed)
-    respond(ex, response.status, response.body, response.headers)
+    val streamed = path.endsWith(":streamGenerateContent")
+    require(!streamed || geminiAltSse(ex.requestURI.rawQuery)) { GEMINI_STREAM_NEEDS_ALT_SSE }
+    val parsed = parseGeminiRequest(body, geminiModelFromPath(path), stream = streamed)
+    if (streamed) {
+        streamGeminiGenerateContent(ex, engine, parsed)
+    } else {
+        val response = engine.handle(vendor = "gemini", req = parsed)
+        respond(ex, response.status, response.body, response.headers)
+    }
 }
 
 /**

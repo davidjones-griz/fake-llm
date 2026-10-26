@@ -129,7 +129,7 @@ private fun vendorRoute(
             handleOpenAi(ex, engine)
         }
 
-        ex.requestMethod == "POST" && GEMINI_GENERATE_CONTENT.matches(path) -> {
+        ex.requestMethod == "POST" && GEMINI_CONTENT_ROUTE.matches(path) -> {
             handleGemini(ex, engine, path)
         }
 
@@ -230,8 +230,8 @@ private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_NOT_FOUND = 404
 private const val BATCHES_PATH = "/anthropic/v1/messages/batches"
 
-/** `/gemini/{version}/models/{model}:generateContent`, matching the OpenAPI path exactly. */
-private val GEMINI_GENERATE_CONTENT = Regex("/gemini/[^/]+/models/[^/:]+:generateContent")
+/** `/gemini/{version}/models/{model}:generateContent` or `:streamGenerateContent`, matching the OpenAPI paths exactly. */
+private val GEMINI_CONTENT_ROUTE = Regex("/gemini/[^/]+/models/[^/:]+:(generateContent|streamGenerateContent)")
 
 private const val HTTP_INTERNAL_ERROR = 500
 private const val HTTP_NOT_IMPLEMENTED = 501

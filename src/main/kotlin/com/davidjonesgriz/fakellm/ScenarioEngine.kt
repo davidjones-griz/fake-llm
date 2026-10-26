@@ -191,10 +191,10 @@ public class ScenarioEngine(
 
     /**
      * Numbers the call, picks what answers it, and records its one call-log entry, all under the
-     * lock; the 400 bodies are built after it. Shared by the buffered [handle] and the Anthropic and
-     * OpenAI SSE paths, so a request is counted and logged once whichever transport renders it. The
-     * 400s are error steps with [Step.streamErrorAfterChunks] unset, so both streaming paths send
-     * their JSON and write no SSE bytes.
+     * lock; the 400 bodies are built after it. Shared by the buffered [handle] and the Anthropic, OpenAI
+     * and Gemini SSE paths, so a request is counted and logged once whichever transport renders it.
+     * The 400s are error steps with [Step.streamErrorAfterChunks] unset, so all three streaming paths
+     * send their JSON and write no SSE bytes.
      *
      * Throws [IllegalArgumentException] when the next step has a tool call with
      * [ToolCall.rawArguments] that [vendor]'s reply can't carry (a buffered Anthropic or a Gemini
