@@ -1,0 +1,69 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-stream-max-tokens",
+  "description": "A streamed max_tokens step finishes with finishReason MAX_TOKENS.",
+  "scenario": {
+    "name": "gemini-stream-max-tokens",
+    "steps": [
+      {
+        "text": "cut off",
+        "stopReason": "max_tokens"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:streamGenerateContent?alt=sse",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "text": "cut off"
+                      }
+                    ]
+                  },
+                  "finishReason": "MAX_TOKENS"
+                }
+              ],
+              "usageMetadata": {
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 50,
+                "totalTokenCount": 150
+              },
+              "fake_llm_seq": 1
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

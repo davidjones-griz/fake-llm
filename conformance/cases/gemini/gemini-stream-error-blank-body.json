@@ -1,0 +1,77 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-stream-error-blank-body",
+  "description": "A streamed error with a blank body sends the generic INTERNAL error body.",
+  "scenario": {
+    "name": "gemini-stream-error-blank-body",
+    "steps": [
+      {
+        "error": {
+          "status": 503,
+          "body": ""
+        },
+        "streamErrorAfterChunks": 1,
+        "streamChunkChars": 8
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:streamGenerateContent?alt=sse",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "candidates": [
+                {
+                  "content": {
+                    "role": "model",
+                    "parts": [
+                      {
+                        "text": "Thinking"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "fake_llm_seq": 1
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "error": {
+                "code": 500,
+                "message": "scripted stream error",
+                "status": "INTERNAL"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
