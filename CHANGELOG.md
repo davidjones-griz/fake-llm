@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0, a minor version may
 change the public API.
 
+## [Unreleased]
+
+### Added
+
+- OpenAI Chat Completions SSE streaming: `"stream": true` returns `chat.completion.chunk` frames
+  and `data: [DONE]`, split and paced by `streamChunkChars` and `streamInterChunkDelayMs`, with a
+  usage chunk when `stream_options.include_usage` is true and an in-stream error after
+  `streamErrorAfterChunks` chunks.
+
+### Changed
+
+- An OpenAI request with `"stream": true` is now answered as a stream; it was answered with one
+  JSON completion.
+
 ## [0.1.0] - 2026-10-26
 
 ### Added

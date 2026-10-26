@@ -1,0 +1,92 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-stream-error-blank-body",
+  "description": "A streamed error with a blank body sends the generic server_error body.",
+  "scenario": {
+    "name": "stream-error-blank",
+    "steps": [
+      {
+        "error": {
+          "status": 500
+        },
+        "streamErrorAfterChunks": 1,
+        "streamChunkChars": 12
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "role": "assistant",
+                    "content": ""
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "content": "Thinking thi"
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "error": {
+                "message": "scripted stream error",
+                "type": "server_error",
+                "param": null,
+                "code": null
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-stream-error-step",
+  "description": "An error step without streamErrorAfterChunks is a plain HTTP error even when the request is streamed.",
+  "scenario": {
+    "name": "stream-error-step",
+    "steps": [
+      {
+        "error": {
+          "status": 429,
+          "body": "{\"error\":{\"message\":\"slow down\",\"type\":\"requests\",\"param\":null,\"code\":\"rate_limit_exceeded\"}}",
+          "headers": {
+            "retry-after": "1"
+          }
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json",
+          "retry-after": "1"
+        },
+        "body": {
+          "error": {
+            "message": "slow down",
+            "type": "requests",
+            "param": null,
+            "code": "rate_limit_exceeded"
+          }
+        }
+      }
+    }
+  ]
+}

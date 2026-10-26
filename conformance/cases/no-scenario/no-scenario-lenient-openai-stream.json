@@ -1,0 +1,110 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "no-scenario-lenient-openai-stream",
+  "description": "With no scenario loaded, lenient mode streams the canned reply to a streamed OpenAI request.",
+  "server": {
+    "lenient": true,
+    "fresh": true
+  },
+  "scenario": null,
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "role": "assistant",
+                    "content": ""
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "content": "This is a canned respons"
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "content": "e from fake-llm."
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {},
+                  "finish_reason": "stop"
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": "[DONE]"
+          }
+        ]
+      }
+    }
+  ]
+}

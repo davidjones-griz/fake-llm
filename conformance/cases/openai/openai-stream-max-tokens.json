@@ -1,0 +1,97 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-stream-max-tokens",
+  "description": "A streamed max_tokens step finishes with finish_reason length.",
+  "scenario": {
+    "name": "stream-max-tokens",
+    "steps": [
+      {
+        "text": "cut off",
+        "stopReason": "max_tokens"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "role": "assistant",
+                    "content": ""
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "content": "cut off"
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {},
+                  "finish_reason": "length"
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": "[DONE]"
+          }
+        ]
+      }
+    }
+  ]
+}

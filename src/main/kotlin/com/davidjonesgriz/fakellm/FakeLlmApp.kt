@@ -24,7 +24,10 @@ import kotlin.system.exitProcess
  *    JSON body, and no SSE bytes are written. With no scenario loaded, lenient mode answers with
  *    the canned assistant reply.
  *  - `/anthropic/v1/messages/batches` — the Batches API is not implemented; any request answers 501.
- *  - `POST /openai/v1/chat/completions` — OpenAI chat completions, as one JSON response.
+ *  - `POST /openai/v1/chat/completions` — OpenAI chat completions. `"stream": true` is answered as
+ *    a Chat Completions SSE stream (`chat.completion.chunk` frames, then `data: [DONE]`). Any
+ *    other request is one JSON chat completion. As on the Anthropic route, a call after the last
+ *    step, or a call with no scenario loaded in strict mode, is the JSON 400 with no SSE bytes.
  *  - `POST /gemini/…:generateContent` — Gemini `generateContent`, as one JSON response. The model
  *    id is the path segment between `/models/` and `:`.
  *  - The three vendor routes share the scenario's steps: call N, on whichever route, gets step N.
@@ -141,8 +144,12 @@ internal fun handleOpenAi(
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
     val parsed = parseOpenAiRequest(body)
-    val response = engine.handle(vendor = "openai", req = parsed)
-    respond(ex, response.status, response.body, response.headers)
+    if (parsed.stream) {
+        streamOpenAiChatCompletion(ex, engine, parsed)
+    } else {
+        val response = engine.handle(vendor = "openai", req = parsed)
+        respond(ex, response.status, response.body, response.headers)
+    }
 }
 
 internal fun handleGemini(
@@ -181,11 +188,7 @@ private fun streamAnthropicMessages(
         respond(ex, error.status, error.body, error.headers)
         return
     }
-    ex.responseHeaders.add("Content-Type", "text/event-stream")
-    ex.responseHeaders.add("Cache-Control", "no-cache")
-    ex.responseHeaders.add("Connection", "keep-alive")
-    ex.sendResponseHeaders(HTTP_OK, 0)
-    val out = ex.responseBody
+    val out = startEventStream(ex)
     try {
         writeSse(out, "message_start", messageStartJson(resolution.seq, req.model, req.hasCacheBreakpoint))
         if (error != null) {

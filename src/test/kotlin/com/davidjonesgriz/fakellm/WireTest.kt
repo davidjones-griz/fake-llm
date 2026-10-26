@@ -69,6 +69,20 @@ class WireTest {
     }
 
     @Test
+    fun `openai stream and include_usage are parsed, and include_usage counts only on a stream`() {
+        fun parse(extra: String) = parseOpenAiRequest("""{"model":"m","messages":[{"role":"user","content":"P"}]$extra}""")
+        assertEquals(false, parse("").includeUsage)
+        assertEquals(false, parse(",\"stream\":true").includeUsage)
+        assertEquals(true, parse(",\"stream\":true").stream)
+        assertEquals(true, parse(",\"stream\":true,\"stream_options\":{\"include_usage\":true}").includeUsage)
+        assertEquals(false, parse(",\"stream\":false,\"stream_options\":{\"include_usage\":true}").includeUsage)
+        assertEquals(false, parse(",\"stream_options\":{\"include_usage\":true}").includeUsage)
+        assertEquals(false, parse(",\"stream\":true,\"stream_options\":{\"include_usage\":false}").includeUsage)
+        assertEquals(false, parse(",\"stream\":true,\"stream_options\":{\"include_usage\":\"yes\"}").includeUsage)
+        assertEquals(false, parse(",\"stream\":true,\"stream_options\":null").includeUsage)
+    }
+
+    @Test
     fun `a body without messages is a hard error`() {
         assertFailsWith<IllegalStateException> { parseAnthropicRequest("""{"model":"m"}""") }
     }

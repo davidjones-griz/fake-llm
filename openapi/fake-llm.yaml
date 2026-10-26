@@ -39,8 +39,8 @@ info:
     provider's API, and this document does not describe them field by field. The conformance
     cases in `conformance/cases` define them exactly, including the values fake-llm fixes: the
     token counts, the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`), OpenAI's
-    `model`, the thinking signature, the streamed-error filler text and generic error body, and
-    the lenient canned reply.
+    `model`, the thinking signature, the streamed-error filler text and generic error body, the
+    OpenAI generic stream error body, and the lenient canned reply.
 
     **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
     cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.
@@ -263,7 +263,9 @@ paths:
       summary: OpenAI Chat Completions API stand-in
       description: |
         Request and success response follow the OpenAI Chat Completions API
-        (https://platform.openai.com/docs/api-reference/chat). Streaming is not supported. A
+        (https://platform.openai.com/docs/api-reference/chat). Server-sent events when the request
+        sets `"stream": true`: `chat.completion.chunk` data frames, then `data: [DONE]`, with a
+        usage chunk first when `stream_options.include_usage` is true (read like `stream`). A
         step's scripted error can return any status and body.
       security: []
       requestBody:
@@ -274,11 +276,14 @@ paths:
               type: object
       responses:
         "200":
-          description: A reply in the OpenAI Chat Completions format.
+          description: A reply in the OpenAI Chat Completions format, or an SSE stream.
           content:
             application/json:
               schema:
                 type: object
+            text/event-stream:
+              schema:
+                type: string
         "400":
           $ref: "#/components/responses/VendorBadRequest"
         default:
@@ -373,7 +378,7 @@ components:
         fake-llm's own 400s, not the provider's. A call after the loaded scenario's last step gets
         `NoMoreStepsError`, in strict and lenient mode. A call when no scenario is loaded gets
         `NoScenarioError` in strict mode (the default); lenient mode serves the canned reply. On
-        the Anthropic route both are JSON even when the request sets `"stream": true`. A request body that is not valid JSON, or lacks the `messages`
+        the Anthropic and OpenAI routes both are JSON even when the request sets `"stream": true`. A request body that is not valid JSON, or lacks the `messages`
         (Anthropic, OpenAI) or `contents` (Gemini) array, gets `ExceptionError`. A step's scripted
         error is outside these schemas, even when its status is 400: see `ScriptedError`.
       content:
@@ -675,20 +680,20 @@ components:
           minimum: 1
           maximum: 2147483647
           default: 24
-          description: Size of each streamed delta, in Unicode code points.
+          description: Size of each streamed delta, in Unicode code points (Anthropic and OpenAI streams).
         streamInterChunkDelayMs:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
           default: 0
-          description: Milliseconds to wait between streamed deltas.
+          description: Milliseconds to wait before each streamed delta (Anthropic and OpenAI streams).
         streamErrorAfterChunks:
           type: [integer, "null"]
           minimum: 1
           maximum: 2147483647
           description: |
-            Only on an error step, and only when streamed: send this many text deltas, then an
-            in-stream error event.
+            Only on an error step, and only when streamed (Anthropic or OpenAI): send this many text
+            deltas, then an in-stream error.
     ErrorStep:
       type: object
       description: A scripted HTTP error in place of a text reply.

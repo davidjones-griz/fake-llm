@@ -113,7 +113,8 @@ Turns every skip into a failure. CI sets it: with a command target, nothing shou
   - `rawBody`: compared with the body text exactly;
   - `events`: an SSE body, compared as an ordered list of `{ "event": "<name>", "data": … }` with no
     missing or extra events. A JSON `data` is compared with the parsed data; a string with the raw
-    data line.
+    data line. An event without an `event:` line, such as every OpenAI chunk, is named `message`;
+    `data: [DONE]` is the string `"[DONE]"`.
 
   With none of them, the body is not checked.
 
@@ -166,10 +167,10 @@ them, exactly. That includes the values fake-llm fixes:
 the `anthropic`, `openai` and `google-genai` Python SDKs, at the versions pinned in
 `requirements.txt`. Each test loads its own scenario, makes calls through an SDK, and asserts on
 what the SDK parsed or raised and on the exact call log (`GET /control/calls`). It covers what the
-server supports today: Anthropic Messages buffered and streaming, OpenAI Chat Completions buffered,
-and Gemini `generateContent` buffered. The HTTP cases above say what the server sends; this suite
-says a real client can read it. CI's `conformance` job runs both against the same fat jar and
-Docker image.
+server supports today: Anthropic Messages buffered and streaming, OpenAI Chat Completions buffered
+and streaming, and Gemini `generateContent` buffered. The HTTP cases above say what the server
+sends; this suite says a real client can read it. CI's `conformance` job runs both against the same
+fat jar and Docker image.
 
 ```
 conformance/sdk/python/
