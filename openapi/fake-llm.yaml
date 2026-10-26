@@ -512,11 +512,10 @@ components:
       type: string
       enum: [blocks, string, absent, unknown]
       description: |
-        The shape of the request's system prompt. Anthropic: `absent` when `system` is missing,
-        `string` when it is a JSON string (or another scalar, including `null`; see issue #68),
-        `blocks` when it is an array, `unknown` when it is an object. OpenAI: `blocks` when a
-        message has role `system`, else `absent`. Gemini: always `absent` (`systemInstruction`
-        is not read).
+        The shape of the request's system prompt. Anthropic: `absent` when `system` is missing or
+        `null`, `string` when it is a JSON string, `blocks` when it is an array, `unknown` for any
+        other value (an object, a number or a boolean). OpenAI: `blocks` when a message has role
+        `system`, else `absent`. Gemini: always `absent` (`systemInstruction` is not read).
     MessageError:
       type: object
       required: [fake_llm_error]

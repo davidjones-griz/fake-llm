@@ -1,0 +1,6 @@
+{
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
+  "name": "extension-sees-own-calls",
+  "description": "One step: the reply to SummarizerExtensionTest's `sees only its own calls`.",
+  "steps": [{ "text": "Churn fell to 2% after the onboarding redesign." }]
+}

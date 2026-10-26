@@ -42,6 +42,33 @@ class WireTest {
     }
 
     @Test
+    fun `null system shape is absent and adds no prompt text`() {
+        val req = parseAnthropicRequest("""{"model":"m","system":null,"messages":[{"role":"user","content":"P"}]}""")
+        assertEquals("absent", req.systemShape)
+        assertEquals("P\n", req.promptText)
+    }
+
+    @Test
+    fun `a non-string scalar system is unknown and adds no prompt text`() {
+        listOf("5", "true").forEach { system ->
+            val req = parseAnthropicRequest("""{"model":"m","system":$system,"messages":[{"role":"user","content":"P"}]}""")
+            assertEquals("unknown", req.systemShape, system)
+            assertEquals("P\n", req.promptText, system)
+        }
+    }
+
+    @Test
+    fun `a text block whose text is not a string adds no prompt text`() {
+        val req =
+            parseAnthropicRequest(
+                """{"model":"m","system":[{"type":"text","text":null},{"type":"text","text":5}],""" +
+                    """"messages":[{"role":"user","content":[{"type":"text","text":true},{"type":"text","text":"P"}]}]}""",
+            )
+        assertEquals("blocks", req.systemShape)
+        assertEquals("P\n", req.promptText)
+    }
+
+    @Test
     fun `a body without messages is a hard error`() {
         assertFailsWith<IllegalStateException> { parseAnthropicRequest("""{"model":"m"}""") }
     }
