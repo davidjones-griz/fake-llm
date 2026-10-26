@@ -101,3 +101,8 @@ Compared with pre-release builds of `main`:
   `IllegalArgumentException`. When a step is invalid, the message starts with its 1-based number
   (`step 2: …`) and the cause is kotlinx-serialization's `SerializationException`.
 - Docker image and the `fake-llm-all.jar` fat jar.
+
+### Fixed
+
+- An Anthropic request with `"system": null` is recorded as `systemShape` `absent`, not `string`,
+  and no longer adds `null` to the prompt sample. A number or boolean `system` is `unknown`.
