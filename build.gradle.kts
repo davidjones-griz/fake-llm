@@ -170,6 +170,21 @@ allprojects {
                     name = "buildLocal"
                     url = uri(rootProject.layout.buildDirectory.dir("local-repo"))
                 }
+                // The Maven Central bundle the release workflow zips and uploads (see "Releasing" in README.md).
+                maven {
+                    name = "centralBundle"
+                    url = uri(rootProject.layout.buildDirectory.dir("central-bundle"))
+                }
+            }
+        }
+
+        // Signed only when SIGNING_KEY is set, as in the release workflow; local publishing stays unsigned.
+        apply(plugin = "signing")
+        val signingKey = System.getenv("SIGNING_KEY")
+        if (!signingKey.isNullOrBlank()) {
+            configure<SigningExtension> {
+                useInMemoryPgpKeys(signingKey, System.getenv("SIGNING_KEY_PASSWORD"))
+                sign(the<PublishingExtension>().publications)
             }
         }
     }
