@@ -94,7 +94,6 @@ def test_call_after_last_step(fake, openai_client):
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
 
 
-
 def content(chunks):
     return [chunk.choices[0].delta.content for chunk in chunks]
 
