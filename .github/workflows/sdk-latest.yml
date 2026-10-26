@@ -1,0 +1,47 @@
+name: SDK latest
+
+# Runs the SDK conformance suite (conformance/sdk/python) daily against the newest releases of the
+# official Python SDKs, unpinned, so a new release that breaks against fake-llm shows up before
+# Dependabot proposes it. Pull requests run the pinned versions (ci.yml's conformance job). A
+# failure fails the run; GitHub emails whoever last changed the cron line. See
+# conformance/README.md#sdk-suite.
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-latest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+      - name: Build the fat jar
+        run: ./gradlew shadowJar --no-daemon
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: conformance/sdk/python/.python-version
+      - name: Install the latest SDKs
+        run: python -m pip install --upgrade -r conformance/sdk/python/requirements.in
+      - name: List the installed versions
+        run: |
+          {
+            echo "| Package | Version |"
+            echo "| --- | --- |"
+            for package in anthropic openai google-genai pytest; do
+              echo "| $package | $(python -m pip show "$package" | sed -n 's/^Version: //p') |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run the SDK suite against the fat jar
+        env:
+          FAKE_LLM_COMMAND: java -jar build/libs/fake-llm-all.jar
+        run: python -m pytest conformance/sdk/python
