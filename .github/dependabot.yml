@@ -1,5 +1,5 @@
 # Weekly version updates. Minor and patch updates are grouped per ecosystem; other majors arrive
-# as separate pull requests, except in the kotlin group below. See "Dependency updates" in README.md.
+# as separate pull requests, except in the kotlin and python-sdks groups below. See "Dependency updates" in README.md.
 version: 2
 updates:
   - package-ecosystem: gradle
@@ -69,3 +69,14 @@ updates:
       # The Java version is a deliberate choice (#39): digest updates only, never eclipse-temurin 22+.
       - dependency-name: "eclipse-temurin"
         update-types: ["version-update:semver-major"]
+
+  # The SDK conformance suite's lock (conformance/sdk/python/requirements.txt). All bumps, majors
+  # included, arrive as one pull request, which must pass the same required checks.
+  - package-ecosystem: pip
+    directory: "/conformance/sdk/python"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      python-sdks:
+        patterns: ["*"]
