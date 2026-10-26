@@ -1,0 +1,311 @@
+name: Release
+
+# Publishes a release from a vX.Y.Z tag on main: the two Maven artifacts on Maven Central, a
+# linux/amd64 + linux/arm64 image on GHCR, and a GitHub Release with the fat jar and the
+# CHANGELOG section for the version. See "Releasing" in README.md.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  # Checks the tag, then builds and tests the tagged commit the same way CI does.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check the tag
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main"
+            exit 1
+          fi
+          declared=$(sed -n 's/^version=//p' gradle.properties)
+          if [ "$version" != "$declared" ]; then
+            echo "::error::$GITHUB_REF_NAME does not match version=$declared in gradle.properties"
+            exit 1
+          fi
+      - name: Extract the release notes
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          # The heading is matched literally, so the dots in the version are not regex wildcards.
+          # The notes are the lines up to the next "## " heading, without leading or trailing blank lines.
+          awk -v heading="## [$version] - " '
+            !found && index($0, heading) == 1 && substr($0, length(heading) + 1) ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ {
+              found = 1
+              next
+            }
+            found && /^## / { exit }
+            found {
+              lines[++n] = $0
+              if ($0 ~ /[^[:space:]]/) { if (!first) first = n; last = n }
+            }
+            END {
+              if (!found) exit 2
+              for (i = first; i && i <= last; i++) print lines[i]
+            }
+          ' CHANGELOG.md > release-notes.md || {
+            echo "::error::CHANGELOG.md has no '## [$version] - YYYY-MM-DD' heading (still Unreleased?)"
+            exit 1
+          }
+          if [ ! -s release-notes.md ]; then
+            echo "::error::the CHANGELOG section for $version is empty"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: release-notes.md
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+      - name: Build, test and publish to the build-local repository
+        run: ./gradlew build publishAllPublicationsToBuildLocalRepository --no-daemon
+      - name: Test examples/ against the published artifacts
+        run: ./gradlew -p examples check --no-daemon
+      - name: Run the HTTP conformance suite against the fat jar
+        run: >-
+          ./gradlew :fake-llm-conformance:test --no-daemon -Pfakellm.failOnSkip=true
+          -Pfakellm.command="java -jar build/libs/fake-llm-all.jar"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fat-jar
+          path: build/libs/fake-llm-all.jar
+
+  # Builds the image for both platforms, pushes it by digest only, smoke-tests each platform, and
+  # only then tags it.
+  image:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/davidjones-griz/fake-llm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set VERSION
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          # Attestations are out of scope; without this, the action adds provenance by default.
+          provenance: false
+          labels: |
+            org.opencontainers.image.source=https://github.com/davidjones-griz/fake-llm
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=Apache-2.0
+      - name: Smoke-test each platform
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          expected='{"status":"ok","scenario":null,"lenient":false}'
+          for platform in linux/amd64 linux/arm64; do
+            docker pull --quiet --platform "$platform" "$IMAGE@$DIGEST"
+            container=$(docker run -d --platform "$platform" -p 8080:8080 "$IMAGE@$DIGEST")
+            healthy=0
+            deadline=$((SECONDS + 90))
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              if [ "$(curl -fsS http://127.0.0.1:8080/health 2>/dev/null || true)" = "$expected" ]; then
+                healthy=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$healthy" != 1 ]; then
+              docker logs "$container"
+              docker rm -f "$container" > /dev/null
+              echo "::error::the $platform image did not answer GET /health with $expected within 90 s"
+              exit 1
+            fi
+            docker rm -f "$container" > /dev/null
+            echo "$platform: healthy"
+          done
+      - name: Tag the image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            -t "$IMAGE:$VERSION" -t "$IMAGE:${VERSION%.*}" -t "$IMAGE:latest" \
+            "$IMAGE@$DIGEST"
+          {
+            echo "### Image"
+            echo
+            echo "Tags \`$IMAGE:$VERSION\`, \`$IMAGE:${VERSION%.*}\` and \`$IMAGE:latest\`, digest \`$DIGEST\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Signs and uploads both artifacts to Maven Central. Runs after the image job, because a Central
+  # publish cannot be undone: an image that fails its smoke test stops the release first.
+  maven:
+    needs: [verify, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+      MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+    steps:
+      - name: Check the Maven Central secrets
+        id: secrets
+        run: |
+          if [ -z "$MAVEN_CENTRAL_USERNAME" ] || [ -z "$MAVEN_CENTRAL_PASSWORD" ] || [ -z "$SIGNING_KEY" ] || [ -z "$SIGNING_KEY_PASSWORD" ]; then
+            message="Maven Central secrets are not set; the image and GitHub Release are published without it."
+            echo "::notice title=Maven Central skipped::$message"
+            echo "$message" >> "$GITHUB_STEP_SUMMARY"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.secrets.outputs.present == 'true'
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        if: steps.secrets.outputs.present == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        if: steps.secrets.outputs.present == 'true'
+        with:
+          cache-provider: basic
+      - name: Build the signed bundle
+        if: steps.secrets.outputs.present == 'true'
+        run: ./gradlew publishAllPublicationsToCentralBundleRepository --no-daemon
+      - name: Check and zip the bundle
+        if: steps.secrets.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          cd build/central-bundle
+          find . -name 'maven-metadata.xml*' -delete
+          for pom in "com/davidjonesgriz/fake-llm/$version/fake-llm-$version.pom" \
+                     "com/davidjonesgriz/fake-llm-junit-jupiter/$version/fake-llm-junit-jupiter-$version.pom"; do
+            if [ ! -f "$pom" ]; then
+              echo "::error::the bundle has no $pom"
+              exit 1
+            fi
+          done
+          # Central requires every file to be signed; checksums and signatures need no signature.
+          missing=0
+          while IFS= read -r file; do
+            if [ ! -f "$file.asc" ]; then
+              echo "::error::no signature for $file"
+              missing=1
+            fi
+          done < <(find . -type f ! -name '*.asc' ! -name '*.md5' ! -name '*.sha1' ! -name '*.sha256' ! -name '*.sha512')
+          if [ "$missing" != 0 ]; then exit 1; fi
+          zip -qr ../../central-bundle.zip com
+      - name: Upload to Maven Central
+        id: upload
+        if: steps.secrets.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          token=$(printf '%s:%s' "$MAVEN_CENTRAL_USERNAME" "$MAVEN_CENTRAL_PASSWORD" | base64 -w0)
+          echo "::add-mask::$token"
+          curl --fail-with-body -sS -o upload.txt -X POST -H "Authorization: Bearer $token" \
+            -F bundle=@central-bundle.zip \
+            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC&name=fake-llm-$version" || {
+            echo "::error::the upload to Maven Central failed:"
+            cat upload.txt
+            exit 1
+          }
+          echo "id=$(cat upload.txt)" >> "$GITHUB_OUTPUT"
+      - name: Wait for Maven Central to publish
+        if: steps.secrets.outputs.present == 'true'
+        env:
+          DEPLOYMENT_ID: ${{ steps.upload.outputs.id }}
+        run: |
+          set -euo pipefail
+          token=$(printf '%s:%s' "$MAVEN_CENTRAL_USERNAME" "$MAVEN_CENTRAL_PASSWORD" | base64 -w0)
+          echo "::add-mask::$token"
+          deadline=$((SECONDS + 1800))
+          failures=0
+          while :; do
+            code=$(curl -sS -o status.json -w '%{http_code}' -X POST -H "Authorization: Bearer $token" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$DEPLOYMENT_ID") || code=000
+            if [ "$code" = 200 ]; then
+              failures=0
+              state=$(jq -r '.deploymentState' status.json)
+              case "$state" in
+                PUBLISHING | PUBLISHED)
+                  echo "Maven Central deployment $DEPLOYMENT_ID: $state" | tee -a "$GITHUB_STEP_SUMMARY"
+                  exit 0
+                  ;;
+                FAILED)
+                  echo "::error::Maven Central rejected deployment $DEPLOYMENT_ID:"
+                  jq '.errors' status.json
+                  exit 1
+                  ;;
+              esac
+              echo "state: $state"
+            elif [ "$code" = 000 ] || [ "${code#5}" != "$code" ]; then
+              # A network error or a 5xx is retried, up to 3 times in a row.
+              failures=$((failures + 1))
+              if [ "$failures" -gt 3 ]; then
+                echo "::error::the Maven Central status request failed 4 times in a row (last: $code)"
+                cat status.json 2> /dev/null || true
+                exit 1
+              fi
+            else
+              echo "::error::the Maven Central status request answered $code:"
+              cat status.json
+              exit 1
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::Maven Central did not publish deployment $DEPLOYMENT_ID within 30 minutes"
+              exit 1
+            fi
+            sleep 15
+          done
+
+  # Runs only when all three jobs succeeded; a skipped Maven publish counts as success.
+  release:
+    needs: [verify, maven, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-notes
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fat-jar
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          sha256sum fake-llm-all.jar > fake-llm-all.jar.sha256
+          gh release create "v$version" --verify-tag --title "fake-llm $version" \
+            --notes-file release-notes.md fake-llm-all.jar fake-llm-all.jar.sha256
