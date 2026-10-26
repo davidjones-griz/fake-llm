@@ -59,11 +59,21 @@ private fun usageProblem(arg: String): String? {
     val path = runCatching { Path.of(arg) }.getOrElse { e -> return "invalid path '$arg': ${(e as? InvalidPathException)?.reason ?: e}" }
     return when {
         arg.startsWith("-") -> "unknown flag '$arg'"
-        path.isDirectory() -> "no .json files in $arg".takeIf { jsonFiles(path).isEmpty() }
-        path.isRegularFile() -> null
+        path.isDirectory() -> directoryProblem(path, arg)
+        path.isRegularFile() -> "not a .json file: $arg".takeIf { path.extension != "json" }
         else -> "no such file or directory: $arg"
     }
 }
+
+private fun directoryProblem(
+    dir: Path,
+    arg: String,
+): String? =
+    try {
+        "no .json files in $arg".takeIf { jsonFiles(dir).isEmpty() }
+    } catch (e: IOException) {
+        "cannot read directory $arg: $e"
+    }
 
 private fun jsonFiles(dir: Path): List<Path> =
     Files.list(dir).use { entries ->

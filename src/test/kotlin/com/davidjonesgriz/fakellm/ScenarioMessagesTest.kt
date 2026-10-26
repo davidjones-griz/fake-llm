@@ -21,6 +21,7 @@ class ScenarioMessagesTest {
             messageFor("""{"name":"x","steps":[{"text":"a"},{"text":"b","foo":1}]}"""),
         )
         assertEquals("\$: unknown field 'rules'", messageFor("""{"name":"x","rules":[]}"""))
+        assertEquals("\$: unknown field 'it\\'s'", messageFor("""{"name":"x","steps":[{"text":"t"}],"it's":1}"""))
         assertEquals(
             "step 1: \$.steps[0].error: unknown field 'extra'",
             messageFor("""{"name":"x","steps":[{"error":{"status":500,"extra":1}}]}"""),
@@ -50,12 +51,16 @@ class ScenarioMessagesTest {
 
     @Test
     fun `an integer must be a plain JSON integer in range, not quoted, fractional or with an exponent`() {
-        listOf("\"24\"", "24.0", "2e1", "2E+1", "1.5e3", "3000000000").forEach { value ->
+        listOf("\"24\"", "24.0", "2e1", "2E+1", "1.5e3").forEach { value ->
             assertEquals(
                 "step 1: \$.steps[0].streamChunkChars: expected an integer, got $value",
                 messageFor("""{"name":"x","steps":[{"text":"t","streamChunkChars":$value}]}"""),
             )
         }
+        assertEquals(
+            "step 1: \$.steps[0].streamChunkChars: expected an integer from -2147483648 to 2147483647, got 3000000000",
+            messageFor("""{"name":"x","steps":[{"text":"t","streamChunkChars":3000000000}]}"""),
+        )
         assertEquals(
             "step 1: \$.steps[0].error.status: expected an integer, got \"500\"",
             messageFor("""{"name":"x","steps":[{"error":{"status":"500"}}]}"""),
@@ -64,7 +69,8 @@ class ScenarioMessagesTest {
         val max = """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":9223372036854775807}]}"""
         assertEquals(Long.MAX_VALUE, ScenarioLoader.decode(Json.parseToJsonElement(max)).steps[0].streamInterChunkDelayMs)
         assertEquals(
-            "step 1: \$.steps[0].streamInterChunkDelayMs: expected an integer, got 9223372036854775808",
+            "step 1: \$.steps[0].streamInterChunkDelayMs: expected an integer from -9223372036854775808 to 9223372036854775807, " +
+                "got 9223372036854775808",
             messageFor("""{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":9223372036854775808}]}"""),
         )
     }
@@ -118,7 +124,7 @@ class ScenarioMessagesTest {
         val withSchema = """{"${'$'}schema":"https://example.invalid/s.json","name":"x","steps":[{"text":"t"}]}"""
         assertEquals("x", ScenarioLoader.decode(Json.parseToJsonElement(withSchema)).name)
         assertEquals(
-            "\$.\$schema: expected a string, got null",
+            "\$.\$schema: must not be null",
             messageFor("""{"${'$'}schema":null,"name":"x","steps":[{"text":"t"}]}"""),
         )
         assertEquals(

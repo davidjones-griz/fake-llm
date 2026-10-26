@@ -88,6 +88,7 @@ class ScenarioValidationTest {
                 listOf(good, dir.resolve("missing.json").toString()) to "no such file or directory: ${dir.resolve("missing.json")}",
                 listOf(empty) to "no .json files in $empty",
                 listOf(good, "--port") to "unknown flag '--port'",
+                listOf(dir.write("notes.txt", "{}")) to "not a .json file: ${dir.resolve("notes.txt")}",
                 listOf("a\u0000b") to "invalid path 'a\u0000b': Nul character not allowed",
             ).forEach { (args, detail) ->
                 val outcome = validate(*args.toTypedArray())

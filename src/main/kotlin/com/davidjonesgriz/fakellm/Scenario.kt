@@ -1,11 +1,11 @@
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.File
 import java.nio.file.Path
@@ -184,7 +184,7 @@ internal object ScenarioLoader {
     /** [element] without its top-level `$schema` key. A `$schema` that is not a string is an error. */
     private fun withoutSchemaKey(element: JsonElement): JsonElement {
         val schema = (element as? JsonObject)?.get(SCHEMA_KEY) ?: return element
-        require(schema is JsonPrimitive && schema.isString) { "$.$SCHEMA_KEY: expected a string, got $schema" }
+        ScenarioShape.require(schema, String.serializer().descriptor, "$.$SCHEMA_KEY")
         return JsonObject(element - SCHEMA_KEY)
     }
 

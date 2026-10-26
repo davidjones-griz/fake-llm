@@ -3,6 +3,7 @@ package com.davidjonesgriz.fakellm
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.SerialKind
 import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.Json
@@ -53,7 +54,7 @@ internal object ScenarioShape {
         if (element !is JsonObject) return expected("an object", element, path)
         val unknown = element.keys.firstOrNull { descriptor.getElementIndex(it) == CompositeDecoder.UNKNOWN_NAME }
         return if (unknown != null) {
-            "$path: unknown field '$unknown'"
+            "$path: unknown field '${quoted(unknown)}'"
         } else {
             (0 until descriptor.elementsCount).firstNotNullOfOrNull { i ->
                 val name = descriptor.getElementName(i)
@@ -85,13 +86,13 @@ internal object ScenarioShape {
     ): String? {
         if (element !is JsonObject) return expected("an object", element, path)
         return element.entries.firstNotNullOfOrNull { (key, value) ->
-            problem(value, descriptor.getElementDescriptor(1), "$path['${key.replace("'", "\\'")}']")
+            problem(value, descriptor.getElementDescriptor(1), "$path['${quoted(key)}']")
         }
     }
 
     private fun primitiveProblem(
         element: JsonElement,
-        kind: Any,
+        kind: SerialKind,
         path: String,
     ): String? {
         val primitive = element as? JsonPrimitive
@@ -102,7 +103,19 @@ internal object ScenarioShape {
                 PrimitiveKind.LONG -> primitive?.isString == false && primitive.content.toLongOrNull() != null
                 else -> error("scenario field kind $kind at $path is not supported by the shape check")
             }
-        return if (valid) null else expected(if (kind == PrimitiveKind.STRING) "a string" else "an integer", element, path)
+        return when {
+            valid -> null
+
+            kind == PrimitiveKind.STRING -> expected("a string", element, path)
+
+            primitive?.isString == false &&
+                INTEGER_LITERAL.matches(
+                    primitive.content,
+                )
+            -> expected(INTEGER_RANGES.getValue(kind), element, path)
+
+            else -> expected("an integer", element, path)
+        }
     }
 
     private fun expected(
@@ -161,5 +174,14 @@ internal object ScenarioShape {
         }
 
     private const val PREVIEW_CHARS = 60
+    private val INTEGER_LITERAL = Regex("-?\\d+")
+    private val INTEGER_RANGES: Map<SerialKind, String> =
+        mapOf(
+            PrimitiveKind.INT to "an integer from ${Int.MIN_VALUE} to ${Int.MAX_VALUE}",
+            PrimitiveKind.LONG to "an integer from ${Long.MIN_VALUE} to ${Long.MAX_VALUE}",
+        )
     private val OFFSET = Regex(" at offset (\\d+)")
 }
+
+/** [name] for a path, with `'` escaped, since paths quote names in `'`. */
+private fun quoted(name: String): String = name.replace("'", "\\'")
