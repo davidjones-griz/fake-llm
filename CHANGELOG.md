@@ -62,6 +62,9 @@ change the public API.
 - An SDK conformance suite in `conformance/sdk/python/` that drives the official `anthropic`,
   `openai` and `google-genai` Python SDKs, at pinned versions, against the fat jar and the Docker
   image in CI, plus a daily run against their latest releases.
+- Releases from a `vX.Y.Z` tag: signed artifacts on Maven Central, a multi-arch (amd64, arm64) image
+  at `ghcr.io/davidjones-griz/fake-llm`, and a GitHub Release with the fat jar and this changelog's
+  notes.
 - A JSON Schema for scenario files, `schema/scenario.schema.json`, generated from the spec. A
   scenario may name it in a top-level `"$schema"` key, which the server ignores, so editors such
   as VS Code and IntelliJ check and complete scenario files.

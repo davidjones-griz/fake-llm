@@ -19,6 +19,8 @@ docker build -t fake-llm .
 docker run -p 8080:8080 fake-llm --scenario hello
 ```
 
+Building the image needs BuildKit, `docker build`'s default since Docker 23.
+
 `GET /health` then returns `{"status":"ok","scenario":"hello","lenient":false}`.
 
 The same process from a checkout:
@@ -93,9 +95,52 @@ curl -s http://localhost:8080/anthropic/v1/messages \
 curl -s -X POST http://localhost:8080/control/reset
 ```
 
+## Install
+
+The image is on GHCR, for linux/amd64 and linux/arm64:
+
+```bash
+docker run -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.1.0 --scenario hello
+```
+
+The libraries are on Maven Central. With Gradle:
+
+```kotlin
+repositories { mavenCentral() }
+dependencies {
+    testImplementation("com.davidjonesgriz:fake-llm:0.1.0")
+    // Optional: the JUnit Jupiter extension.
+    testImplementation("com.davidjonesgriz:fake-llm-junit-jupiter:0.1.0")
+}
+```
+
+With Maven:
+
+```xml
+<dependency>
+  <groupId>com.davidjonesgriz</groupId>
+  <artifactId>fake-llm</artifactId>
+  <version>0.1.0</version>
+  <scope>test</scope>
+</dependency>
+<!-- Optional: the JUnit Jupiter extension. -->
+<dependency>
+  <groupId>com.davidjonesgriz</groupId>
+  <artifactId>fake-llm-junit-jupiter</artifactId>
+  <version>0.1.0</version>
+  <scope>test</scope>
+</dependency>
+```
+
+The fat jar is attached to each [GitHub Release](https://github.com/davidjones-griz/fake-llm/releases), with its SHA-256. It needs Java 21 or newer:
+
+```bash
+java -jar fake-llm-all.jar --scenario hello
+```
+
 ## Use as a library
 
-Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `com.davidjonesgriz:fake-llm:0.1.0`. Classes are in the `com.davidjonesgriz.fakellm` package. The artifact is not on Maven Central yet, so for now either publish it to your local Maven repository:
+Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `com.davidjonesgriz:fake-llm:0.1.0`. Classes are in the `com.davidjonesgriz.fakellm` package. To build from a checkout instead, publish it to your local Maven repository:
 
 ```bash
 ./gradlew publishToMavenLocal
@@ -106,7 +151,7 @@ repositories { mavenLocal() }
 dependencies { testImplementation("com.davidjonesgriz:fake-llm:0.1.0") }
 ```
 
-or include a checkout of this repository as a composite build. Gradle then substitutes the dependency with the checkout's source, with no publishing step. The included build runs on your project's Gradle, which must be 9.2 or newer (and so run on JDK 17 or newer); it compiles with a JDK 21 toolchain, and your tests must run on Java 21 or newer:
+or include it as a composite build. Gradle then substitutes the dependency with the checkout's source, with no publishing step. The included build runs on your project's Gradle, which must be 9.2 or newer (and so run on JDK 17 or newer); it compiles with a JDK 21 toolchain, and your tests must run on Java 21 or newer:
 
 ```kotlin
 // settings.gradle.kts
@@ -515,6 +560,22 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 - To change the Gradle version by hand, run `./gradlew wrapper --gradle-version <version> --gradle-distribution-sha256-sum <sum>`, with the sum from `https://services.gradle.org/distributions/gradle-<version>-bin.zip.sha256`. Run it twice: the first run uses the old Gradle, and the second lets the new version regenerate `gradlew`, `gradlew.bat` and the wrapper jar.
 - JUnit versions are ignored by Dependabot. The extension compiles against the oldest JUnit Jupiter it supports (5.10.5, `minimumJupiter` in `junit-jupiter/build.gradle.kts`) and its tests run again on newer releases (the `testJupiter514` and `testJupiter6` tasks, both part of `check`). Update the tested releases by hand; raise the minimum only as a deliberate, documented change.
 - Dependabot security alerts cover the Gradle dependencies. GitHub cannot read them from the build files, so the [Dependency submission](.github/workflows/dependency-submission.yml) workflow resolves the root build (`junit-jupiter/` included) on every push to `main`, weekly, and on demand, and submits every resolved dependency, transitive ones included. The libraries' runtime classpaths, which are also what the fat jar and the Docker image bundle, are marked as runtime dependencies; build plugins, linters, test libraries and Gradle itself are marked as development, so alerts can be filtered by scope. `examples/` is not submitted: its third-party dependencies are currently the same coordinates as the root build's, so a dependency added only to `examples/` would not be covered. An alert usually needs a hand-made fix here: transitive versions are not written in any build file (add a constraint or a BOM), the JUnit versions are set by hand (see the JUnit bullet above), and `ktlintVersion` is a property Dependabot cannot follow. The alerts to dismiss rather than fix are on the JUnit release at the extension's minimum (Jupiter 5.10.5, Platform 1.10.5): it is `compileOnly`, never shipped, and it is the release the extension's tests exist to check. The JUnit the root tests get through `kotlin("test")` (5.10.1) is incidental; fix an alert on it by adding a JUnit BOM to the root `testImplementation`, as `examples/` does.
+
+### Releasing
+
+A release is published from a `vX.Y.Z` tag on `main` by the [Release](.github/workflows/release.yml) workflow.
+
+1. In a pull request, set `version` in `gradle.properties` to `X.Y.Z` and change the CHANGELOG heading from `## [X.Y.Z] - Unreleased` to `## [X.Y.Z] - YYYY-MM-DD`.
+2. After it merges, tag the merge commit and push the tag: `git tag vX.Y.Z <merge commit> && git push origin vX.Y.Z`.
+
+The workflow then runs four jobs:
+
+- `verify` fails unless the tag is on `main`, matches `version` in `gradle.properties`, and has a dated CHANGELOG heading. It extracts that CHANGELOG section as the release notes, then builds and tests as CI does: the build, `examples/`, and the HTTP conformance suite against the fat jar.
+- `image` builds the image for linux/amd64 and linux/arm64, pushes it to `ghcr.io/davidjones-griz/fake-llm` by digest only, and checks `GET /health` on each platform. Only then does it tag it `X.Y.Z`, `X.Y` and `latest`.
+- `maven` runs after `image`, because a Maven Central publish cannot be undone. It signs both artifacts, checks that every file in the bundle is signed, uploads the bundle to the Central Portal, and waits up to 30 minutes for it to publish. It needs four repository secrets: `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD` (a Central Portal user token), `SIGNING_KEY` (the ASCII-armored private key) and `SIGNING_KEY_PASSWORD`. If any is missing, the job passes with a "Maven Central skipped" notice in its log and summary, and the image and GitHub Release are still published.
+- `release` creates the GitHub Release `vX.Y.Z` with the release notes, the fat jar and its `.sha256`. It runs only when the other three jobs succeeded.
+
+If a job fails for a reason outside the code, such as a missing secret, a key that hasn't reached the keyservers, or an outage, fix the cause and re-run the failed jobs. A problem in the code, the POM or the signatures needs a new tag, because a re-run uses the same commit. Central does not accept the same version twice: if Central published after the `maven` job gave up waiting, re-running that job fails, so check the deployment on central.sonatype.com and create the Release by hand. After the first release, set the `fake-llm` package on GHCR to public.
 
 ## Roadmap
 
