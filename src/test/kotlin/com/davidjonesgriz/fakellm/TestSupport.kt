@@ -196,3 +196,16 @@ internal fun repositoryScenarioFiles(): List<File> {
     assertTrue(files.size >= MIN_SCENARIO_FILES, "found only ${files.map { it.path }}")
     return files
 }
+
+/**
+ * The data payloads of an OpenAI Chat Completions stream, in order. Fails unless every frame is
+ * exactly one `data:` line, as the OpenAI stream sends them (no `event:` line).
+ */
+internal fun openAiFrames(body: String): List<String> {
+    val frames = body.split("\n\n").filter { it.isNotEmpty() }
+    return frames.map { frame ->
+        val lines = frame.split("\n")
+        assertTrue(lines.size == 1 && lines[0].startsWith("data: "), "not a single data: line: $frame")
+        lines[0].removePrefix("data: ")
+    }
+}

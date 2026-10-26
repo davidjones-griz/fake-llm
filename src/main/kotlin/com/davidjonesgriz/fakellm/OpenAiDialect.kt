@@ -33,12 +33,16 @@ internal fun parseOpenAiRequest(body: String): ParsedRequest {
             }
         }
     val stream = (obj["stream"] as? JsonPrimitive)?.content?.toBoolean() ?: false
+    // Read like `stream`, and only on a streamed request.
+    val includeUsage =
+        stream && ((obj["stream_options"] as? JsonObject)?.get("include_usage") as? JsonPrimitive)?.content?.toBoolean() == true
     return ParsedRequest(
         model = model,
         systemShape = systemShape,
         promptText = text,
         messageCount = messages.size,
         stream = stream,
+        includeUsage = includeUsage,
     )
 }
 
@@ -79,4 +83,4 @@ internal fun openAiEnvelope(
         )
     }.toString()
 
-private fun openAiFinishReason(anthropicStopReason: String): String = if (anthropicStopReason == "max_tokens") "length" else "stop"
+internal fun openAiFinishReason(anthropicStopReason: String): String = if (anthropicStopReason == "max_tokens") "length" else "stop"

@@ -106,6 +106,7 @@ class FakeLlmServerTest {
                     """{"model":"example-gpt","stream":true,"messages":[{"role":"system","content":"sys"},{"role":"user","content":"hi"}]}""",
                 )
             assertCallError(openai, "no scenario loaded", 3, "openai", "example-gpt", "blocks", 2, "sys\nhi\n")
+            assertFalse(openai.body().contains("data:"))
 
             val gemini =
                 client.post("/gemini/v1beta/models/gemini-2.0-flash:generateContent", """{"contents":[{"parts":[{"text":"Hello"}]}]}""")

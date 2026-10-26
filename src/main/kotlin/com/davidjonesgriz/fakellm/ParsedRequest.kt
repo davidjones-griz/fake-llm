@@ -18,6 +18,8 @@ internal data class ParsedRequest(
     val messageCount: Int,
     val stream: Boolean = false,
     val hasCacheBreakpoint: Boolean = false,
+    /** OpenAI only: the request is streamed and sets `stream_options.include_usage` to true. */
+    val includeUsage: Boolean = false,
 )
 
 private fun hasCacheControl(el: JsonElement?): Boolean =
