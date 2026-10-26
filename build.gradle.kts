@@ -55,6 +55,21 @@ tasks.test {
     useJUnitPlatform()
     // OpenApiConformanceTest checks every conformance case against the spec.
     inputs.dir("conformance/cases").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("conformanceCases")
+    // The scenario JSON Schema and the scenario files the tests check against it and the spec.
+    inputs.file("schema/scenario.schema.json").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("scenarioSchema")
+    listOf("examples/src/test/resources/scenarios", "examples/src/test/scenarios", "junit-jupiter/src/test/fixture-scenarios").forEach {
+        inputs.dir(it).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("scenarios:$it")
+    }
+}
+
+// Writes schema/scenario.schema.json from the OpenAPI spec's Scenario schema (see
+// ScenarioSchemaGenerator). ScenarioSchemaTest fails until the committed file matches the spec.
+tasks.register<JavaExec>("updateScenarioSchema") {
+    group = "build"
+    description = "Writes schema/scenario.schema.json from the OpenAPI spec."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.davidjonesgriz.fakellm.ScenarioSchemaGeneratorKt")
+    workingDir = projectDir
 }
 
 // The OpenAPI document is the language-neutral contract, kept at the repository root; the server

@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -18,6 +19,7 @@ import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.writeText
+import kotlin.test.assertTrue
 
 internal class TestClient(
     private val port: Int,
@@ -130,4 +132,67 @@ internal fun writeScenario(
     json: String,
 ) {
     dir.resolve("$name.json").writeText(json)
+}
+
+/**
+ * Scenarios that both the server's decoder and the scenario schemas (the spec's and the generated
+ * file) must reject, each with the reason it is invalid.
+ */
+internal val invalidScenarios =
+    listOf(
+        "no steps" to """{"name":"x","steps":[]}""",
+        "no name" to """{"steps":[{"text":"t"}]}""",
+        "an unknown field" to """{"name":"x","steps":[{"text":"t"}],"extra":1}""",
+        "the removed rules format" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t"}]}]}""",
+        "a null steps list" to """{"name":"x","steps":null}""",
+        "a step with text and error" to """{"name":"x","steps":[{"text":"t","error":{"status":500}}]}""",
+        "a step with neither" to """{"name":"x","steps":[{}]}""",
+        "a step with both null" to """{"name":"x","steps":[{"text":null,"error":null}]}""",
+        "thinking on an error step" to
+            """{"name":"x","steps":[{"thinking":"h","error":{"status":500}}]}""",
+        "streamErrorAfterChunks on a text step" to
+            """{"name":"x","steps":[{"text":"t","streamErrorAfterChunks":2}]}""",
+        "streamErrorAfterChunks of 0" to
+            """{"name":"x","steps":[{"error":{"status":500},"streamErrorAfterChunks":0}]}""",
+        "streamChunkChars of 0" to """{"name":"x","steps":[{"text":"t","streamChunkChars":0}]}""",
+        "streamChunkChars past Int" to
+            """{"name":"x","steps":[{"text":"t","streamChunkChars":3000000000}]}""",
+        "a negative delay" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":-1}]}""",
+        "an unknown field in a step" to """{"name":"x","steps":[{"text":"t","extra":1}]}""",
+        "an error status of 42" to """{"name":"x","steps":[{"error":{"status":42}}]}""",
+        "an error status of 600" to """{"name":"x","steps":[{"error":{"status":600}}]}""",
+        "an error with no status" to """{"name":"x","steps":[{"error":{"body":"b"}}]}""",
+        "an unknown field in an error" to """{"name":"x","steps":[{"error":{"status":500,"extra":1}}]}""",
+        "a null description" to """{"name":"x","description":null,"steps":[{"text":"t"}]}""",
+        "a null stopReason" to """{"name":"x","steps":[{"text":"t","stopReason":null}]}""",
+        "a null delay" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":null}]}""",
+        "a null error body" to """{"name":"x","steps":[{"error":{"status":500,"body":null}}]}""",
+        "null error headers" to """{"name":"x","steps":[{"error":{"status":500,"headers":null}}]}""",
+        "a non-string error header" to
+            """{"name":"x","steps":[{"error":{"status":500,"headers":{"a":1}}}]}""",
+        "a quoted integer" to """{"name":"x","steps":[{"text":"t","streamChunkChars":"24"}]}""",
+        "a quoted error status" to """{"name":"x","steps":[{"error":{"status":"500"}}]}""",
+        "a null \$schema" to """{"${'$'}schema":null,"name":"x","steps":[{"text":"t"}]}""",
+        "a numeric \$schema" to """{"${'$'}schema":1,"name":"x","steps":[{"text":"t"}]}""",
+        "\$schema in a step" to """{"name":"x","steps":[{"${'$'}schema":"s","text":"t"}]}""",
+    )
+
+/** Every directory of scenario files in the repository, relative to the root project. */
+internal val scenarioDirectories =
+    listOf(
+        "src/main/resources/com/davidjonesgriz/fakellm/scenarios",
+        "examples/src/test/resources/scenarios",
+        "examples/src/test/scenarios",
+        "junit-jupiter/src/test/fixture-scenarios",
+    )
+
+private const val MIN_SCENARIO_FILES = 12
+
+/** The `*.json` files in [scenarioDirectories]. Fails if a directory has none, so a moved directory is noticed. */
+internal fun repositoryScenarioFiles(): List<File> {
+    val byDirectory = scenarioDirectories.associateWith { dir -> File(dir).listFiles { f -> f.extension == "json" }.orEmpty().toList() }
+    byDirectory.forEach { (dir, found) -> assertTrue(found.isNotEmpty(), "no scenario files in $dir") }
+    val files = byDirectory.values.flatten()
+    assertTrue(files.size >= MIN_SCENARIO_FILES, "found only ${files.map { it.path }}")
+    return files
 }
