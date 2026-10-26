@@ -41,10 +41,14 @@ def server():
 
 def _check_running(base_url):
     """A running server must be strict and have open control routes."""
-    health = httpx.get(f"{base_url}/health")
-    if health.status_code != 200 or health.json().get("lenient") is not False:
+    try:
+        health = httpx.get(f"{base_url}/health")
+        lenient = health.json().get("lenient") if health.status_code == 200 else None
+        calls = httpx.get(f"{base_url}/control/calls")
+    except (httpx.TransportError, ValueError) as e:
+        pytest.fail(f"cannot check the server at {base_url}: {e!r}")
+    if lenient is not False:
         pytest.fail(f"GET {base_url}/health must answer 200 with \"lenient\": false, got {health.status_code}: {health.text}")
-    calls = httpx.get(f"{base_url}/control/calls")
     if calls.status_code != 200:
         pytest.fail(f"GET {base_url}/control/calls must answer without a control token, got {calls.status_code}: {calls.text}")
 
@@ -119,7 +123,7 @@ class Fake:
 
 @pytest.fixture
 def fake(server, request):
-    return Fake(server, request.node.name.replace("_", "-"))
+    return Fake(server, request.function.__name__.replace("_", "-"))
 
 
 @pytest.fixture

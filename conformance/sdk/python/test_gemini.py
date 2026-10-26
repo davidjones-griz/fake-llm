@@ -5,6 +5,8 @@ import json
 import pytest
 from google.genai import errors, types
 
+FAST_RETRY = {"retry-after-ms": "10"}
+
 
 def generate(client):
     return client.models.generate_content(model="example-gemini", contents="Hello")
@@ -14,8 +16,11 @@ def call(seq, outcome, step):
     return (seq, "gemini", "example-gemini", outcome, step)
 
 
-def error_step(code, message, status):
-    return {"error": {"status": code, "body": json.dumps({"error": {"code": code, "message": message, "status": status}})}}
+def error_step(code, message, status, headers=None):
+    error = {"status": code, "body": json.dumps({"error": {"code": code, "message": message, "status": status}})}
+    if headers:
+        error["headers"] = headers
+    return {"error": error}
 
 
 def test_text(fake, gemini_client):
@@ -47,7 +52,7 @@ def test_thinking_ignored(fake, gemini_client):
 
 
 def test_default_client_does_not_retry(fake, gemini_client):
-    fake.load([error_step(503, "unavailable", "UNAVAILABLE"), {"text": "ok"}])
+    fake.load([error_step(503, "unavailable", "UNAVAILABLE", FAST_RETRY), {"text": "ok"}])
     with pytest.raises(errors.ServerError) as raised:
         generate(gemini_client)
     assert (raised.value.code, raised.value.status, raised.value.message) == (503, "UNAVAILABLE", "unavailable")
@@ -56,13 +61,13 @@ def test_default_client_does_not_retry(fake, gemini_client):
 
 
 def test_rate_limit_retried(fake, gemini_retry_client):
-    fake.load([error_step(429, "slow down", "RESOURCE_EXHAUSTED"), {"text": "ok"}])
+    fake.load([error_step(429, "slow down", "RESOURCE_EXHAUSTED", FAST_RETRY), {"text": "ok"}])
     assert generate(gemini_retry_client).text == "ok"
     assert fake.log() == [call(1, "error:429", 1), call(2, "text", 2)]
 
 
 def test_unavailable_retries_exhausted(fake, gemini_retry_client):
-    fake.load([error_step(503, "unavailable", "UNAVAILABLE")] * 3)
+    fake.load([error_step(503, "unavailable", "UNAVAILABLE", FAST_RETRY)] * 3)
     with pytest.raises(errors.ServerError) as raised:
         generate(gemini_retry_client)
     assert raised.value.code == 503

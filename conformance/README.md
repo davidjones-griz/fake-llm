@@ -194,7 +194,7 @@ FAKE_LLM_BASE_URL=http://localhost:8080 python -m pytest conformance/sdk/python
 
 `FAKE_LLM_COMMAND` has the same contract as the runner's `-Pfakellm.command`: it runs through
 `sh -c` with `PORT`, `FAKE_LLM_LENIENT` and `FAKE_LLM_CONTROL_TOKEN` set, so the Docker command
-above works here too. Set exactly one of the two variables; with neither or both, every test fails
+above works here too. Set exactly one of the two variables; with neither or both, every test errors
 rather than skipping.
 
 **Retries.** The Anthropic and OpenAI clients keep their default retries (2, so up to 3 calls),
