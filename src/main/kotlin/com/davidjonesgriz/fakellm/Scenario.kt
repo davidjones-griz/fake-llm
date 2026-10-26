@@ -1,6 +1,7 @@
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -136,8 +137,20 @@ internal object ScenarioLoader {
         projectLoader: ClassLoader = defaultLoader,
     ): Scenario {
         require(name.matches(SCENARIO_NAME)) { "illegal scenario name '$name'" }
-        val text = readScenarioText(name, directory?.toFile(), projectLoader)
-        val scenario = decode(json.parseToJsonElement(text))
+        return decodeFile(name, readScenarioText(name, directory?.toFile(), projectLoader))
+    }
+
+    /**
+     * Decodes [text], the content of the file `<name>.json`, with the checks a load by name makes:
+     * [name] must be a legal scenario name, and the scenario must declare it. Used by [load] and by
+     * the `validate` command.
+     */
+    fun decodeFile(
+        name: String,
+        text: String,
+    ): Scenario {
+        require(name.matches(SCENARIO_NAME)) { "'$name' is not a legal scenario name ([A-Za-z0-9_-]+)" }
+        val scenario = decode(ScenarioShape.parse(json, text))
         check(scenario.name == name) {
             "scenario file $name.json declares name '${scenario.name}' — file name and declared name must match"
         }
@@ -146,17 +159,33 @@ internal object ScenarioLoader {
 
     /**
      * Parses one scenario value with the same strict settings as [load] (`ignoreUnknownKeys` is
-     * false). Each step is decoded on its own first, so an invalid one is reported by its number.
+     * false). A top-level `$schema` string, which points an editor at the scenario JSON Schema, is
+     * removed first. Each step is checked on its own first, so an invalid one is reported by its
+     * number. Messages name the path of the field at fault (see [ScenarioShape]).
      */
     internal fun decode(element: JsonElement): Scenario {
-        ((element as? JsonObject)?.get("steps") as? JsonArray)?.forEachIndexed { i, step ->
+        val root = withoutSchemaKey(element)
+        ((root as? JsonObject)?.get("steps") as? JsonArray)?.forEachIndexed { i, step ->
             try {
+                ScenarioShape.require(step, Step.serializer().descriptor, "$.steps[$i]")
                 json.decodeFromJsonElement<Step>(step)
             } catch (e: IllegalArgumentException) {
-                throw IllegalArgumentException("step ${i + 1}: ${e.message}", e)
+                throw IllegalArgumentException("step ${i + 1}: ${ScenarioShape.decodeFailure(e)}", e)
             }
         }
-        return json.decodeFromJsonElement(element)
+        ScenarioShape.require(root, Scenario.serializer().descriptor, "$")
+        return try {
+            json.decodeFromJsonElement(root)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalArgumentException(ScenarioShape.decodeFailure(e), e)
+        }
+    }
+
+    /** [element] without its top-level `$schema` key. A `$schema` that is not a string is an error. */
+    private fun withoutSchemaKey(element: JsonElement): JsonElement {
+        val schema = (element as? JsonObject)?.get(SCHEMA_KEY) ?: return element
+        ScenarioShape.require(schema, String.serializer().descriptor, "$.$SCHEMA_KEY")
+        return JsonObject(element - SCHEMA_KEY)
     }
 
     /**
@@ -216,6 +245,9 @@ internal object ScenarioLoader {
 
     private val defaultLoader: ClassLoader = ScenarioLoader::class.java.classLoader
 }
+
+/** The key a scenario file uses to name its JSON Schema, for editors. */
+private const val SCHEMA_KEY = "\$schema"
 
 private val SCENARIO_NAME = Regex("[A-Za-z0-9_-]+")
 

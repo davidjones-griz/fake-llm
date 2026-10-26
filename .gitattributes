@@ -1,2 +1,4 @@
 # Keep the public API dump byte-identical across platforms.
 *.api text eol=lf
+# The generated scenario schema is compared byte for byte with what the spec gives.
+schema/scenario.schema.json text eol=lf

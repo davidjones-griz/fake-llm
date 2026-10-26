@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "thinking-stream",
   "description": "One step: a text reply that includes a thinking trace. Streaming splits it into 8-character chunks and waits 20 milliseconds between chunks.",
   "steps": [

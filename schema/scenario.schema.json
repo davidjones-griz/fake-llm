@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
+  "$comment": "Generated from openapi/fake-llm.yaml by ./gradlew updateScenarioSchema. Do not edit by hand.",
+  "title": "fake-llm scenario",
+  "type": "object",
+  "description": "One named behaviour: an ordered list of steps. After a load or reset, call N gets step N.\nA call after the last step gets `NoMoreStepsError`.\n",
+  "required": [
+    "name",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The scenario JSON Schema's URL or path, for editors (see `schema/scenario.schema.json`).\nIgnored by the server. Only at the top level, not in a step.\n"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string",
+      "default": ""
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/Step"
+      }
+    }
+  },
+  "$defs": {
+    "Step": {
+      "type": "object",
+      "description": "One scripted reply: assistant `text` (optionally with `thinking`), or a scripted `error`.\nExactly one of `text` and `error` is set (and not null).\n",
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "thinking"
+            ],
+            "properties": {
+              "thinking": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "text"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "streamErrorAfterChunks"
+            ],
+            "properties": {
+              "streamErrorAfterChunks": {
+                "type": "integer"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "thinking": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "An Anthropic thinking block, before the text. Only on a text step."
+        },
+        "stopReason": {
+          "type": "string",
+          "default": "end_turn",
+          "description": "The `stop_reason` of a text step; `max_tokens` reports a truncated reply."
+        },
+        "error": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ErrorStep"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "streamChunkChars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "default": 24,
+          "description": "Size of each streamed delta, in Unicode code points."
+        },
+        "streamInterChunkDelayMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807,
+          "default": 0,
+          "description": "Milliseconds to wait between streamed deltas."
+        },
+        "streamErrorAfterChunks": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Only on an error step, and only when streamed: send this many text deltas, then an\nin-stream error event.\n"
+        }
+      }
+    },
+    "ErrorStep": {
+      "type": "object",
+      "description": "A scripted HTTP error in place of a text reply.",
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "body": {
+          "type": "string",
+          "default": "",
+          "description": "The response body, sent as given."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Extra response headers, such as `retry-after`, sent as given."
+        }
+      }
+    }
+  }
+}

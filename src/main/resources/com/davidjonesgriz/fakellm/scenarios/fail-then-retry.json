@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "fail-then-retry",
   "description": "Two steps. Call 1 returns HTTP 500 with an api_error body. Call 2 returns a normal text reply, so a client that retries once succeeds.",
   "steps": [

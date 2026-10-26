@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "malformed-json",
   "description": "Two steps. Call 1 replies with prose around a broken JSON fragment. Call 2 replies with a valid JSON object, so a client can retry after a parse failure.",
   "steps": [

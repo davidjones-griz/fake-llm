@@ -68,17 +68,7 @@ class OpenApiConformanceTest {
 
     @Test
     fun `every scenario file in the repository conforms to the Scenario schema`() {
-        val byDirectory =
-            listOf(
-                "src/main/resources/com/davidjonesgriz/fakellm/scenarios",
-                "examples/src/test/resources/scenarios",
-                "examples/src/test/scenarios",
-                "junit-jupiter/src/test/fixture-scenarios",
-            ).associateWith { dir -> File(dir).listFiles { f -> f.extension == "json" }.orEmpty().toList() }
-        byDirectory.forEach { (dir, found) -> assertTrue(found.isNotEmpty(), "no scenario files in $dir") }
-        val files = byDirectory.values.flatten()
-        assertTrue(files.size >= MIN_SCENARIO_FILES, "found only ${files.map { it.path }}")
-        files.forEach { file ->
+        repositoryScenarioFiles().forEach { file ->
             assertEquals(emptyList(), validate(SCENARIO, file.readText()), file.path)
         }
     }
@@ -111,16 +101,19 @@ class OpenApiConformanceTest {
     }
 
     @Test
-    fun `integers are written without a fraction, as the spec says`() {
-        // JSON Schema treats 24.0 as an integer, so the rule is stated in the spec's description;
-        // the server's decoder enforces it.
-        val integralFloat = """{"name":"x","steps":[{"text":"t","streamChunkChars":24.0}]}"""
-        assertContains(spec.path("info").path("description").asString(), "without a fraction or exponent")
-        assertFails {
-            ScenarioLoader.decode(
-                kotlinx.serialization.json.Json
-                    .parseToJsonElement(integralFloat),
-            )
+    fun `integers are written without a fraction or exponent, as the spec says`() {
+        // JSON Schema treats 24.0 and 2e1 as integers, so the rule is stated in the spec's
+        // description; the server's decoder enforces it.
+        assertContains(spec.path("info").path("description").asString(), "without quotes, a fraction or an exponent")
+        listOf("24.0", "2e1", "2E+1").forEach { value ->
+            val scenario = """{"name":"x","steps":[{"text":"t","streamChunkChars":$value}]}"""
+            assertEquals(emptyList(), validate(SCENARIO, scenario), value)
+            assertFails(value) {
+                ScenarioLoader.decode(
+                    kotlinx.serialization.json.Json
+                        .parseToJsonElement(scenario),
+                )
+            }
         }
     }
 
@@ -495,7 +488,6 @@ class OpenApiConformanceTest {
         const val BASE = "https://fake-llm.invalid/openapi.json"
         const val SCENARIO = "#/components/schemas/Scenario"
         const val TOKEN = "spec-token"
-        const val MIN_SCENARIO_FILES = 12
         val HTTP_METHODS = setOf("get", "put", "post", "delete", "options", "head", "patch", "trace")
         val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Step", "ErrorStep")
 
@@ -982,41 +974,6 @@ class OpenApiConformanceTest {
                     Target.Operation("/anthropic/v1/messages/batches/{batchId}"),
                     expectStatus = 501,
                 ),
-            )
-
-        /** Each must be rejected by both the Scenario schema and ScenarioLoader.decode. */
-        val invalidScenarios =
-            listOf(
-                "no steps" to """{"name":"x","steps":[]}""",
-                "no name" to """{"steps":[{"text":"t"}]}""",
-                "an unknown field" to """{"name":"x","steps":[{"text":"t"}],"extra":1}""",
-                "the removed rules format" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t"}]}]}""",
-                "a null steps list" to """{"name":"x","steps":null}""",
-                "a step with text and error" to """{"name":"x","steps":[{"text":"t","error":{"status":500}}]}""",
-                "a step with neither" to """{"name":"x","steps":[{}]}""",
-                "a step with both null" to """{"name":"x","steps":[{"text":null,"error":null}]}""",
-                "thinking on an error step" to
-                    """{"name":"x","steps":[{"thinking":"h","error":{"status":500}}]}""",
-                "streamErrorAfterChunks on a text step" to
-                    """{"name":"x","steps":[{"text":"t","streamErrorAfterChunks":2}]}""",
-                "streamErrorAfterChunks of 0" to
-                    """{"name":"x","steps":[{"error":{"status":500},"streamErrorAfterChunks":0}]}""",
-                "streamChunkChars of 0" to """{"name":"x","steps":[{"text":"t","streamChunkChars":0}]}""",
-                "streamChunkChars past Int" to
-                    """{"name":"x","steps":[{"text":"t","streamChunkChars":3000000000}]}""",
-                "a negative delay" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":-1}]}""",
-                "an unknown field in a step" to """{"name":"x","steps":[{"text":"t","extra":1}]}""",
-                "an error status of 42" to """{"name":"x","steps":[{"error":{"status":42}}]}""",
-                "an error status of 600" to """{"name":"x","steps":[{"error":{"status":600}}]}""",
-                "an error with no status" to """{"name":"x","steps":[{"error":{"body":"b"}}]}""",
-                "an unknown field in an error" to """{"name":"x","steps":[{"error":{"status":500,"extra":1}}]}""",
-                "a null description" to """{"name":"x","description":null,"steps":[{"text":"t"}]}""",
-                "a null stopReason" to """{"name":"x","steps":[{"text":"t","stopReason":null}]}""",
-                "a null delay" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":null}]}""",
-                "a null error body" to """{"name":"x","steps":[{"error":{"status":500,"body":null}}]}""",
-                "null error headers" to """{"name":"x","steps":[{"error":{"status":500,"headers":null}}]}""",
-                "a non-string error header" to
-                    """{"name":"x","steps":[{"error":{"status":500,"headers":{"a":1}}}]}""",
             )
     }
 }

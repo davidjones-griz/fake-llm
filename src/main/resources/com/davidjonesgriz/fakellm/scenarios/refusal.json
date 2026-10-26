@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "refusal",
   "description": "One step: a text reply with stop reason refusal and a short message that declines the request.",
   "steps": [

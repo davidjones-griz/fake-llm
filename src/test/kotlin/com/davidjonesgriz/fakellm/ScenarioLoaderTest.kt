@@ -273,24 +273,6 @@ class ScenarioLoaderTest {
         files.forEach { (file, text) -> scenarios.resolve(file).writeText(text) }
     }
 
-    @OptIn(kotlin.io.path.ExperimentalPathApi::class)
-    private fun withScenarioDir(block: (Path) -> Unit) {
-        val dir = createTempDirectory("fake-llm-scenarios")
-        try {
-            block(dir)
-        } finally {
-            dir.deleteRecursively()
-        }
-    }
-
-    private fun writeScenario(
-        dir: Path,
-        name: String,
-        json: String,
-    ) {
-        dir.resolve("$name.json").writeText(json)
-    }
-
     private fun singleReply(
         name: String,
         text: String,

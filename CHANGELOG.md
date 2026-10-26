@@ -59,6 +59,15 @@ change the public API.
   Schema and against the OpenAPI spec, and a runner (`:fake-llm-conformance`, not published) that
   runs them against a server it starts with a command or one already running at a URL. CI runs it
   against the fat jar and the Docker image.
+- A JSON Schema for scenario files, `schema/scenario.schema.json`, generated from the spec. A
+  scenario may name it in a top-level `"$schema"` key, which the server ignores, so editors such
+  as VS Code and IntelliJ check and complete scenario files.
+- `fake-llm validate <file|dir>...` checks scenario files without starting a server, with the
+  checks a load by name makes. It names each invalid file, step and field, and exits 0 when all
+  are valid, 1 when any is invalid and 2 for a usage error.
+- Scenario errors name the path of the field at fault, such as
+  `step 2: $.steps[1]: unknown field 'stopReasn'`, and malformed JSON is reported by line and
+  column.
 - Public API checks: Kotlin explicit API mode, and `api/fake-llm.api`, which `./gradlew check`
   compares with the compiled API.
 
@@ -76,6 +85,8 @@ Compared with pre-release builds of `main`:
   loaded". `POST /control/scenario` returns `steps` instead of `rules`.
 - `Step` checks text-xor-error itself, so an invalid `Step` throws when it is built, not only
   inside a scenario.
+- Scenario integers must be plain JSON integers, as the spec says: a quoted number (`"24"`) or
+  one written with an exponent (`2e1`) is now rejected.
 - `kotlinx-serialization-json` is an `api` dependency.
 - Built with Kotlin 2.4, and the `kotlinx-serialization-json` dependency is 1.12.0. A Kotlin build
   that uses the library needs Kotlin 2.4 (2.3 may work, on a best-effort basis), and gets

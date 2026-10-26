@@ -288,6 +288,16 @@ class FakeLlmServerTest {
     }
 
     @Test
+    fun `an inline scenario may name the scenario schema in a top-level $schema key`() {
+        withServer { client, engine ->
+            val withSchema = """{"scenario":{"${'$'}schema":"https://example.invalid/s.json","name":"s","steps":[{"text":"t"}]}}"""
+            val loaded = client.post("/control/scenario", withSchema)
+            assertEquals(200, loaded.statusCode(), loaded.body())
+            assertEquals("s", engine.currentScenarioName())
+        }
+    }
+
+    @Test
     fun `an inline scenario with an invalid step, no steps, or rules is rejected`() {
         withServer { client, engine ->
             val badStatus = """{"scenario":{"name":"s","steps":[{"text":"ok"},{"error":{"status":42}}]}}"""
@@ -295,6 +305,11 @@ class FakeLlmServerTest {
             assertEquals(400, status.statusCode(), status.body())
             assertContains(errorDetail(status.body()), "step 2: ")
             assertContains(errorDetail(status.body()), "HTTP status")
+
+            val misspelt = """{"scenario":{"name":"s","steps":[{"text":"ok"},{"text":"x","stopReasn":"max_tokens"}]}}"""
+            val field = client.post("/control/scenario", misspelt)
+            assertEquals(400, field.statusCode(), field.body())
+            assertEquals("step 2: \$.steps[1]: unknown field 'stopReasn'", errorDetail(field.body()))
 
             val noSteps = client.post("/control/scenario", """{"scenario":{"name":"s","steps":[]}}""")
             assertEquals(400, noSteps.statusCode(), noSteps.body())

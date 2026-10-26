@@ -25,7 +25,8 @@ info:
     may add fields. Request bodies are strict: unknown fields are rejected. Human-readable
     messages (`fake_llm_error` texts other than `"exception"`, `"no scenario loaded"` and
     `"no more steps"`, and `detail`) are diagnostics, not part of the contract. Integers are written as JSON integers,
-    without a fraction or exponent: `24.0` is rejected where an integer is expected.
+    without quotes, a fraction or an exponent: `"24"`, `24.0` and `2e1` are rejected where an
+    integer is expected.
 
     **Scenarios and calls.** A scenario is an ordered list of steps. Every request to a vendor
     route that does not get `ExceptionError` is a call: it takes the next call number (`seq`,
@@ -605,6 +606,11 @@ components:
       required: [name, steps]
       additionalProperties: false
       properties:
+        $schema:
+          type: string
+          description: |
+            The scenario JSON Schema's URL or path, for editors (see `schema/scenario.schema.json`).
+            Ignored by the server. Only at the top level, not in a step.
         name:
           type: string
         description:
