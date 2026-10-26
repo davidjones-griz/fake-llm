@@ -1,0 +1,95 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-stream-no-more-steps",
+  "description": "A streamed call after the last step gets the JSON no-more-steps 400, with no event stream.",
+  "scenario": {
+    "name": "stream-no-more-steps",
+    "steps": [
+      {
+        "text": "only"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-openai-1",
+          "object": "chat.completion",
+          "model": "fake-openai",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "only"
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Again"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no more steps",
+          "scenario": "stream-no-more-steps",
+          "steps": 1,
+          "seq": 2,
+          "vendor": "openai",
+          "model": "example-gpt",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "Again\n"
+        }
+      }
+    }
+  ]
+}

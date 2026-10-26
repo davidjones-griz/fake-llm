@@ -1,0 +1,110 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-stream-error-after-chunks",
+  "description": "streamErrorAfterChunks sends the role chunk and that many filler chunks, then the error body as a data frame, with no finish chunk or [DONE].",
+  "scenario": {
+    "name": "stream-error-after-chunks",
+    "steps": [
+      {
+        "error": {
+          "status": 500,
+          "body": "{\"error\":{\"message\":\"server error\",\"type\":\"server_error\",\"param\":null,\"code\":null}}"
+        },
+        "streamErrorAfterChunks": 2,
+        "streamChunkChars": 10
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "role": "assistant",
+                    "content": ""
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "content": "Thinking t"
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "id": "fake-openai-1",
+              "object": "chat.completion.chunk",
+              "model": "fake-openai",
+              "choices": [
+                {
+                  "index": 0,
+                  "delta": {
+                    "content": "his throug"
+                  },
+                  "finish_reason": null
+                }
+              ]
+            }
+          },
+          {
+            "event": "message",
+            "data": {
+              "error": {
+                "message": "server error",
+                "type": "server_error",
+                "param": null,
+                "code": null
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
