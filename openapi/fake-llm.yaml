@@ -806,7 +806,7 @@ components:
             one is set.
     ErrorStep:
       type: object
-      description: A scripted HTTP error in place of a text reply.
+      description: A scripted HTTP error in place of a reply.
       required: [status]
       additionalProperties: false
       properties:

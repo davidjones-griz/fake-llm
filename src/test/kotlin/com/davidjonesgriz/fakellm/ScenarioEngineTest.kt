@@ -442,11 +442,12 @@ class ScenarioEngineTest {
             gemini.message,
         )
         assertEquals(emptyList(), engine.calls())
-        listOf(req(stream = true) to "anthropic", req() to "openai").forEach { (request, vendor) ->
-            engine.reset()
-            engine.resolve(vendor, request)
-            assertEquals(listOf(Triple(1L, 1, "tool-calls")), engine.calls().map { Triple(it.seq, it.step, it.outcome) }, vendor)
-        }
+        // Neither rejected request took a number, so the step is still next: the first call gets it.
+        engine.resolve("anthropic", req(stream = true))
+        assertEquals(listOf(Triple(1L, 1, "tool-calls")), engine.calls().map { Triple(it.seq, it.step, it.outcome) })
+        engine.reset()
+        engine.resolve("openai", req())
+        assertEquals(listOf(Triple(1L, 1, "tool-calls")), engine.calls().map { Triple(it.seq, it.step, it.outcome) })
     }
 
     @Test

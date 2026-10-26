@@ -45,9 +45,12 @@ public data class Step(
     /** Assistant text copied into the vendor response. */
     val text: String? = null,
     val thinking: String? = null,
-    /** `stop_reason` for a text step. `"max_tokens"` reports that the reply was truncated. */
+    /**
+     * `stop_reason` for a reply. `"max_tokens"` reports that the reply was truncated. On a step with
+     * [toolCalls] it must be `end_turn` or `tool_use`, and every format reports a tool-call stop.
+     */
     val stopReason: String = "end_turn",
-    /** A scripted vendor error in place of a text reply. The status classifies it; the body is sent as given. */
+    /** A scripted vendor error in place of a reply. The status classifies it; the body is sent as given. */
     val error: ErrorStep? = null,
     /**
      * SSE streaming: delta size in Unicode code points, not UTF-16 chars. A boundary inside a
@@ -131,7 +134,7 @@ internal fun ToolCall.argumentText(): String = rawArguments ?: (arguments ?: Jso
 private const val DEFAULT_STREAM_CHUNK_CHARS = 24
 
 /**
- * A scripted HTTP error in place of a text reply: the [status], the [body], and extra [headers].
+ * A scripted HTTP error in place of a reply: the [status], the [body], and extra [headers].
  *
  * @throws IllegalArgumentException when [status] is not an HTTP status (100 to 599). The message
  *   text is diagnostic, not part of the API.

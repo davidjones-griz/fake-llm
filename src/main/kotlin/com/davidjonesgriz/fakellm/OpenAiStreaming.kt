@@ -141,7 +141,7 @@ internal fun emitOpenAiContentDeltas(
  *
  * An error step without `streamErrorAfterChunks`, and the no-more-steps and no-scenario 400s,
  * are sent as the plain JSON response, with no SSE bytes. Otherwise the response is an event
- * stream: the role chunk, then for a text step one content chunk per `streamChunkChars` code
+ * stream: the role chunk, then for a reply step one content chunk per `streamChunkChars` code
  * points (each after `streamInterChunkDelayMs`), the finish chunk, the usage chunk when the
  * request set `stream_options.include_usage`, and `data: [DONE]`. Tool calls come after the
  * content chunks: per call a header chunk, then its argument text in `streamChunkChars` pieces;
