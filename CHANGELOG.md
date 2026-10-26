@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0, a minor version may
 change the public API.
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-26
 
 ### Added
 
@@ -102,7 +102,7 @@ Compared with pre-release builds of `main`:
   the including project, running on JDK 17 or newer.
 - A scenario that fails validation while being decoded from JSON throws an
   `IllegalArgumentException`. When a step is invalid, the message starts with its 1-based number
-  (`step 2: …`) and the cause is kotlinx-serialization's `SerializationException`.
+  (`step 2: …`), and the message names the path of the field at fault.
 - Docker image and the `fake-llm-all.jar` fat jar.
 
 ### Fixed
