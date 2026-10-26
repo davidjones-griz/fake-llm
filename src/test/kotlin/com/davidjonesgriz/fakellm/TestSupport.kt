@@ -175,6 +175,17 @@ internal val invalidScenarios =
         "a null \$schema" to """{"${'$'}schema":null,"name":"x","steps":[{"text":"t"}]}""",
         "a numeric \$schema" to """{"${'$'}schema":1,"name":"x","steps":[{"text":"t"}]}""",
         "\$schema in a step" to """{"name":"x","steps":[{"${'$'}schema":"s","text":"t"}]}""",
+        "toolCalls with an error" to """{"name":"x","steps":[{"toolCalls":[{"name":"f"}],"error":{"status":500}}]}""",
+        "an empty toolCalls list" to """{"name":"x","steps":[{"toolCalls":[]}]}""",
+        "a null toolCalls with no text" to """{"name":"x","steps":[{"toolCalls":null}]}""",
+        "a tool call without a name" to """{"name":"x","steps":[{"toolCalls":[{"arguments":{}}]}]}""",
+        "an empty tool name" to """{"name":"x","steps":[{"toolCalls":[{"name":""}]}]}""",
+        "an empty tool call id" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","id":""}]}]}""",
+        "arguments and rawArguments" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","arguments":{},"rawArguments":"{}"}]}]}""",
+        "array arguments" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","arguments":[1]}]}]}""",
+        "object rawArguments" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","rawArguments":{}}]}]}""",
+        "max_tokens with toolCalls" to """{"name":"x","steps":[{"toolCalls":[{"name":"f"}],"stopReason":"max_tokens"}]}""",
+        "an unknown field in a tool call" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","input":{}}]}]}""",
     )
 
 /** Every directory of scenario files in the repository, relative to the root project. */

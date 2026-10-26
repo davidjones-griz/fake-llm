@@ -628,14 +628,19 @@ components:
     Step:
       type: object
       description: |
-        One scripted reply: assistant `text` (optionally with `thinking`), or a scripted `error`.
-        Exactly one of `text` and `error` is set (and not null).
+        One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking`), or a
+        scripted `error`. A step sets exactly one of a reply and `error`.
       additionalProperties: false
       oneOf:
-        - required: [text]
-          properties:
-            text:
-              type: string
+        - anyOf:
+            - required: [text]
+              properties:
+                text:
+                  type: string
+            - required: [toolCalls]
+              properties:
+                toolCalls:
+                  type: array
         - required: [error]
           properties:
             error:
@@ -647,10 +652,24 @@ components:
               thinking:
                 type: string
           then:
-            required: [text]
+            anyOf:
+              - required: [text]
+                properties:
+                  text:
+                    type: string
+              - required: [toolCalls]
+                properties:
+                  toolCalls:
+                    type: array
+        - if:
+            required: [toolCalls]
             properties:
-              text:
-                type: string
+              toolCalls:
+                type: array
+          then:
+            properties:
+              stopReason:
+                enum: [end_turn, tool_use]
         - if:
             required: [streamErrorAfterChunks]
             properties:
@@ -666,11 +685,13 @@ components:
           type: [string, "null"]
         thinking:
           type: [string, "null"]
-          description: An Anthropic thinking block, before the text. Only on a text step.
+          description: An Anthropic thinking block, before the text and tool calls. Only on a reply step.
         stopReason:
           type: string
           default: end_turn
-          description: The `stop_reason` of a text step; `max_tokens` reports a truncated reply.
+          description: |
+            The `stop_reason` of a reply; `max_tokens` reports a truncated reply. On a step with
+            `toolCalls` it must be `end_turn` or `tool_use`, and every format reports a tool-call stop.
         error:
           oneOf:
             - $ref: "#/components/schemas/ErrorStep"
@@ -694,6 +715,45 @@ components:
           description: |
             Only on an error step, and only when streamed (Anthropic or OpenAI): send this many text
             deltas, then an in-stream error.
+        toolCalls:
+          type: [array, "null"]
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ToolCall"
+          description: Tool calls the reply makes, in order, after any `text`.
+    ToolCall:
+      type: object
+      description: One scripted tool call.
+      required: [name]
+      additionalProperties: false
+      not:
+        required: [arguments, rawArguments]
+        properties:
+          arguments:
+            type: object
+          rawArguments:
+            type: string
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: The tool's name, sent as given.
+        arguments:
+          type: [object, "null"]
+          description: The arguments as a JSON object. With `rawArguments` also unset, `{}`.
+        rawArguments:
+          type: [string, "null"]
+          description: |
+            The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI format and a
+            streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step
+            has it gets `ExceptionError`, and the step is not used.
+        id:
+          type: [string, "null"]
+          minLength: 1
+          description: |
+            The call's id. Default: `toolu_fake_<seq>_<n>` (Anthropic) and `call_fake_<seq>_<n>`
+            (OpenAI), where `n` is the call's 1-based position in the step. Gemini sends an id only when
+            one is set.
     ErrorStep:
       type: object
       description: A scripted HTTP error in place of a text reply.

@@ -34,11 +34,11 @@ public data class Scenario(
 }
 
 /**
- * One step of a [Scenario]: assistant [text], optionally with [thinking], or a scripted [error].
- * Exactly one of [text] and [error] must be set.
+ * One step of a [Scenario]: a reply ([text], [toolCalls] or both, optionally with [thinking]) or a
+ * scripted [error].
  *
- * @throws IllegalArgumentException when a value is invalid, including when both or neither of [text]
- *   and [error] are set. The message text is diagnostic, not part of the API.
+ * @throws IllegalArgumentException when a value is invalid, including when a step sets both or
+ *   neither of a reply and [error]. The message text is diagnostic, not part of the API.
  */
 @Serializable
 public data class Step(
@@ -74,9 +74,17 @@ public data class Step(
      * already been generated.
      */
     val streamErrorAfterChunks: Int? = null,
+    /** Tool calls the reply makes, in order, after any `text`. */
+    val toolCalls: List<ToolCall>? = null,
 ) {
     init {
-        require((text != null) xor (error != null)) { "a step must set exactly one of text and error" }
+        require(((text != null) || (toolCalls != null)) xor (error != null)) {
+            "a step must set either error or a reply: text, toolCalls or both"
+        }
+        require(toolCalls == null || toolCalls.isNotEmpty()) { "toolCalls must not be empty" }
+        require(toolCalls == null || stopReason == "end_turn" || stopReason == "tool_use") {
+            "stopReason must be end_turn or tool_use on a step with toolCalls, got '$stopReason'"
+        }
         require(streamChunkChars > 0) { "streamChunkChars must be positive, got $streamChunkChars" }
         require(streamInterChunkDelayMs >= 0) {
             "streamInterChunkDelayMs must be >= 0, got $streamInterChunkDelayMs"
@@ -87,9 +95,38 @@ public data class Step(
         require(streamErrorAfterChunks == null || streamErrorAfterChunks > 0) {
             "streamErrorAfterChunks must be positive, got $streamErrorAfterChunks"
         }
-        require(thinking == null || text != null) { "thinking is only valid on a text step" }
+        require(thinking == null || text != null || toolCalls != null) {
+            "thinking is only valid on a step with text or toolCalls"
+        }
     }
 }
+
+/**
+ * One scripted tool call in a [Step]'s reply.
+ *
+ * @throws IllegalArgumentException when [name] or [id] is empty, or when both [arguments] and
+ *   [rawArguments] are set. The message text is diagnostic, not part of the API.
+ */
+@Serializable
+public data class ToolCall(
+    /** The tool's name, sent as given: it need not match a tool the request declared. */
+    val name: String,
+    /** The arguments as a JSON object. Null, with rawArguments null too, means `{}`. */
+    val arguments: JsonObject? = null,
+    /** The argument text sent verbatim, for invalid or non-object JSON. Formats that carry text only. */
+    val rawArguments: String? = null,
+    /** The call's id. Null uses the format's default (see Rendering). */
+    val id: String? = null,
+) {
+    init {
+        require(name.isNotEmpty()) { "a tool call's name must not be empty" }
+        require(id == null || id.isNotEmpty()) { "a tool call's id must not be empty" }
+        require(arguments == null || rawArguments == null) { "a tool call sets at most one of arguments and rawArguments" }
+    }
+}
+
+/** The argument text a format that carries text sends: [ToolCall.rawArguments], or the compact JSON of the arguments. */
+internal fun ToolCall.argumentText(): String = rawArguments ?: (arguments ?: JsonObject(emptyMap())).toString()
 
 private const val DEFAULT_STREAM_CHUNK_CHARS = 24
 

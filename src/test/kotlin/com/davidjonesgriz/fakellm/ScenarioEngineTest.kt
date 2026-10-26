@@ -350,12 +350,53 @@ class ScenarioEngineTest {
     }
 
     @Test
-    fun `a scenario needs at least one step, and a step exactly one of text and error`() {
+    fun `a step is an error or a reply of text, tool calls or both`() {
+        val call = listOf(ToolCall(name = "f"))
         assertFailsWith<IllegalArgumentException> { Scenario(name = "empty", steps = emptyList()) }
         assertFailsWith<IllegalArgumentException> { Step(text = "x", error = ErrorStep(500)) }
         assertFailsWith<IllegalArgumentException> { Step() }
         Step(text = "x")
         Step(error = ErrorStep(500))
+        Step(toolCalls = call)
+        Step(text = "x", toolCalls = call)
+        Step(thinking = "t", toolCalls = call)
+        Step(toolCalls = call, stopReason = "tool_use")
+        val failures =
+            listOf(
+                assertFailsWith<IllegalArgumentException> { Step(toolCalls = call, error = ErrorStep(500)) },
+                assertFailsWith<IllegalArgumentException> { Step(toolCalls = emptyList()) },
+                assertFailsWith<IllegalArgumentException> { Step(toolCalls = call, stopReason = "max_tokens") },
+            )
+        assertEquals(
+            listOf(
+                "a step must set either error or a reply: text, toolCalls or both",
+                "toolCalls must not be empty",
+                "stopReason must be end_turn or tool_use on a step with toolCalls, got 'max_tokens'",
+            ),
+            failures.map { it.message },
+        )
+    }
+
+    @Test
+    fun `a tool call needs a name, a non-empty id and at most one of arguments and rawArguments`() {
+        ToolCall(name = "f", id = "x", arguments = JsonObject(emptyMap()))
+        ToolCall(name = "f", rawArguments = "not json")
+        val failures =
+            listOf(
+                assertFailsWith<IllegalArgumentException> { ToolCall(name = "") },
+                assertFailsWith<IllegalArgumentException> { ToolCall(name = "f", id = "") },
+                assertFailsWith<IllegalArgumentException> {
+                    ToolCall(name = "f", arguments = JsonObject(emptyMap()), rawArguments = "{}")
+                },
+            )
+        assertEquals(
+            listOf(
+                "a tool call's name must not be empty",
+                "a tool call's id must not be empty",
+                "a tool call sets at most one of arguments and rawArguments",
+            ),
+            failures.map { it.message },
+        )
     }
 
     @Test

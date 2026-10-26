@@ -93,7 +93,8 @@ class ScenarioSchemaTest {
     fun `the schema accepts a top-level $schema and explicit nulls on nullable fields`() {
         val valid =
             """{"${'$'}schema":"${ScenarioSchemaGenerator.ID}","name":"x","steps":[
-              {"text":null,"thinking":null,"error":{"status":500}},{"text":"t","error":null,"streamErrorAfterChunks":null}
+              {"text":null,"thinking":null,"error":{"status":500}},{"text":"t","error":null,"streamErrorAfterChunks":null},
+              {"text":"t","toolCalls":null},{"toolCalls":[{"name":"f","arguments":null,"rawArguments":null,"id":null}]}
             ]}"""
         assertEquals(emptyList(), errors(valid))
     }
@@ -178,7 +179,13 @@ class ScenarioSchemaTest {
      * removes it before decoding.
      */
     private fun modelDrift(schemas: JsonObject): List<String> {
-        val models = listOf(Scenario.serializer().descriptor, Step.serializer().descriptor, ErrorStep.serializer().descriptor)
+        val models =
+            listOf(
+                Scenario.serializer().descriptor,
+                Step.serializer().descriptor,
+                ToolCall.serializer().descriptor,
+                ErrorStep.serializer().descriptor,
+            )
         return models.flatMap { descriptor ->
             val name = descriptor.serialName.substringAfterLast('.')
             val schema = schemas.getValue(name).jsonObject
