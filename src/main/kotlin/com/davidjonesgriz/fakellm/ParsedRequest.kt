@@ -90,7 +90,7 @@ private fun StringBuilder.appendTexts(el: JsonElement?) {
 
         JsonNull -> {}
 
-        // Only JSON strings are text: a number or boolean adds nothing.
+        // Only JSON strings are text: null, numbers and booleans add nothing.
         is JsonPrimitive -> {
             if (el.isString) append(el.content).append('\n')
         }
