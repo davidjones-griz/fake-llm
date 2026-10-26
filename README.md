@@ -6,7 +6,7 @@ A local HTTP stand-in for Anthropic Messages, OpenAI chat completions, and Gemin
 
 I got tired of my CI pipeline failing over trivial bugs that should have been caught easily, because there was no way to run each LLM-calling component without deploying it and paying for real model calls. I extracted fake-llm from a personal project so I could exercise each component on its own.
 
-The code that calls an LLM is deterministic; the model is the only part you cannot predict. A scenario takes that part away: it is an ordered list of steps, and call N gets step N, locally and with no model call. That includes the failure paths: a scripted error status, a cutoff in the middle of a stream, `max_tokens` truncation, malformed output, and a failure followed by a successful retry.
+The code that calls an LLM is deterministic; the model is the only part you cannot predict. A scenario takes that part away: it is an ordered list of steps, and call N gets step N, locally and with no model call. That includes the failure paths: a scripted error status, a cutoff in the middle of a stream, `max_tokens` truncation, malformed output, a tool call with valid or malformed arguments, and a failure followed by a successful retry.
 
 A call the scenario has no step for fails: a call after the last step returns HTTP 400 (`no more steps`), and so does a call with no scenario loaded, unless the server runs with `--lenient` or `FAKE_LLM_LENIENT=true`, which answers that case with a canned reply.
 
@@ -243,7 +243,7 @@ The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6
 
 ### API stability
 
-The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord` or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
+The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ToolCall`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `ToolCallRecord`, `ToolResultRecord`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord` or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
 
 [examples/](examples/) is a complete consumer: a small client with retry logic, tested against the published artifact.
 
@@ -272,19 +272,20 @@ A scenario file is JSON. Unknown keys are rejected. `name` is required, `descrip
 }
 ```
 
-After the scenario is loaded or reset, call N on any vendor route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every vendor request that the route's parser accepts is a call and gets one entry in the call log. A request answered with the `exception` 400 (a body that is not JSON, has no `messages` or `contents` array, or has an invalid `cache_control`), a 404 and the Batches 501 are not calls.
+After the scenario is loaded or reset, call N on any vendor route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every vendor request that the route's parser accepts is a call and gets one entry in the call log. A request answered with the `exception` 400 (a body that is not JSON, has no `messages` or `contents` array, or has an invalid `cache_control`, or whose next step has a tool call with `rawArguments` that its format can't carry), a 404 and the Batches 501 are not calls.
 
-Each step sets exactly one of `text` or `error`. When a step in a file or an inline scenario is invalid, the error names its number, from 1, and the path of the field at fault, such as `step 2: $.steps[1]: unknown field 'stopReasn'`. The path is relative to the scenario, including for an inline scenario in `POST /control/scenario`.
+Each step is a reply (`text`, `toolCalls`, or both) or an `error`. When a step in a file or an inline scenario is invalid, the error names its number, from 1, and the path of the field at fault, such as `step 2: $.steps[1]: unknown field 'stopReasn'`. The path is relative to the scenario, including for an inline scenario in `POST /control/scenario`.
 
 | Field | Meaning |
 | --- | --- |
-| `text` | Assistant text copied into the vendor response. |
-| `thinking` | Optional thinking trace. Legal only on a text step. Anthropic includes it as a thinking block (buffered) or as thinking deltas before the text deltas (streaming), with signature `fake-thinking-signature`. OpenAI and Gemini ignore it and return `text` only. |
-| `stopReason` | Stop reason for a text step. Default `end_turn`. Anthropic copies it to `stop_reason`. `"max_tokens"` means the reply was truncated: OpenAI then reports `finish_reason` `length`, and Gemini reports `finishReason` `MAX_TOKENS`. Any other value becomes OpenAI `stop` and Gemini `STOP`. |
+| `text` | Assistant text copied into the vendor response. Optional on a step with `toolCalls`. |
+| `thinking` | Optional thinking trace. Legal only on a reply step. Anthropic includes it as a thinking block (buffered) or as thinking deltas (streaming), before the text and tool calls, with signature `fake-thinking-signature`. OpenAI and Gemini ignore it. |
+| `stopReason` | Stop reason for a reply. Default `end_turn`. Anthropic copies it to `stop_reason`. `"max_tokens"` means the reply was truncated: OpenAI then reports `finish_reason` `length`, and Gemini reports `finishReason` `MAX_TOKENS`. Any other value becomes OpenAI `stop` and Gemini `STOP`. With `toolCalls` it must be `end_turn` or `tool_use`, and is sent as Anthropic `tool_use`, OpenAI `tool_calls` and Gemini `STOP`. |
 | `error` | A scripted HTTP error instead of a text reply. `status` is the HTTP status, from 100 to 599. `body` is sent as given (default empty), and `headers` are added as given (for example `retry-after`). The response is `Content-Type: application/json` unless `headers` sets a `content-type`, which replaces it. |
 | `streamChunkChars` | SSE delta size in Unicode code points, not UTF-16 chars. Default 24. Must be positive. Used only for Anthropic and OpenAI streaming. A buffered request ignores it. |
 | `streamInterChunkDelayMs` | Milliseconds to wait between SSE deltas. Default 0. Must be zero or positive. Anthropic and OpenAI streaming. |
 | `streamErrorAfterChunks` | Legal only on an error step, and must be positive. Anthropic and OpenAI streaming. Null, the default, means the error is a plain HTTP response and no SSE bytes are written, including when the client asked for a stream. Setting it writes HTTP 200 and an event stream. Anthropic: `message_start`, a text block start, this many filler deltas, then `event: error` whose data is `error.body` (or a generic `api_error` body when `body` is blank); `content_block_stop`, `message_delta`, and `message_stop` are skipped. OpenAI: the role chunk, this many filler chunks, then a `data:` frame whose payload is `error.body` (or a generic `server_error` body when `body` is blank); no finish chunk, usage chunk or `[DONE]` follows. `error.status` and `error.headers` are not used on that path. A non-streaming client still receives `error.status` and `error.body`. The filler is fixed text, not the error body. |
+| `toolCalls` | Tool calls the reply makes, in order, after any `text`. See [Tool calls](#tool-calls). |
 
 A call after the last step returns HTTP 400, in strict and lenient mode alike. The body is JSON:
 
@@ -311,6 +312,83 @@ The combined prompt text, used by `promptSample` and `prompt_preview`, depends o
 - Anthropic: the `system` field, when it is a string or an array of text blocks, then each message `content` that is a string or an array of text blocks. Non-text blocks contribute nothing. Each piece is followed by a newline. A `null`, number or boolean contributes nothing.
 - OpenAI: every message whose `content` is a JSON string, including a system message. Array content is skipped. A message with role `system` sets `systemShape` to `blocks`; otherwise it is `absent`. OpenAI requests never record `string`.
 - Gemini: each `contents[].parts[].text`. `systemInstruction` is not read, and `systemShape` is always `absent`. The model id comes from the URL, not the body.
+
+### Tool calls
+
+A step's `toolCalls` lists the tool calls its reply makes, after any `text`. Each one is:
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Required, not empty. The tool's name, sent as given: it need not match a tool the request declared. |
+| `arguments` | The arguments as a JSON object, sent as given. With `rawArguments` also unset, `{}`. |
+| `rawArguments` | The argument text, sent verbatim, so it can be invalid JSON. Set at most one of `arguments` and `rawArguments`. |
+| `id` | The call's id, not empty. By default `toolu_fake_<seq>_<n>` for Anthropic and `call_fake_<seq>_<n>` for OpenAI, where `seq` is the call's number and `n` the tool call's 1-based position in the step. Gemini sends an id only when one is set. |
+
+Each format renders them as its API does:
+
+- Anthropic: one `tool_use` block per call, after the thinking and text blocks, with `input` set to `arguments`, and `stop_reason` `tool_use`. Streamed, each call is a `tool_use` block start with an empty `input`, the argument text as `input_json_delta` pieces of `streamChunkChars` code points, and a block stop.
+- OpenAI: `message.tool_calls`, each with `type` `function` and the argument text as `function.arguments`, and `finish_reason` `tool_calls`. `message.content` is the text, or `null` without text. Streamed, the tool calls come after the content chunks: per call a header chunk with its `index`, `id`, `type` and `name` and empty `arguments`, then its argument text in `streamChunkChars` pieces. Without text, the role chunk's `content` is `null`.
+- Gemini: one `functionCall` part per call, after the text part, with `args` set to `arguments`, and `finishReason` `STOP`. Gemini function calls are buffered only.
+
+`rawArguments` is sent verbatim by OpenAI, buffered or streamed, and by a streamed Anthropic reply. A buffered Anthropic `tool_use.input` and a Gemini `functionCall.args` must be JSON objects, so a buffered Anthropic request or a Gemini request whose next step sets `rawArguments` gets the `exception` 400. That request is not a call: the step is not used, and the next call gets it.
+
+The request's `tools` and `tool_choice` (and Gemini `tools` and `toolConfig`) are ignored: a step's tool calls are sent whatever tools the request declares.
+
+A tool loop is two steps: the tool call, then the reply after the app sends the result back.
+
+```json
+{
+  "name": "weather-tool",
+  "steps": [
+    { "toolCalls": [{ "name": "get_weather", "arguments": { "city": "Paris" } }] },
+    { "text": "It is 18 degrees in Paris." }
+  ]
+}
+```
+
+With the OpenAI SDK, the app sends the assistant message back with the tool's result:
+
+```python
+first = client.chat.completions.create(model="example-gpt", messages=messages, tools=tools)
+message = first.choices[0].message
+messages += [message, {"role": "tool", "tool_call_id": message.tool_calls[0].id, "content": "18 degrees"}]
+second = client.chat.completions.create(model="example-gpt", messages=messages, tools=tools)
+```
+
+`GET /control/calls` then shows both calls, with the tool call the first response carried and the result the second request sent back:
+
+```json
+[
+  {
+    "seq": 1,
+    "step": 1,
+    "vendor": "openai",
+    "model": "example-gpt",
+    "systemShape": "absent",
+    "messageCount": 1,
+    "outcome": "tool-calls",
+    "timestampMs": 1710000000000,
+    "promptSample": "Hello\n",
+    "toolCalls": [{ "id": "call_fake_1_1", "name": "get_weather" }],
+    "toolResults": []
+  },
+  {
+    "seq": 2,
+    "step": 2,
+    "vendor": "openai",
+    "model": "example-gpt",
+    "systemShape": "absent",
+    "messageCount": 3,
+    "outcome": "text",
+    "timestampMs": 1710000000100,
+    "promptSample": "Hello\n18 degrees\n",
+    "toolCalls": [],
+    "toolResults": [{ "id": "call_fake_1_1", "name": "get_weather", "content": "18 degrees", "isError": false }]
+  }
+]
+```
+
+`toolResults` lists every tool result in the request, in order: Anthropic `tool_result` blocks (`id` from `tool_use_id`, `content` as sent, `isError` when `is_error` is `true`), OpenAI `tool` messages (`id` from `tool_call_id`, `content` as sent), and Gemini `functionResponse` parts (`id`, `name`, and `response` as `content`). For Anthropic and OpenAI, `name` is the name of the tool call in the same request with the matching id, or `null` when there is none. A multi-turn request resends its history, so a later call lists the earlier results again. The fake records what was sent; the test decides what is right.
 
 ### Writing scenarios for tests
 
@@ -430,9 +508,9 @@ Always open, including when a control token is set. Reports liveness, the loaded
 
 ### `POST /anthropic/v1/messages`
 
-Anthropic Messages JSON. A text step with `"stream": true` is answered as `text/event-stream`: `message_start`, content blocks and deltas, `message_delta`, `message_stop`. A thinking step adds a thinking block before the text block. An error step with `streamErrorAfterChunks` set uses the shorter stream described above. Any other request, including an error step that leaves `streamErrorAfterChunks` unset, is one buffered response: the text step as JSON, or the error step as that HTTP status, even when the client set `"stream": true`.
+Anthropic Messages JSON. A reply step with `"stream": true` is answered as `text/event-stream`: `message_start`, content blocks and deltas, `message_delta`, `message_stop`. A thinking step adds a thinking block before the text block, and tool calls add `tool_use` blocks after it (see [Tool calls](#tool-calls)). An error step with `streamErrorAfterChunks` set uses the shorter stream described above. Any other request, including an error step that leaves `streamErrorAfterChunks` unset, is one buffered response: the reply step as JSON, or the error step as that HTTP status, even when the client set `"stream": true`.
 
-The buffered message carries `id` (`fake-msg-<seq>`), `type`, `role`, `content` (an optional thinking block, then one text block), `stop_reason`, and `usage`. It does not include a `model` field. `message_start` on the stream does, and it echoes the request model.
+The buffered message carries `id` (`fake-msg-<seq>`), `type`, `role`, `content` (an optional thinking block, the text block when the step has text, then one `tool_use` block per tool call), `stop_reason`, and `usage`. It does not include a `model` field. `message_start` on the stream does, and it echoes the request model.
 
 A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, including when `"stream": true`. That response is `application/json`, and no SSE bytes are written. With no scenario loaded, lenient mode serves the canned reply instead, and `"stream": true` streams it as a text step.
 
@@ -446,13 +524,13 @@ Any method on a path that starts with `/anthropic/v1/messages/batches` returns H
 
 ### `POST /openai/v1/chat/completions`
 
-One JSON chat completion: `id` `fake-openai-<seq>`, `object` `chat.completion`, `model` `fake-openai`, one choice with `message.role` `assistant` and `message.content` set to the step text, `finish_reason` as mapped above, and `usage`. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a chat completion. With no scenario loaded, lenient mode returns the canned reply as a completion.
+One JSON chat completion: `id` `fake-openai-<seq>`, `object` `chat.completion`, `model` `fake-openai`, one choice with `message.role` `assistant`, `message.content` set to the step text (`null` on a tool-call step without text), `message.tool_calls` on a tool-call step, `finish_reason` as mapped above, and `usage`. [Tool calls](#tool-calls) describes the tool-call fields and chunks. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a chat completion. With no scenario loaded, lenient mode returns the canned reply as a completion.
 
-With `"stream": true`, a text step is answered as `text/event-stream` of data-only frames (`data: <payload>`, no `event:` line). Each chunk has `id` `fake-openai-<seq>`, `object` `chat.completion.chunk`, `model` `fake-openai`, and one choice with `index`, `delta` and `finish_reason`. The frames are, in order: the role chunk (`delta` `{"role":"assistant","content":""}`), one content chunk per `streamChunkChars` code points of the text, the finish chunk (empty `delta`, `finish_reason` as mapped above), then `data: [DONE]`. When the request sets `stream_options.include_usage` to true (read like `stream`), a usage chunk with no choices comes before `[DONE]`, and every other chunk carries `"usage": null`. An error step with `streamErrorAfterChunks` set sends the role chunk and the filler chunks, then the error body as a data frame (a generic `server_error` body when `body` is blank), and closes the stream with no finish chunk, usage chunk or `[DONE]`. A call the scenario has no step for, and an error step that leaves `streamErrorAfterChunks` unset, get the JSON response, with no SSE bytes.
+With `"stream": true`, a reply step is answered as `text/event-stream` of data-only frames (`data: <payload>`, no `event:` line). Each chunk has `id` `fake-openai-<seq>`, `object` `chat.completion.chunk`, `model` `fake-openai`, and one choice with `index`, `delta` and `finish_reason`. The frames are, in order: the role chunk (`delta` `{"role":"assistant","content":""}`), one content chunk per `streamChunkChars` code points of the text, the finish chunk (empty `delta`, `finish_reason` as mapped above), then `data: [DONE]`. When the request sets `stream_options.include_usage` to true (read like `stream`), a usage chunk with no choices comes before `[DONE]`, and every other chunk carries `"usage": null`. An error step with `streamErrorAfterChunks` set sends the role chunk and the filler chunks, then the error body as a data frame (a generic `server_error` body when `body` is blank), and closes the stream with no finish chunk, usage chunk or `[DONE]`. A call the scenario has no step for, and an error step that leaves `streamErrorAfterChunks` unset, get the JSON response, with no SSE bytes.
 
 ### `POST /gemini/…:generateContent`
 
-One JSON `generateContent` body: one candidate whose part text is the step text, `finishReason` `STOP` or `MAX_TOKENS`, `usageMetadata`, and `fake_llm_seq`. The parser forces the call to be non-streaming. `:streamGenerateContent` does not contain `:generateContent`, so that path is a 404. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a `generateContent` body. With no scenario loaded, lenient mode returns the canned reply as one candidate.
+One JSON `generateContent` body: one candidate whose parts are the step text and one `functionCall` part per tool call (see [Tool calls](#tool-calls)), `finishReason` `STOP` or `MAX_TOKENS`, `usageMetadata`, and `fake_llm_seq`. The parser forces the call to be non-streaming. `:streamGenerateContent` does not contain `:generateContent`, so that path is a 404. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a `generateContent` body. With no scenario loaded, lenient mode returns the canned reply as one candidate.
 
 ### Control API
 
@@ -484,7 +562,7 @@ With a scenario directory set, `*.json` names from that directory are merged in,
 {"reset":true}
 ```
 
-`GET /control/calls` returns the call log as a JSON array, in call order. `seq` is the call's number since the last load or reset, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text` or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call was recorded.
+`GET /control/calls` returns the call log as a JSON array, in call order. `seq` is the call's number since the last load or reset, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call was recorded. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](#tool-calls) describes them.
 
 ```json
 [
@@ -497,7 +575,9 @@ With a scenario directory set, `*.json` names from that directory are merged in,
     "messageCount": 1,
     "outcome": "text",
     "timestampMs": 1710000000000,
-    "promptSample": "Hello\n"
+    "promptSample": "Hello\n",
+    "toolCalls": [],
+    "toolResults": []
   }
 ]
 ```
@@ -525,7 +605,7 @@ The process binds the IPv6 wildcard `::` when the host can, and otherwise the IP
 
 ## Limits
 
-Anthropic Messages and OpenAI Chat Completions stream. On `POST /anthropic/v1/messages` and `POST /openai/v1/chat/completions`, `"stream": true` is a server-sent event response for a text step, and for an error step that sets `streamErrorAfterChunks`. An error step that leaves that field unset is a plain HTTP error instead. Gemini always returns one JSON `generateContent` body. The Gemini parser sets `stream` to false, and `:streamGenerateContent` is not a route.
+Anthropic Messages and OpenAI Chat Completions stream. On `POST /anthropic/v1/messages` and `POST /openai/v1/chat/completions`, `"stream": true` is a server-sent event response for a reply step, and for an error step that sets `streamErrorAfterChunks`. An error step that leaves that field unset is a plain HTTP error instead. Gemini always returns one JSON `generateContent` body. The Gemini parser sets `stream` to false, and `:streamGenerateContent` is not a route.
 
 A call after the scenario's last step, and in strict mode (the default) a call with no scenario loaded, gets HTTP 400 and a JSON body on every vendor route. On `POST /anthropic/v1/messages` and `POST /openai/v1/chat/completions` that includes `"stream": true`: the response is `application/json`, and no server-sent events are written. With no scenario loaded, lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) returns the canned assistant reply instead. For a streamed Anthropic or OpenAI request, that reply is a normal text stream.
 
@@ -533,7 +613,7 @@ The Anthropic Batches API is not implemented. Every request under `/anthropic/v1
 
 Token counts are constants, not a count of the prompt or the reply. Anthropic reports `input_tokens` 100 and `output_tokens` 50. `cache_creation_input_tokens` is 20 and `cache_read_input_tokens` is 10 when the request carries a `cache_control` breakpoint, and both are 0 otherwise. A breakpoint is a `cache_control` object on a block in the `system` array or in a message `content` array. `type` must be `ephemeral`, and `ttl`, if present, must be `5m` or `1h`. On a stream, the input and cache figures are on `message_start`, and `output_tokens` 50 is on `message_delta`. OpenAI reports `prompt_tokens` 100, `completion_tokens` 50, and `total_tokens` 150. On an OpenAI stream, usage is sent only when `stream_options.include_usage` is true, in a final chunk with no choices. Gemini reports `promptTokenCount` 100, `candidatesTokenCount` 50, and `totalTokenCount` 150.
 
-The server does not simulate tool use or function calling. Responses are text, plus an Anthropic thinking block when the step sets `thinking`. Request fields such as `tools`, `tool_choice`, and Gemini `tools` are ignored, and the response never contains `tool_use`, `tool_calls`, or `functionCall` parts.
+Tool calls are scripted per step; request fields such as `tools`, `tool_choice` and Gemini `tools` and `toolConfig` are ignored, so a step's tool calls are sent whatever tools the request declares. Gemini has no streaming route yet, so Gemini function calls are buffered only.
 
 Each process holds one scenario and one call log in memory. Nothing is written to disk. Another process does not share that state.
 
@@ -552,7 +632,7 @@ The example project tests the published artifact, not the source, so publish it 
 
 ### Public API
 
-Kotlin explicit API mode is on, so a new public declaration in `src/main` (or `junit-jupiter/src/main`) needs an explicit `public` modifier. `./gradlew check`, and so `./gradlew build` and CI, compares the compiled public API with `api/fake-llm.api` and `junit-jupiter/api/fake-llm-junit-jupiter.api` and fails on any difference. For an intended change, run `./gradlew apiDump`, commit the updated `.api` file with the change, and add a CHANGELOG entry. Add new fields to the scenario model classes last, with a default value, so existing Kotlin call sites still compile. A scenario field also goes in the spec's `Scenario`, `Step` or `ErrorStep` schema (a test fails until it does); then run `./gradlew updateScenarioSchema` and commit the regenerated `schema/scenario.schema.json`. A Kotlin or kotlinx-serialization upgrade can change the generated members in the dump, so run `apiDump` after one and review the diff.
+Kotlin explicit API mode is on, so a new public declaration in `src/main` (or `junit-jupiter/src/main`) needs an explicit `public` modifier. `./gradlew check`, and so `./gradlew build` and CI, compares the compiled public API with `api/fake-llm.api` and `junit-jupiter/api/fake-llm-junit-jupiter.api` and fails on any difference. For an intended change, run `./gradlew apiDump`, commit the updated `.api` file with the change, and add a CHANGELOG entry. Add new fields to the scenario model classes last, with a default value, so existing Kotlin call sites still compile. A scenario field also goes in the spec's `Scenario`, `Step`, `ToolCall` or `ErrorStep` schema (a test fails until it does); then run `./gradlew updateScenarioSchema` and commit the regenerated `schema/scenario.schema.json`. A Kotlin or kotlinx-serialization upgrade can change the generated members in the dump, so run `apiDump` after one and review the diff.
 
 ### Quality gates
 
