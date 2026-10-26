@@ -1,0 +1,20 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openapi-document",
+  "description": "GET /openapi serves the OpenAPI document as YAML.",
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/openapi"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/yaml"
+        }
+      }
+    }
+  ]
+}

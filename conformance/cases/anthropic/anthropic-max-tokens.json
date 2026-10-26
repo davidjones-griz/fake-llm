@@ -1,0 +1,59 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "anthropic-max-tokens",
+  "description": "stopReason max_tokens is copied to stop_reason.",
+  "scenario": {
+    "name": "cutoff",
+    "steps": [
+      {
+        "text": "The recipe is {\"name\":",
+        "stopReason": "max_tokens"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The recipe is {\"name\":"
+            }
+          ],
+          "stop_reason": "max_tokens",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}

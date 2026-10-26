@@ -70,120 +70,6 @@ class FakeLlmServerTest {
     }
 
     @Test
-    fun `an inline scenario's steps answer calls in order on any route, then the no-more-steps 400`() {
-        withServer { client, _ ->
-            val loaded = client.post("/control/scenario", inline("first", "second"))
-            assertEquals(200, loaded.statusCode(), loaded.body())
-            assertEquals("""{"loaded":"inline-steps","steps":2}""", loaded.body())
-            assertContains(client.get("/health").body(), "inline-steps")
-
-            val first = client.post("/anthropic/v1/messages", anthropicBody("weekly forecast", model = "weather-model"))
-            assertEquals("first", anthropicText(first.body()))
-            val second =
-                client.post("/openai/v1/chat/completions", """{"model":"example-gpt","messages":[{"role":"user","content":"hi"}]}""")
-            assertEquals(200, second.statusCode(), second.body())
-            assertContains(second.body(), "\"second\"")
-
-            val third = client.post("/anthropic/v1/messages", anthropicBody("one more", stream = true))
-            val body =
-                assertCallError(
-                    third,
-                    error = "no more steps",
-                    seq = 3,
-                    vendor = "anthropic",
-                    model = "example-model",
-                    systemShape = "absent",
-                    messageCount = 1,
-                    promptPreview = "one more\n",
-                )
-            assertEquals("inline-steps", body.getValue("scenario").jsonPrimitive.content)
-            assertEquals(2, body.getValue("steps").jsonPrimitive.int)
-
-            val log = calls(client)
-            assertEquals(listOf(1L, 2L, 3L), log.longs("seq"))
-            assertEquals(listOf(1L, 2L, null), log.longs("step"))
-            assertEquals(listOf("text", "text", "no-more-steps"), log.strings("outcome"))
-            assertEquals(listOf("anthropic", "openai", "anthropic"), log.strings("vendor"))
-            assertEquals("weather-model", log[0].getValue("model").jsonPrimitive.content)
-            assertEquals("absent", log[0].getValue("systemShape").jsonPrimitive.content)
-            assertEquals(1, log[0].getValue("messageCount").jsonPrimitive.int)
-            assertEquals("weekly forecast\n", log[0].getValue("promptSample").jsonPrimitive.content)
-
-            val reloaded = client.post("/control/scenario", """{"name":"hello"}""")
-            assertEquals("""{"loaded":"hello","steps":1}""", reloaded.body())
-            assertEquals("[]", client.get("/control/calls").body())
-            assertEquals(
-                "Hello. I can help with the weather, a simple recipe, or a short how-to.",
-                anthropicText(client.post("/anthropic/v1/messages", anthropicBody("hi")).body()),
-            )
-        }
-    }
-
-    @Test
-    fun `reset starts the scenario over, numbering and response ids included`() {
-        withServer { client, _ ->
-            assertEquals(200, client.post("/control/scenario", inline("one", "two")).statusCode())
-            assertEquals("one", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("a")).body()))
-            assertEquals("two", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("b")).body()))
-
-            val reset = client.post("/control/reset", "")
-            assertEquals(200, reset.statusCode())
-            assertEquals("""{"reset":true}""", reset.body())
-            assertEquals("[]", client.get("/control/calls").body())
-            val health = Json.parseToJsonElement(client.get("/health").body()).jsonObject
-            assertEquals("ok", health.getValue("status").jsonPrimitive.content)
-            assertEquals("inline-steps", health.getValue("scenario").jsonPrimitive.content)
-            assertEquals("false", health.getValue("lenient").jsonPrimitive.content)
-
-            val again = client.post("/anthropic/v1/messages", anthropicBody("c"))
-            assertEquals("one", anthropicText(again.body()))
-            assertEquals(
-                "fake-msg-1",
-                Json
-                    .parseToJsonElement(again.body())
-                    .jsonObject
-                    .getValue("id")
-                    .jsonPrimitive.content,
-            )
-            val log = calls(client)
-            assertEquals(listOf(1L), log.longs("seq"))
-            assertEquals(listOf(1L), log.longs("step"))
-        }
-    }
-
-    @Test
-    fun `lenient mode with no scenario loaded returns the canned assistant text`() {
-        withServer(engine = ScenarioEngine(lenient = true)) { client, _ ->
-            val health = Json.parseToJsonElement(client.get("/health").body()).jsonObject
-            assertEquals(JsonNull, health.getValue("scenario"))
-            assertFalse(health.getValue("lenient").jsonPrimitive.isString)
-            assertEquals("true", health.getValue("lenient").jsonPrimitive.content)
-
-            val resp = client.post("/anthropic/v1/messages", anthropicBody("hello"))
-            assertEquals(200, resp.statusCode())
-            assertEquals(CANNED_ASSISTANT_TEXT, anthropicText(resp.body()))
-            val call = calls(client).single()
-            assertEquals("default", call.getValue("outcome").jsonPrimitive.content)
-            assertEquals(JsonNull, call.getValue("step"))
-        }
-    }
-
-    @Test
-    fun `health reports lenient mode`() {
-        withServer { client, _ ->
-            val health = Json.parseToJsonElement(client.get("/health").body()).jsonObject
-            assertEquals("ok", health.getValue("status").jsonPrimitive.content)
-            assertEquals(JsonNull, health.getValue("scenario"))
-            assertFalse(health.getValue("lenient").jsonPrimitive.isString)
-            assertEquals("false", health.getValue("lenient").jsonPrimitive.content)
-        }
-        withServer(engine = ScenarioEngine(lenient = true)) { client, _ ->
-            val health = Json.parseToJsonElement(client.get("/health").body()).jsonObject
-            assertEquals("true", health.getValue("lenient").jsonPrimitive.content)
-        }
-    }
-
-    @Test
     fun `strict mode with no scenario loaded answers the no-scenario 400 on every vendor, including a stream`() {
         withServer { client, _ ->
             val quoted = "Hello \"there\""
@@ -269,21 +155,6 @@ class FakeLlmServerTest {
     }
 
     @Test
-    fun `requests that fail to parse, miss every route, or hit the batches route are not calls`() {
-        withServer { client, _ ->
-            client.post("/control/scenario", inline("one"))
-            assertEquals(400, client.post("/anthropic/v1/messages", "{").statusCode())
-            assertEquals(400, client.post("/anthropic/v1/messages", """{"model":"m"}""").statusCode())
-            assertEquals(404, client.post("/nope", "{}").statusCode())
-            assertEquals(501, client.post("/anthropic/v1/messages/batches", "{}").statusCode())
-            assertEquals("[]", client.get("/control/calls").body())
-
-            assertEquals("one", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("hi")).body()))
-            assertEquals(listOf(1L), calls(client).longs("seq"))
-        }
-    }
-
-    @Test
     fun `calls that arrive together each get the step matching their own number`() {
         val size = 20
         withServer { client, _ ->
@@ -344,91 +215,6 @@ class FakeLlmServerTest {
             }.joinToString("")
 
     @Test
-    fun `cache tokens follow the request cache breakpoint`() {
-        withServer(engine = ScenarioEngine(lenient = true)) { client, _ ->
-            val withBreakpoint =
-                client.post(
-                    "/anthropic/v1/messages",
-                    """
-                    {"model":"example-model","max_tokens":64,
-                     "system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral"}}],
-                     "messages":[{"role":"user","content":"hello"}]}
-                    """.trimIndent(),
-                )
-            assertEquals(200, withBreakpoint.statusCode(), withBreakpoint.body())
-            val usage =
-                Json
-                    .parseToJsonElement(withBreakpoint.body())
-                    .jsonObject
-                    .getValue("usage")
-                    .jsonObject
-            assertEquals(
-                FIXED_INPUT_TOKENS,
-                usage
-                    .getValue("input_tokens")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertEquals(
-                FIXED_OUTPUT_TOKENS,
-                usage
-                    .getValue("output_tokens")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertEquals(
-                FIXED_CACHE_CREATION_TOKENS,
-                usage
-                    .getValue("cache_creation_input_tokens")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertEquals(
-                FIXED_CACHE_READ_TOKENS,
-                usage
-                    .getValue("cache_read_input_tokens")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertTrue(FIXED_CACHE_CREATION_TOKENS >= 1)
-            assertTrue(FIXED_CACHE_READ_TOKENS >= 1)
-
-            val without =
-                client.post(
-                    "/anthropic/v1/messages",
-                    """{"model":"example-model","max_tokens":64,"messages":[{"role":"user","content":"hello"}]}""",
-                )
-            val plain =
-                Json
-                    .parseToJsonElement(without.body())
-                    .jsonObject
-                    .getValue("usage")
-                    .jsonObject
-            assertEquals(
-                0,
-                plain
-                    .getValue("cache_creation_input_tokens")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertEquals(
-                0,
-                plain
-                    .getValue("cache_read_input_tokens")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertEquals(
-                FIXED_INPUT_TOKENS,
-                plain
-                    .getValue("input_tokens")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-        }
-    }
-
-    @Test
     fun `a null cache_control ttl returns 400`() {
         withServer { client, _ ->
             val resp =
@@ -467,32 +253,6 @@ class FakeLlmServerTest {
             val control = client.post("/control/scenario", "{")
             assertEquals(400, control.statusCode())
             assertTrue(errorDetail(control.body()).isNotBlank())
-        }
-    }
-
-    @Test
-    fun `an unknown route returns 404`() {
-        withServer { client, _ ->
-            val getResp = client.get("/nope")
-            assertEquals(404, getResp.statusCode())
-            assertContains(getResp.body(), "GET /nope")
-
-            val postResp = client.post("/also-missing", "{}")
-            assertEquals(404, postResp.statusCode())
-            assertContains(postResp.body(), "POST /also-missing")
-        }
-    }
-
-    @Test
-    fun `the messages batches route returns 501`() {
-        withServer { client, _ ->
-            val root = client.post("/anthropic/v1/messages/batches", "{}")
-            assertEquals(501, root.statusCode())
-            assertContains(root.body(), "the Anthropic Batches API is not implemented")
-
-            val nested = client.post("/anthropic/v1/messages/batches/job-1", "{}")
-            assertEquals(501, nested.statusCode())
-            assertContains(nested.body(), "not implemented")
         }
     }
 
@@ -547,21 +307,6 @@ class FakeLlmServerTest {
     }
 
     @Test
-    fun `a scripted content-type header replaces the default instead of adding a second one`() {
-        withServer { client, engine ->
-            engine.loadInline(
-                Scenario(
-                    name = "html-error",
-                    steps = listOf(Step(error = ErrorStep(503, "<p>down</p>", mapOf("content-type" to "text/html")))),
-                ),
-            )
-            val resp = client.post("/anthropic/v1/messages", anthropicBody("hi"))
-            assertEquals(503, resp.statusCode())
-            assertEquals(listOf("text/html"), resp.headers().allValues("content-type"))
-        }
-    }
-
-    @Test
     fun `scripted headers other than content-type are added as given`() {
         withServer { client, engine ->
             val headers = mapOf("X-Retry-Hint" to "1", "x-retry-hint" to "2")
@@ -605,87 +350,5 @@ class FakeLlmServerTest {
         assertEquals("application/json", contentType)
         assertContains(body, "not bundled")
         assertEquals(Triple(200, "application/yaml", "spec"), openApiResponse("spec"))
-    }
-
-    @Test
-    fun `an unknown scenario name returns 400`() {
-        withServer { client, _ ->
-            val resp = client.post("/control/scenario", """{"name":"no-such-scenario"}""")
-            assertEquals(400, resp.statusCode())
-            assertContains(errorDetail(resp.body()), "unknown scenario")
-        }
-    }
-
-    @Test
-    fun `the scenario index lists the names the loader can see`() {
-        withServer { client, _ ->
-            val resp = client.get("/control/scenarios")
-            assertEquals(200, resp.statusCode(), resp.body())
-            val names =
-                Json.parseToJsonElement(resp.body()).jsonObject.getValue("scenarios").jsonArray.map {
-                    it.jsonPrimitive.content
-                }
-            assertEquals(ScenarioLoader.availableNames(directory = null), names)
-            assertContains(names, "hello")
-            assertContains(names, "fail-then-retry")
-            assertContains(names, "rate-limit-429")
-        }
-    }
-
-    @Test
-    fun `health and vendor routes stay open when a control token is set`() {
-        withServer(engine = ScenarioEngine(lenient = true), controlToken = "test-token") { client, _ ->
-            val health = client.get("/health")
-            assertEquals(200, health.statusCode())
-            assertContains(health.body(), "ok")
-
-            val vendor = client.post("/anthropic/v1/messages", anthropicBody("hello"))
-            assertEquals(200, vendor.statusCode())
-            assertEquals(CANNED_ASSISTANT_TEXT, anthropicText(vendor.body()))
-        }
-    }
-
-    @Test
-    fun `control routes reject a missing or wrong bearer token`() {
-        withServer(controlToken = "test-token") { client, _ ->
-            val responses =
-                listOf(
-                    client.get("/control/calls"),
-                    client.get("/control/scenarios"),
-                    client.post("/control/reset", ""),
-                    client.post("/control/scenario", """{"name":"hello"}"""),
-                    client.get("/control/calls", authorization = "Bearer wrong-token"),
-                    client.post("/control/reset", "", authorization = "Bearer wrong-token"),
-                )
-            responses.forEach { resp ->
-                assertEquals(401, resp.statusCode(), resp.body())
-                assertContains(resp.body(), "unauthorized")
-                assertEquals(listOf("Bearer"), resp.headers().allValues("www-authenticate"))
-            }
-        }
-    }
-
-    @Test
-    fun `control routes accept the configured bearer token`() {
-        withServer(controlToken = "test-token") { client, _ ->
-            val auth = "Bearer test-token"
-            assertEquals(200, client.get("/control/calls", authorization = auth).statusCode())
-            assertEquals(200, client.get("/control/scenarios", authorization = auth).statusCode())
-            val reset = client.post("/control/reset", "", authorization = auth)
-            assertEquals(200, reset.statusCode())
-            assertEquals("""{"reset":true}""", reset.body())
-            val load = client.post("/control/scenario", """{"name":"hello"}""", authorization = auth)
-            assertEquals(200, load.statusCode(), load.body())
-            assertContains(load.body(), "hello")
-        }
-    }
-
-    @Test
-    fun `control routes are open when no token is configured`() {
-        withServer(controlToken = null) { client, _ ->
-            assertEquals(200, client.get("/control/calls").statusCode())
-            assertEquals(200, client.get("/control/scenarios").statusCode())
-            assertEquals(200, client.post("/control/reset", "").statusCode())
-        }
     }
 }

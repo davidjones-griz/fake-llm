@@ -1,0 +1,28 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "health-lenient",
+  "description": "GET /health reports lenient mode.",
+  "server": {
+    "lenient": true
+  },
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "hello",
+          "lenient": true
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "load-unknown-name",
+  "description": "Loading an unknown name is a 400 and keeps the loaded scenario.",
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "name": "no-such-scenario"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "hello",
+          "lenient": false
+        }
+      }
+    }
+  ]
+}

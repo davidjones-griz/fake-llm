@@ -17,12 +17,6 @@ class MultiProviderDialectTest {
         """{"model":"example-gpt","messages":[{"role":"system","content":${JsonPrimitive(prompt)}},""" +
             """{"role":"user","content":"hello"}]}"""
 
-    private fun geminiBody(prompt: String): String =
-        """{"contents":[{"role":"user","parts":[{"text":${JsonPrimitive(prompt)}}]}],""" +
-            """"generationConfig":{"maxOutputTokens":256}}"""
-
-    private val geminiPath = "/gemini/v1/models/example-gemini:generateContent"
-
     private fun openAiText(body: String): String {
         val choice =
             Json
@@ -36,28 +30,6 @@ class MultiProviderDialectTest {
             .getValue("message")
             .jsonObject
             .getValue("content")
-            .jsonPrimitive.content
-    }
-
-    private fun geminiText(body: String): String {
-        val candidate =
-            Json
-                .parseToJsonElement(body)
-                .jsonObject
-                .getValue("candidates")
-                .jsonArray
-                .single()
-                .jsonObject
-        val parts =
-            candidate
-                .getValue("content")
-                .jsonObject
-                .getValue("parts")
-                .jsonArray
-        return parts
-            .single()
-            .jsonObject
-            .getValue("text")
             .jsonPrimitive.content
     }
 
@@ -97,42 +69,6 @@ class MultiProviderDialectTest {
             assertEquals("blocks", call.getValue("systemShape").jsonPrimitive.content)
             assertEquals(
                 2,
-                call
-                    .getValue("messageCount")
-                    .jsonPrimitive.content
-                    .toInt(),
-            )
-            assertEquals("1", call.getValue("step").jsonPrimitive.content)
-        }
-    }
-
-    @Test
-    fun `a gemini generateContent call renders the loaded scenario text`() {
-        withServer { client, _ ->
-            assertEquals(200, client.post("/control/scenario", """{"name":"hello"}""").statusCode())
-            val resp = client.post(geminiPath, geminiBody("a short how-to"))
-            assertEquals(200, resp.statusCode())
-            val root = Json.parseToJsonElement(resp.body()).jsonObject
-            val candidate =
-                root
-                    .getValue("candidates")
-                    .jsonArray
-                    .single()
-                    .jsonObject
-            assertEquals("STOP", candidate.getValue("finishReason").jsonPrimitive.content)
-            assertEquals(helloText, geminiText(resp.body()))
-
-            val call =
-                Json
-                    .parseToJsonElement(client.get("/control/calls").body())
-                    .jsonArray
-                    .single()
-                    .jsonObject
-            assertEquals("gemini", call.getValue("vendor").jsonPrimitive.content)
-            assertEquals("example-gemini", call.getValue("model").jsonPrimitive.content)
-            assertEquals("absent", call.getValue("systemShape").jsonPrimitive.content)
-            assertEquals(
-                1,
                 call
                     .getValue("messageCount")
                     .jsonPrimitive.content

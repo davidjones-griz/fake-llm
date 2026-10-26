@@ -55,6 +55,10 @@ change the public API.
   Gemini route matches only `/gemini/{version}/models/{model}:generateContent`, and the Batches
   stand-in only `/anthropic/v1/messages/batches` and paths under it, as the spec documents.
 - `examples/`, a separate build that tests a small client against the published artifact.
+- A language-neutral HTTP conformance suite in `conformance/`: JSON cases, checked against a JSON
+  Schema and against the OpenAPI spec, and a runner (`:fake-llm-conformance`, not published) that
+  runs them against a server it starts with a command or one already running at a URL. CI runs it
+  against the fat jar and the Docker image.
 - Public API checks: Kotlin explicit API mode, and `api/fake-llm.api`, which `./gradlew check`
   compares with the compiled API.
 

@@ -1,0 +1,48 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-error-step",
+  "description": "An error step is sent as scripted.",
+  "scenario": {
+    "name": "error",
+    "steps": [
+      {
+        "error": {
+          "status": 500,
+          "body": "{\"error\":{\"message\":\"server error\",\"type\":\"server_error\"}}"
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 500,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "error": {
+            "message": "server error",
+            "type": "server_error"
+          }
+        }
+      }
+    }
+  ]
+}

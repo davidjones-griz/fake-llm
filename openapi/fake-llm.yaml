@@ -34,6 +34,13 @@ info:
     `NoMoreStepsError`; the last step does not repeat. A request that gets `ExceptionError`, a
     404 and the Batches 501 are not calls.
 
+    **Vendor bodies.** The success bodies and event streams of the vendor routes follow each
+    provider's API, and this document does not describe them field by field. The conformance
+    cases in `conformance/cases` define them exactly, including the values fake-llm fixes: the
+    token counts, the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`), OpenAI's
+    `model`, the thinking signature, the streamed-error filler text and generic error body, and
+    the lenient canned reply.
+
     **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
     cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.
 servers:

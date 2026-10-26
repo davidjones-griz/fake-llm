@@ -1,0 +1,67 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "anthropic-cache-breakpoint",
+  "description": "A cache_control breakpoint in the request reports the fixed cache token counts.",
+  "scenario": {
+    "name": "cache",
+    "steps": [
+      {
+        "text": "Cached."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "system": [
+            {
+              "type": "text",
+              "text": "You answer briefly.",
+              "cache_control": {
+                "type": "ephemeral"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Cached."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 10,
+            "cache_creation_input_tokens": 20
+          }
+        }
+      }
+    }
+  ]
+}

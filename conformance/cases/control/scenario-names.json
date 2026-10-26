@@ -1,0 +1,33 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "scenario-names",
+  "description": "GET /control/scenarios lists the bundled scenario names, sorted.",
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/scenarios"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenarios": [
+            "fail-then-retry",
+            "hello",
+            "malformed-json",
+            "max-tokens-cutoff",
+            "overloaded-529",
+            "rate-limit-429",
+            "refusal",
+            "stream-error-midway",
+            "thinking-stream"
+          ]
+        }
+      }
+    }
+  ]
+}

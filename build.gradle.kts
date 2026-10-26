@@ -53,6 +53,8 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // OpenApiConformanceTest checks every conformance case against the spec.
+    inputs.dir("conformance/cases").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("conformanceCases")
 }
 
 // The OpenAPI document is the language-neutral contract, kept at the repository root; the server
@@ -60,6 +62,11 @@ tasks.test {
 // project's own resources cannot replace it.
 tasks.processResources {
     from("openapi") { into("com/davidjonesgriz/fakellm/openapi") }
+}
+
+apiValidation {
+    // The conformance runner is not published, so it has no public API to track.
+    ignoredProjects.add("fake-llm-conformance")
 }
 
 ktlint {

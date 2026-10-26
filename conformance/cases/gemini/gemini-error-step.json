@@ -1,0 +1,52 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-error-step",
+  "description": "An error step is sent as scripted.",
+  "scenario": {
+    "name": "error",
+    "steps": [
+      {
+        "error": {
+          "status": 503,
+          "body": "{\"error\":{\"code\":503,\"message\":\"unavailable\",\"status\":\"UNAVAILABLE\"}}"
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:generateContent",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 503,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "error": {
+            "code": 503,
+            "message": "unavailable",
+            "status": "UNAVAILABLE"
+          }
+        }
+      }
+    }
+  ]
+}

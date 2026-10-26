@@ -1,0 +1,60 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-max-tokens",
+  "description": "stopReason max_tokens becomes finish_reason length.",
+  "scenario": {
+    "name": "cutoff",
+    "steps": [
+      {
+        "text": "The recipe is",
+        "stopReason": "max_tokens"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-openai-1",
+          "object": "chat.completion",
+          "model": "fake-openai",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "The recipe is"
+              },
+              "finish_reason": "length"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150
+          }
+        }
+      }
+    }
+  ]
+}

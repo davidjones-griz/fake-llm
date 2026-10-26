@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/davidjones-griz/fake-llm/conformance/schema/case.schema.json",
+  "title": "fake-llm conformance case",
+  "description": "One contract test: the scenario to load, the requests to send in order, and the exact response the server must return to each. See conformance/README.md.",
+  "type": "object",
+  "required": ["name", "description", "scenario", "exchanges"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": {
+      "description": "The file name without .json; unique across the suite.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "description": { "type": "string", "minLength": 1 },
+    "server": { "$ref": "#/$defs/server" },
+    "scenario": {
+      "description": "Loaded with POST /control/scenario before the first exchange: an inline scenario, a bundled scenario name, or null for none (which requires server.fresh).",
+      "oneOf": [
+        { "type": "object" },
+        { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+        { "type": "null" }
+      ]
+    },
+    "exchanges": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/exchange" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["scenario"],
+        "properties": { "scenario": { "type": "null" } }
+      },
+      "then": {
+        "required": ["server"],
+        "properties": { "server": { "required": ["fresh"], "properties": { "fresh": { "const": true } } } }
+      }
+    }
+  ],
+  "$defs": {
+    "server": {
+      "description": "The startup settings the case needs. Every field is optional.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lenient": { "type": "boolean", "default": false },
+        "controlToken": { "type": ["string", "null"], "minLength": 1, "default": null },
+        "fresh": {
+          "description": "The case needs a newly started server.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "exchange": {
+      "type": "object",
+      "required": ["request", "response"],
+      "additionalProperties": false,
+      "properties": {
+        "request": { "$ref": "#/$defs/request" },
+        "response": { "$ref": "#/$defs/response" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": ["method", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "method": { "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+        "path": { "type": "string", "pattern": "^/[^\\s]*$" },
+        "headers": {
+          "description": "Sent as given. Headers an HTTP client cannot set are not allowed.",
+          "type": "object",
+          "propertyNames": {
+            "not": { "pattern": "^([Hh][Oo][Ss][Tt]|[Cc][Oo][Nn][Nn][Ee][Cc][Tt][Ii][Oo][Nn]|[Cc][Oo][Nn][Tt][Ee][Nn][Tt]-[Ll][Ee][Nn][Gg][Tt][Hh]|[Ee][Xx][Pp][Ee][Cc][Tt]|[Uu][Pp][Gg][Rr][Aa][Dd][Ee]|[Tt][Rr][Aa][Nn][Ss][Ff][Ee][Rr]-[Ee][Nn][Cc][Oo][Dd][Ii][Nn][Gg])$" }
+          },
+          "additionalProperties": { "type": "string" }
+        },
+        "body": { "description": "A JSON value, sent as given." },
+        "rawBody": { "description": "Sent byte for byte, for bodies that must not be valid JSON.", "type": "string" }
+      },
+      "not": { "required": ["body", "rawBody"] }
+    },
+    "response": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "headers": {
+          "description": "Names match case-insensitively; values exactly (an expected content-type without parameters matches by media type). Unlisted headers are ignored.",
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "body": { "description": "Compared exactly with the parsed JSON body.", "$ref": "#/$defs/expected" },
+        "rawBody": { "description": "Compared exactly with the body text.", "type": "string" },
+        "events": {
+          "description": "An SSE body, compared as an exact, ordered event list.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["event", "data"],
+            "additionalProperties": false,
+            "properties": {
+              "event": { "type": "string", "minLength": 1 },
+              "data": {
+                "description": "A JSON value compared with the parsed data, or a string compared with the raw data.",
+                "$ref": "#/$defs/expected"
+              }
+            }
+          }
+        }
+      },
+      "oneOf": [
+        { "required": ["body"], "not": { "anyOf": [{ "required": ["rawBody"] }, { "required": ["events"] }] } },
+        { "required": ["rawBody"], "not": { "anyOf": [{ "required": ["body"] }, { "required": ["events"] }] } },
+        { "required": ["events"], "not": { "anyOf": [{ "required": ["body"] }, { "required": ["rawBody"] }] } },
+        { "not": { "anyOf": [{ "required": ["body"] }, { "required": ["rawBody"] }, { "required": ["events"] }] } }
+      ]
+    },
+    "expected": {
+      "description": "An expected JSON value. The only matcher is {\"$type\": \"integer\"} or {\"$type\": \"string\"}; any other object with a key starting with $ is rejected.",
+      "anyOf": [
+        { "$ref": "#/$defs/matcher" },
+        { "type": ["string", "number", "boolean", "null"] },
+        { "type": "array", "items": { "$ref": "#/$defs/expected" } },
+        {
+          "type": "object",
+          "propertyNames": { "not": { "pattern": "^\\$" } },
+          "additionalProperties": { "$ref": "#/$defs/expected" }
+        }
+      ]
+    },
+    "matcher": {
+      "type": "object",
+      "required": ["$type"],
+      "additionalProperties": false,
+      "properties": { "$type": { "enum": ["integer", "string"] } }
+    }
+  }
+}

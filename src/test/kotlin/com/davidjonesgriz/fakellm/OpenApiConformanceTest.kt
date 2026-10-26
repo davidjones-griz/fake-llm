@@ -125,6 +125,265 @@ class OpenApiConformanceTest {
     }
 
     @Test
+    fun `every conformance case agrees with the spec`() {
+        val files =
+            File("conformance/cases")
+                .walkTopDown()
+                .filter { it.isFile && it.extension == "json" }
+                .sortedBy { it.path }
+                .toList()
+        assertTrue(files.isNotEmpty(), "no case files in conformance/cases")
+        val failures =
+            files.flatMap { file ->
+                val case =
+                    runCatching {
+                        json.readTree(
+                            file.readText(),
+                        )
+                    }.getOrElse { return@flatMap listOf("${file.path}: not JSON: ${it.message}") }
+                caseDisagreements(case).map { "${file.path}: $it" }
+            }
+        assertTrue(failures.isEmpty(), failures.joinToString("\n"))
+    }
+
+    @Test
+    fun `the case check is not vacuous`() {
+        fun case(response: String) =
+            json.readTree(
+                """{"name":"x","description":"d","scenario":{"name":"s","steps":[{"text":"t"}]},
+                "exchanges":[{"request":{"method":"GET","path":"/health"},"response":$response}]}""",
+            )
+        assertEquals(emptyList(), caseDisagreements(case("""{"status":200,"body":{"status":"ok","scenario":"s","lenient":false}}""")))
+        assertTrue(caseDisagreements(case("""{"status":200,"body":{"status":"ok","scenario":"s","lenient":false,"x":1}}""")).isNotEmpty())
+        assertTrue(caseDisagreements(case("""{"status":418}""")).isNotEmpty())
+        assertTrue(caseDisagreements(case("""{"status":200,"headers":{"content-type":"text/plain"}}""")).isNotEmpty())
+        val badScenario = json.readTree("""{"scenario":{"name":"s","steps":[]},"exchanges":[]}""")
+        assertTrue(caseDisagreements(badScenario).isNotEmpty())
+
+        fun vendor400(body: String) =
+            json.readTree(
+                """{"scenario":"hello","exchanges":[{"request":{"method":"POST","path":"/anthropic/v1/messages"},
+                "response":{"status":400$body}}]}""",
+            )
+        assertEquals(emptyList(), caseDisagreements(vendor400(""","body":{"type":"error"}""")), "a scripted 400")
+        assertTrue(caseDisagreements(vendor400(""","body":{"fake_llm_error":"no more step"}""")).isNotEmpty(), "a misspelt own 400")
+        assertTrue(caseDisagreements(vendor400("")).isNotEmpty(), "a vendor 400 with no body")
+
+        fun control401(server: String) =
+            json.readTree(
+                """{"scenario":"hello",$server"exchanges":[{"request":{"method":"GET","path":"/control/nope"},
+                "response":{"status":401,"headers":{"www-authenticate":"Bearer"},"body":{"fake_llm_error":"x"}}}]}""",
+            )
+        assertEquals(emptyList(), caseDisagreements(control401(""""server":{"controlToken":"t"},""")))
+        assertTrue(caseDisagreements(control401("")).isNotEmpty(), "a 401 without a control token")
+        val rightToken =
+            json.readTree(
+                """{"scenario":"hello","server":{"controlToken":"t"},"exchanges":[{"request":{"method":"GET","path":"/control/nope",
+                "headers":{"Authorization":"Bearer t"}},"response":{"status":404,"body":{"fake_llm_error":"x"}}}]}""",
+            )
+        assertEquals(emptyList(), caseDisagreements(rightToken), "the right token on an unknown control path is a 404")
+        assertEquals(
+            emptyList(),
+            caseDisagreements(
+                vendor400("").also {
+                    (it.path("exchanges")[0].path("response") as ObjectNode).put("status", 401)
+                },
+            ),
+            "a scripted 401",
+        )
+    }
+
+    /** How one conformance case disagrees with the spec; empty when it agrees. */
+    private fun caseDisagreements(case: JsonNode): List<String> {
+        val found = mutableListOf<String>()
+        val token =
+            case
+                .path("server")
+                .path("controlToken")
+                .takeIf { it.isString }
+                ?.asString()
+        case.path("scenario").takeIf { it.isObject }?.let { scenario ->
+            validate(SCENARIO, scenario.toString()).forEach { found += "scenario: $it" }
+        }
+        case.path("exchanges").values().forEachIndexed { i, exchange ->
+            val request = exchange.path("request")
+            val response = exchange.path("response")
+            val method = request.path("method").asString()
+            val path = request.path("path").asString().substringBefore('?')
+            val status = response.path("status").asInt()
+            val where = "exchange ${i + 1} ($method $path $status)"
+            // With a control token configured, a request without exactly that bearer token gets 401 on /control/.
+            val sent =
+                request
+                    .path("headers")
+                    .properties()
+                    .firstOrNull { (name, _) ->
+                        name.equals("authorization", ignoreCase = true)
+                    }?.value
+            val rejected = token != null && sent?.asString() != "Bearer $token"
+            val successfulLoad = method == "POST" && path == "/control/scenario" && status == HTTP_OK && request.has("body")
+            if (successfulLoad) {
+                val load = "${operationPointer(path, method)}/requestBody/content/application~1json/schema"
+                validate(load, request.path("body").toString()).forEach { found += "$where request: $it" }
+            }
+            val pointer =
+                responsePointerFor(method, path, status, response.path("body"), rejected)
+                    .getOrElse { error ->
+                        found += "$where: ${error.message}"
+                        return@forEachIndexed
+                    } ?: return@forEachIndexed
+            found += responseDisagreements(resolve(pointer), response).map { "$where: $it" }
+        }
+        return found
+    }
+
+    /**
+     * The spec's response for a request, or null for a scripted error, which the spec leaves
+     * undescribed. A vendor 400 is fake-llm's own only when its `fake_llm_error` says so; any other
+     * 400 body there is a scripted error step.
+     */
+    private fun responsePointerFor(
+        method: String,
+        path: String,
+        status: Int,
+        body: JsonNode,
+        rejected: Boolean,
+    ): Result<String?> {
+        val template =
+            spec.path("paths").propertyNames().firstOrNull { template ->
+                templateRegex(template).matches(path) &&
+                    spec.path("paths").path(template).has(method.lowercase())
+            }
+        return when {
+            template != null && template.startsWith("/control/") && rejected != (status == HTTP_UNAUTHORIZED) -> {
+                val why =
+                    if (rejected) "lacks the case's control token, so it gets a 401" else "has no token problem, so it gets no 401"
+                Result.failure(IllegalStateException("the request $why"))
+            }
+
+            template != null -> {
+                operationResponse(template, method, status, body)
+            }
+
+            path.startsWith("/anthropic/v1/messages/batches/") -> {
+                expect(status, 501, "#/components/responses/NotImplemented")
+            }
+
+            path.startsWith("/control/") && rejected -> {
+                expect(status, HTTP_UNAUTHORIZED, "#/components/responses/Unauthorized")
+            }
+
+            else -> {
+                expect(status, 404, "#/components/responses/NoRoute")
+            }
+        }
+    }
+
+    /** The response [status] of one documented operation, or null for a scripted vendor error. */
+    private fun operationResponse(
+        template: String,
+        method: String,
+        status: Int,
+        body: JsonNode,
+    ): Result<String?> {
+        val operation = operationPointer(template, method)
+        val responses = spec.atRef("$operation/responses")
+        val vendor = listOf("/anthropic/", "/openai/", "/gemini/").any { template.startsWith(it) }
+        // A vendor 400 whose body has fake_llm_error is fake-llm's own and is checked against
+        // VendorBadRequest (so a misspelt value fails); any other 400 body is a scripted error.
+        val vendor400 = vendor && status == HTTP_BAD_REQUEST
+        return when {
+            vendor400 && body.isMissingNode -> {
+                Result.failure(
+                    IllegalStateException("a vendor 400 must list its body, to tell a scripted 400 from fake-llm's own"),
+                )
+            }
+
+            vendor400 && !body.has("fake_llm_error") -> {
+                Result.success(null)
+            }
+
+            responses.has("$status") -> {
+                Result.success("$operation/responses/$status")
+            }
+
+            vendor && responses.has("default") -> {
+                Result.success(null)
+            }
+
+            else -> {
+                Result.failure(IllegalStateException("status $status is not documented"))
+            }
+        }
+    }
+
+    /** A path template such as `/gemini/{version}/models/{model}:generateContent` as a regex for concrete paths. */
+    private fun templateRegex(template: String): Regex =
+        Regex(template.split(Regex("\\{[^}]+}")).joinToString("[^/]+") { Regex.escape(it) })
+
+    private fun expect(
+        status: Int,
+        documented: Int,
+        pointer: String,
+    ): Result<String?> =
+        if (status ==
+            documented
+        ) {
+            Result.success(pointer)
+        } else {
+            Result.failure(IllegalStateException("expected $documented here, as the spec documents"))
+        }
+
+    private fun responseDisagreements(
+        responsePointer: String,
+        response: JsonNode,
+    ): List<String> {
+        val found = mutableListOf<String>()
+        val documented = spec.atRef(responsePointer)
+        val headers = response.path("headers").properties().associate { (name, value) -> name.lowercase() to value.asString() }
+        documented.path("headers").properties().forEach { (name, header) ->
+            val value = headers[name.lowercase()]
+            if (value == null) {
+                found += "the documented header $name is not listed"
+            } else {
+                val headerSchema = resolve(pointerOf(header) ?: "$responsePointer/headers/${escape(name)}") + "/schema"
+                validate(headerSchema, json.writeValueAsString(value)).forEach { found += "header $name: $it" }
+            }
+        }
+        val media = documented.path("content").propertyNames().toList()
+        headers["content-type"]?.let { contentType ->
+            val type = contentType.substringBefore(';').trim()
+            if (media.isNotEmpty() && type !in media) found += "content-type $type is not documented ($media)"
+        }
+        val body = response.path("body")
+        val schemaMedia = headers["content-type"]?.substringBefore(';')?.trim() ?: media.singleOrNull()
+        if (!body.isMissingNode && schemaMedia == "application/json" && "application/json" in media) {
+            validate("$responsePointer/content/application~1json/schema", withSamples(body).toString()).forEach { found += "body: $it" }
+        }
+        return found
+    }
+
+    /** [node] with each `$type` matcher replaced by a value of that type. */
+    private fun withSamples(node: JsonNode): JsonNode =
+        when {
+            node.isObject && node.propertyNames().toList() == listOf("\$type") -> {
+                if (node.path("\$type").asString() == "integer") json.readTree("0") else json.readTree("\"sample\"")
+            }
+
+            node.isObject -> {
+                json.createObjectNode().also { obj -> node.properties().forEach { (k, v) -> obj.set(k, withSamples(v)) } }
+            }
+
+            node.isArray -> {
+                json.createArrayNode().also { arr -> node.values().forEach { arr.add(withSamples(it)) } }
+            }
+
+            else -> {
+                node
+            }
+        }
+
+    @Test
     fun `the spec's version is the build's version`() {
         val version = File("gradle.properties").readLines().first { it.startsWith("version=") }.removePrefix("version=")
         assertEquals(version, spec.path("info").path("version").asString())
@@ -239,6 +498,10 @@ class OpenApiConformanceTest {
         const val MIN_SCENARIO_FILES = 12
         val HTTP_METHODS = setOf("get", "put", "post", "delete", "options", "head", "patch", "trace")
         val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Step", "ErrorStep")
+
+        const val HTTP_OK = 200
+        const val HTTP_BAD_REQUEST = 400
+        const val HTTP_UNAUTHORIZED = 401
 
         /** Documented, but reachable only from a broken build; FakeLlmServerTest covers openApiResponse(null). */
         val NOT_REACHABLE_OVER_HTTP = setOf(Triple("/openapi", "get", "500"))

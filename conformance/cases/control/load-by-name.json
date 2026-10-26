@@ -1,0 +1,47 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "load-by-name",
+  "description": "Loading a bundled scenario by name returns its name and step count.",
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "name": "fail-then-retry"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "loaded": "fail-then-retry",
+          "steps": 2
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "fail-then-retry",
+          "lenient": false
+        }
+      }
+    }
+  ]
+}
