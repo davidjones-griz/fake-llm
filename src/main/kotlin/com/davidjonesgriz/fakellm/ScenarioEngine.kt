@@ -167,8 +167,7 @@ public class ScenarioEngine(
 
     /**
      * Removes the loaded scenario and empties the call log and the exchange log; the next call is
-     * call 1. Calls then get
-     * the strict-mode 400 or the lenient canned reply.
+     * call 1. Calls then get the strict-mode 400 or the lenient canned reply.
      */
     public fun unload() {
         replace(null)

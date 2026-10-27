@@ -82,8 +82,10 @@ internal class ExchangeCapture(
         override fun flush() = guarded { original.flush() }
 
         override fun close() {
-            guarded { original.close() }
+            // Marked before delegating, since the delegate's close sends the last bytes: a reader
+            // that has the whole body then never sees `open`. A failed close marks it `aborted`.
             synchronized(lock) { if (state != "aborted") state = "complete" }
+            guarded { original.close() }
         }
 
         private inline fun guarded(block: () -> Unit) {
@@ -134,7 +136,7 @@ internal fun HttpExchange.sendRecordedResponseHeaders(
 }
 
 /**
- * The exchange's capture, or null for a request that wasn't wrapped (a control route). Not kept
+ * The exchange's capture, or null for a request that wasn't wrapped (one `controlRoute` answered). Not kept
  * as an exchange attribute: on JDK 21 those belong to the `HttpContext`, shared by every request.
  */
 internal fun HttpExchange.exchangeCapture(): ExchangeCapture? = (responseBody as? ExchangeCapture.Stream)?.capture

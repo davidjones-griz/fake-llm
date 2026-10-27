@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -155,6 +156,15 @@ class ExchangeLogTest {
             val third = client.post("/anthropic/v1/messages", anthropicBody("Hi"))
             val noScenario = exchanges(client).single().jsonObject
             assertEquals(1, noScenario.getValue("seq").jsonPrimitive.long)
+            assertEquals(400, third.statusCode())
+            assertEquals(
+                400,
+                noScenario
+                    .obj("response")
+                    .getValue("status")
+                    .jsonPrimitive.int,
+            )
+            assertEquals(mapOf("content-type" to listOf("application/json")), headersOf(noScenario.obj("response").obj("headers")))
             assertEquals(third.body(), noScenario.obj("response").str("body"))
             assertContains(third.body(), "no scenario loaded")
         }
@@ -164,7 +174,10 @@ class ExchangeLogTest {
     fun `lenient mode records the canned reply`() {
         withServer(ScenarioEngine(lenient = true)) { client, _ ->
             val http = client.post("/anthropic/v1/messages", anthropicBody("Hi"))
-            val response = exchanges(client).single().jsonObject.obj("response")
+            val entry = exchanges(client).single().jsonObject
+            assertEquals(1, entry.getValue("seq").jsonPrimitive.long)
+            val response = entry.obj("response")
+            assertEquals("complete", response.str("state"))
             assertEquals(
                 200,
                 response
@@ -423,7 +436,7 @@ class ExchangeLogTest {
 
     @Test
     fun `a call waiting out firstByteDelayMs is listed with a null response`() {
-        withServer(engineWith(Step(text = "x", firstByteDelayMs = 1000))) { client, engine ->
+        withServer(engineWith(Step(text = "x", firstByteDelayMs = 3000))) { client, engine ->
             val http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
             val future =
                 http.sendAsync(

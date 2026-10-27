@@ -58,8 +58,8 @@ public data class ExchangeResponse internal constructor(
     /**
      * - `open`: the body is still being written; [body] holds what has been written so far.
      * - `complete`: fake-llm finished the response and closed the body normally.
-     * - `aborted`: sending the headers, or a write, flush or close, failed, or the server stopped
-     *   mid-response, usually because the client disconnected. [body] holds the bytes written
+     * - `aborted`: sending the headers, or a write, flush or close, failed (usually because the
+     *   client disconnected), or the server stopped mid-response. [body] holds the bytes written
      *   before the failure; the client may have received fewer.
      */
     val state: String,

@@ -122,7 +122,7 @@ private fun vendorRoute(
     ex: HttpExchange,
     engine: ScenarioEngine,
 ): Boolean {
-    // Health and the control routes are answered before this, so they are never wrapped.
+    // The health and control requests controlRoute answers never get here, so they are never wrapped.
     installExchangeCapture(ex)
     val path = ex.requestURI.path
     when {
