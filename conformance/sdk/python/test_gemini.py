@@ -2,7 +2,9 @@
 
 import json
 
+import httpx
 import pytest
+from google import genai
 from google.genai import errors, types
 
 FAST_RETRY = {"retry-after-ms": "10"}
@@ -219,3 +221,20 @@ def test_stream_raw_arguments_not_a_call(fake, gemini_client):
     assert raised.value.code == 400
     assert raised.value.details["fake_llm_error"] == "exception"
     assert fake.log() == []
+
+
+def test_first_byte_delay_timeout(fake, server):
+    fake.load([{"text": "slow", "firstByteDelayMs": 2000}, {"text": "slow", "firstByteDelayMs": 2000}, {"text": "fast"}])
+    client = genai.Client(api_key="not-used", http_options=types.HttpOptions(base_url=f"{server}/gemini/", timeout=500))
+    try:
+        with pytest.raises(httpx.ReadTimeout):
+            generate(client)
+        fake.wait_for_calls(1)
+        with pytest.raises(httpx.ReadTimeout):
+            list(stream(client))
+        fake.wait_for_calls(2)
+        assert generate(client).text == "fast"
+    finally:
+        client.close()
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2), call(3, "text", 3)]
+    assert fake.delays() == [(2000, 0), (2000, 0), (0, 0)]
