@@ -53,24 +53,28 @@ public data class Step(
     /** A scripted vendor error in place of a reply. The status classifies it; the body is sent as given. */
     val error: ErrorStep? = null,
     /**
-     * SSE streaming: delta size in Unicode code points, not UTF-16 chars. A boundary inside a
-     * surrogate pair would encode that half as its own UTF-8 frame and replace it with U+FFFD,
-     * so the chunks would no longer reassemble to the original text. Consulted only when the
-     * request is streamed; a buffered request ignores it.
+     * SSE streaming (Anthropic, OpenAI Chat Completions and Responses, and Gemini): delta size in
+     * Unicode code points, not UTF-16 chars. A boundary inside a surrogate pair would encode that
+     * half as its own UTF-8 frame and replace it with U+FFFD, so the chunks would no longer
+     * reassemble to the original text. Consulted only when the request is streamed; a buffered
+     * request ignores it.
      */
     val streamChunkChars: Int = DEFAULT_STREAM_CHUNK_CHARS,
     /**
-     * Milliseconds to wait between SSE deltas, for injecting latency. `0` waits nothing, so the
-     * default stays immediate. Streaming only; see [streamChunkChars].
+     * Milliseconds to wait between SSE deltas (Anthropic, OpenAI Chat Completions and Responses, and
+     * Gemini), for injecting latency. `0` waits nothing, so the default stays immediate. Streaming
+     * only; see [streamChunkChars].
      */
     val streamInterChunkDelayMs: Long = 0,
     /**
-     * Streaming only (Anthropic, OpenAI and Gemini), and only valid on an error step ([error] set):
+     * Streaming only (Anthropic, OpenAI Chat Completions and Responses, and Gemini), and only valid on
+     * an error step ([error] set):
      * emit this many text deltas, then an in-stream error. On the Anthropic stream that is an
      * `event: error` frame, with no `content_block_stop`, `message_delta` or `message_stop`; on the
      * OpenAI stream it is a `data:` frame with the error body, with no finish chunk, usage chunk
-     * or `[DONE]`; on the Gemini stream it is a `data:` frame with the error body, with no chunk
-     * carrying `finishReason`.
+     * or `[DONE]`; on the OpenAI Responses stream it is an `event: error` frame with the error body,
+     * or the API's own error event when the body is blank; on the Gemini stream it is a `data:`
+     * frame with the error body, with no chunk carrying `finishReason`.
      *
      * Null (the default): the step's error is a plain HTTP response, and no SSE bytes are written.
      * That matches a provider that rejects before generation starts — the usual timing for
@@ -117,9 +121,12 @@ public data class ToolCall(
     val name: String,
     /** The arguments as a JSON object. Null, with rawArguments null too, means `{}`. */
     val arguments: JsonObject? = null,
-    /** The argument text sent verbatim, for invalid or non-object JSON. Formats that carry text only. */
+    /**
+     * The argument text sent verbatim, for invalid or non-object JSON. Only formats that carry text:
+     * OpenAI Chat Completions and Responses, and a streamed Anthropic reply.
+     */
     val rawArguments: String? = null,
-    /** The call's id. Null uses the format's default (see Rendering). */
+    /** The call's id. Null uses the format's default (see Rendering), which is also the OpenAI Responses `call_id`. */
     val id: String? = null,
 ) {
     init {

@@ -311,13 +311,6 @@ class MultiProviderDialectTest {
         }
     }
 
-    private fun anthropicFrames(body: String): List<Pair<String, String>> =
-        body.split("\n\n").filter { it.isNotBlank() }.map { frame ->
-            val lines = frame.lines()
-            lines.single { it.startsWith("event: ") }.removePrefix("event: ") to
-                lines.single { it.startsWith("data: ") }.removePrefix("data: ")
-        }
-
     private fun toolArgs(json: String) = Json.parseToJsonElement(json).jsonObject
 
     private fun blockStart(
@@ -348,7 +341,7 @@ class MultiProviderDialectTest {
                 streamChunkChars = 8,
             )
         withServer(engineWith(step)) { client, _ ->
-            val frames = anthropicFrames(client.post("/anthropic/v1/messages", anthropicBody("Hello", stream = true)).body())
+            val frames = namedFrames(client.post("/anthropic/v1/messages", anthropicBody("Hello", stream = true)).body())
             assertEquals("message_start", frames.first().first)
             assertEquals(
                 listOf(
@@ -380,7 +373,7 @@ class MultiProviderDialectTest {
     fun `a streamed anthropic tool call sends rawArguments verbatim`() {
         val step = Step(toolCalls = listOf(ToolCall(name = "get_weather", rawArguments = """{"city": Paris}""")), streamChunkChars = 8)
         withServer(engineWith(step)) { client, _ ->
-            val frames = anthropicFrames(client.post("/anthropic/v1/messages", anthropicBody("Hello", stream = true)).body())
+            val frames = namedFrames(client.post("/anthropic/v1/messages", anthropicBody("Hello", stream = true)).body())
             assertEquals(
                 listOf(
                     blockStart(0, """{"type":"tool_use","id":"toolu_fake_1_1","name":"get_weather","input":{}}"""),

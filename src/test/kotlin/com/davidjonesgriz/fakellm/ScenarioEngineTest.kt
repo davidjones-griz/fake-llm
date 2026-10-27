@@ -410,17 +410,18 @@ class ScenarioEngineTest {
                     ),
             )
         val records =
-            listOf("anthropic", "openai", "gemini").map { vendor ->
+            listOf("anthropic", "openai", "gemini", RESPONSES_VENDOR).map { vendor ->
                 val engine = engineWith(Scenario(name = "tools-$vendor", steps = listOf(step)))
                 engine.handle(vendor, req())
                 engine.calls().single()
             }
-        assertEquals(listOf("tool-calls", "tool-calls", "tool-calls"), records.map { it.outcome })
+        assertEquals(listOf("tool-calls", "tool-calls", "tool-calls", "tool-calls"), records.map { it.outcome })
         assertEquals(
             listOf(
                 listOf(ToolCallRecord("toolu_fake_1_1", "get_weather"), ToolCallRecord("scripted", "get_time")),
                 listOf(ToolCallRecord("call_fake_1_1", "get_weather"), ToolCallRecord("scripted", "get_time")),
                 listOf(ToolCallRecord(null, "get_weather"), ToolCallRecord("scripted", "get_time")),
+                listOf(ToolCallRecord("call_fake_1_1", "get_weather"), ToolCallRecord("scripted", "get_time")),
             ),
             records.map { it.toolCalls },
         )

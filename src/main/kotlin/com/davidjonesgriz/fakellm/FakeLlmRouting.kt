@@ -1,6 +1,6 @@
 // HTTP plumbing for the fake LLM server: the listen socket, request dispatch, the control API,
 // and the JSON response writer shared by those handlers. Vendor request handlers live in
-// FakeLlmApp.kt.
+// FakeLlmApp.kt and ResponsesStreaming.kt.
 package com.davidjonesgriz.fakellm
 
 import com.sun.net.httpserver.HttpExchange
@@ -127,6 +127,10 @@ private fun vendorRoute(
 
         ex.requestMethod == "POST" && path == "/openai/v1/chat/completions" -> {
             handleOpenAi(ex, engine)
+        }
+
+        ex.requestMethod == "POST" && path == "/openai/v1/responses" -> {
+            handleOpenAiResponses(ex, engine)
         }
 
         ex.requestMethod == "POST" && GEMINI_CONTENT_ROUTE.matches(path) -> {

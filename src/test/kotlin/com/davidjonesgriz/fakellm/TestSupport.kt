@@ -19,6 +19,7 @@ import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.writeText
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 internal class TestClient(
@@ -207,6 +208,24 @@ internal fun repositoryScenarioFiles(): List<File> {
     assertTrue(files.size >= MIN_SCENARIO_FILES, "found only ${files.map { it.path }}")
     return files
 }
+
+/**
+ * The event name and data payload of each frame of a named-event stream (Anthropic, OpenAI
+ * Responses), in order. Fails unless every frame is exactly one `event:` line and one `data:` line.
+ */
+internal fun namedFrames(body: String): List<Pair<String, String>> =
+    body.split("\n\n").filter { it.isNotBlank() }.map { frame ->
+        val lines = frame.lines()
+        assertEquals(2, lines.size, "a frame is one event line and one data line: $frame")
+        lines[0].also { assertTrue(it.startsWith("event: "), frame) }.removePrefix("event: ") to
+            lines[1].also { assertTrue(it.startsWith("data: "), frame) }.removePrefix("data: ")
+    }
+
+/** A minimal OpenAI Responses request body: `{"model":"example-gpt","input":"<input>"}`, with `"stream":true` when [stream]. */
+internal fun responsesBody(
+    input: String = "Hello",
+    stream: Boolean = false,
+): String = """{"model":"example-gpt","input":${JsonPrimitive(input)}""" + (if (stream) ""","stream":true}""" else "}")
 
 /**
  * The data payloads of a data-only stream (OpenAI, Gemini), in order. Fails unless every frame is

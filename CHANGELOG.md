@@ -14,10 +14,19 @@ change the public API.
   `streamInterChunkDelayMs`, each tool call as a whole `functionCall` part, `finishReason` and
   `usageMetadata` on the last chunk, and an in-stream error after `streamErrorAfterChunks`
   chunks. Without `alt=sse` the request is the `exception` 400.
+- OpenAI Responses API: `POST /openai/v1/responses`, buffered and streamed. Text is a `message`
+  output item, tool calls are `function_call` items (`call_id` from the scripted or default id,
+  argument text verbatim), `max_tokens` is `status` `incomplete` with `max_output_tokens`, and
+  `"stream": true` returns the named Responses events, with an in-stream `error` event after
+  `streamErrorAfterChunks` deltas. The call log reads `instructions` and `input`, and records
+  `function_call_output` items as `toolResults`. `previous_response_id`, `store` and
+  `conversation` are accepted and ignored.
 
 ### Changed
 
 - `:streamGenerateContent` is now a route; it was a 404.
+- The call log's `vendor`, and the `vendor` of the no-scenario and no-more-steps 400 bodies, can be
+  `openai-responses`.
 
 ## [0.2.0] - 2026-10-26
 

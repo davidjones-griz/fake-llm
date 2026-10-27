@@ -120,11 +120,20 @@ class FakeLlmServerTest {
             assertCallError(geminiStream, "no scenario loaded", 5, "gemini", "gemini-2.0-flash", "absent", 1, "Hello\n")
             assertFalse(geminiStream.body().contains("data:"))
 
+            val responses = client.post("/openai/v1/responses", responsesBody())
+            assertCallError(responses, "no scenario loaded", 6, "openai-responses", "example-gpt", "absent", 1, "Hello\n")
+            val responsesStream = client.post("/openai/v1/responses", responsesBody(stream = true))
+            assertCallError(responsesStream, "no scenario loaded", 7, "openai-responses", "example-gpt", "absent", 1, "Hello\n")
+            assertFalse(responsesStream.body().contains("event:"))
+
             val log = calls(client)
-            assertEquals(listOf("anthropic", "anthropic", "openai", "gemini", "gemini"), log.strings("vendor"))
+            assertEquals(
+                listOf("anthropic", "anthropic", "openai", "gemini", "gemini", "openai-responses", "openai-responses"),
+                log.strings("vendor"),
+            )
             assertTrue(log.all { it.getValue("outcome").jsonPrimitive.content == "no-scenario" })
             assertTrue(log.all { it.getValue("step") == JsonNull })
-            assertEquals(listOf(1L, 2L, 3L, 4L, 5L), log.longs("seq"))
+            assertEquals(listOf(1L, 2L, 3L, 4L, 5L, 6L, 7L), log.longs("seq"))
             assertEquals("sys\nHello \"there\"\n", log[0].getValue("promptSample").jsonPrimitive.content)
         }
     }
@@ -340,6 +349,17 @@ class FakeLlmServerTest {
             val resp = client.post("/anthropic/v1/messages", anthropicBody("hi"))
             assertEquals(listOf("1", "2"), resp.headers().allValues("x-retry-hint").sorted())
             assertEquals(listOf("application/json"), resp.headers().allValues("content-type"))
+        }
+    }
+
+    @Test
+    fun `the responses route matches its documented path exactly`() {
+        withServer { client, _ ->
+            assertEquals(400, client.post("/openai/v1/responses", responsesBody()).statusCode(), "the documented path, no scenario")
+            assertEquals(404, client.post("/openai/v1/responses/", responsesBody()).statusCode())
+            assertEquals(404, client.get("/openai/v1/responses").statusCode())
+            assertEquals(404, client.get("/openai/v1/responses/resp_fake_1").statusCode())
+            assertEquals(404, client.post("/openai/v1/responses/resp_fake_1/cancel", "{}").statusCode())
         }
     }
 
