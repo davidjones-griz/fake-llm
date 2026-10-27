@@ -117,6 +117,17 @@ class Fake:
     def calls(self):
         return httpx.get(f"{self.base_url}/control/calls").json()
 
+    def wait_for_calls(self, count, timeout=5.0):
+        """Waits until the call log holds count records, so a timed-out call is logged before the next is sent."""
+        deadline = time.monotonic() + timeout
+        while len(self.calls()) < count and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert len(self.calls()) == count
+
+    def delays(self):
+        """Each call's (firstByteDelayMs, streamInterChunkDelayMs), in call order."""
+        return [(c["firstByteDelayMs"], c["streamInterChunkDelayMs"]) for c in self.calls()]
+
     def log(self):
         return [(c["seq"], c["vendor"], c["model"], c["outcome"], c["step"]) for c in self.calls()]
 

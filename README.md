@@ -283,7 +283,8 @@ Each step is a reply (`text`, `toolCalls`, or both) or an `error`. When a step i
 | `stopReason` | Stop reason for a reply. Default `end_turn`. Anthropic copies it to `stop_reason`. `"max_tokens"` means the reply was truncated: OpenAI then reports `finish_reason` `length`, and Gemini reports `finishReason` `MAX_TOKENS`. Any other value becomes OpenAI `stop` and Gemini `STOP`. With `toolCalls` it must be `end_turn` or `tool_use`, and is sent as Anthropic `tool_use`, OpenAI `tool_calls` and Gemini `STOP`. OpenAI Responses reports `max_tokens` as `status` `incomplete` with `incomplete_details.reason` `max_output_tokens`, and any other value as `completed`. A tool-call step is `completed`. |
 | `error` | A scripted HTTP error instead of a reply. `status` is the HTTP status, from 100 to 599. `body` is sent as given (default empty), and `headers` are added as given (for example `retry-after`). The response is `Content-Type: application/json` unless `headers` sets a `content-type`, which replaces it. |
 | `streamChunkChars` | SSE delta size in Unicode code points, not UTF-16 chars. Default 24. Must be positive. Used only for Anthropic, OpenAI Chat Completions and Responses, and Gemini streaming. A buffered request ignores it. |
-| `streamInterChunkDelayMs` | Milliseconds to wait between SSE deltas. Default 0. Must be zero or positive. Anthropic, OpenAI Chat Completions and Responses, and Gemini streaming. |
+| `streamInterChunkDelayMs` | Milliseconds to wait before each streamed delta. Default 0. From 0 to 600000 (10 minutes). Anthropic, OpenAI Chat Completions and Responses, and Gemini streaming; a Gemini `functionCall` chunk has no wait. |
+| `firstByteDelayMs` | Milliseconds to wait before any response bytes, status and headers included. Default 0. From 0 to 600000 (10 minutes). Every vendor route: buffered and streamed replies and error steps. The call is numbered and logged when it arrives, before the wait. Use it to test client timeouts and slow-first-token handling. See [Latency and timeouts](#latency-and-timeouts). |
 | `streamErrorAfterChunks` | Legal only on an error step, and must be positive. Anthropic, OpenAI Chat Completions and Responses, and Gemini streaming. Null, the default, means the error is a plain HTTP response and no SSE bytes are written, including when the client asked for a stream. Setting it writes HTTP 200 and an event stream. Anthropic: `message_start`, a text block start, this many filler deltas, then `event: error` whose data is `error.body` (or a generic `api_error` body when `body` is blank); `content_block_stop`, `message_delta`, and `message_stop` are skipped. OpenAI: the role chunk, this many filler chunks, then a `data:` frame whose payload is `error.body` (or a generic `server_error` body when `body` is blank); no finish chunk, usage chunk or `[DONE]` follows. Gemini: this many filler chunks, then a `data:` frame whose payload is `error.body`, or a generic `INTERNAL` body with `code` 500 when `body` is blank. No chunk with `finishReason` follows. The `google-genai` SDK raises on that frame only when the body's first key is `error`, and picks `ClientError` or `ServerError` from `error.code`, which must be an integer. OpenAI Responses: `response.created`, `response.in_progress`, the message's opening events, this many filler `response.output_text.delta` events, then `event: error` whose data is `error.body`, or the API's own `error` event (`code` `server_error`) when `body` is blank. The `openai` SDK raises `APIError` only for a body with an `error` key; it yields the generic event without raising. `error.status` and `error.headers` are not used on that path. A non-streaming client still receives `error.status` and `error.body`. The filler is fixed text, not the error body. |
 | `toolCalls` | Tool calls the reply makes, in order, after any `text`. See [Tool calls](#tool-calls). |
 
@@ -372,7 +373,9 @@ second = client.chat.completions.create(model="example-gpt", messages=messages, 
     "timestampMs": 1710000000000,
     "promptSample": "Hello\n",
     "toolCalls": [{ "id": "call_fake_1_1", "name": "get_weather" }],
-    "toolResults": []
+    "toolResults": [],
+    "firstByteDelayMs": 0,
+    "streamInterChunkDelayMs": 0
   },
   {
     "seq": 2,
@@ -385,12 +388,30 @@ second = client.chat.completions.create(model="example-gpt", messages=messages, 
     "timestampMs": 1710000000100,
     "promptSample": "Hello\n18 degrees\n",
     "toolCalls": [],
-    "toolResults": [{ "id": "call_fake_1_1", "name": "get_weather", "content": "18 degrees", "isError": false }]
+    "toolResults": [{ "id": "call_fake_1_1", "name": "get_weather", "content": "18 degrees", "isError": false }],
+    "firstByteDelayMs": 0,
+    "streamInterChunkDelayMs": 0
   }
 ]
 ```
 
 `toolResults` lists every tool result in the request, in order: Anthropic `tool_result` blocks (`id` from `tool_use_id`, `content` as sent, `isError` when `is_error` is `true`), OpenAI `tool` messages (`id` from `tool_call_id`, `content` as sent), OpenAI Responses `function_call_output` items (`id` from `call_id`, `output` as `content`, named after the `function_call` item with the same `call_id`), and Gemini `functionResponse` parts (`id`, `name`, and `response` as `content`). For Anthropic and OpenAI Chat Completions, `name` is the name of the tool call in the same request with the matching id, or `null` when there is none. A multi-turn request resends its history, so a later call lists the earlier results again. The fake records what was sent; the test decides what is right.
+
+### Latency and timeouts
+
+Two step fields add latency. `firstByteDelayMs` holds back the whole response: the server waits that long before sending anything, status and headers included, on every vendor route, for a buffered or streamed reply and for an error step. On a stream, `streamInterChunkDelayMs` then waits before each delta (each text, thinking and tool-call argument delta; a Gemini `functionCall` chunk has no wait); a buffered response ignores it. Both are 0 by default and at most 600000 (10 minutes).
+
+Only a step's own fields wait. The responses that come from no step never wait: the no-more-steps and no-scenario 400s, the lenient canned reply, and the `exception` 400s, 401s, 404s and the Batches 501.
+
+A call is numbered and logged when it arrives, before the wait, and the wait runs outside the engine's lock. Other calls are served while one waits, so a later call can finish first, and a reset or load during the wait doesn't change the waiting call's response. The call log records the delays each call used (`firstByteDelayMs`, and `streamInterChunkDelayMs` only when the response was an event stream: a streamed request answered by a reply, or by an error step with `streamErrorAfterChunks`), not measured time.
+
+A client whose timeout is shorter than `firstByteDelayMs` times out. Its call was logged once, when it arrived, and stays in the log. The server finishes the wait (it does not stop early), its response goes nowhere, and the next request is served normally with the next step. A client that retries the request, such as the `openai` SDK with its default `max_retries`, makes a new call, which gets the next step. A client that disconnects between streamed chunks is handled the same way.
+
+```json
+{ "name": "slow-provider", "steps": [{ "text": "slow", "firstByteDelayMs": 5000 }] }
+```
+
+With that scenario, an `openai` client created with `timeout=1.0` and `max_retries=0` raises `openai.APITimeoutError`.
 
 ### Writing scenarios for tests
 
@@ -596,7 +617,7 @@ With a scenario directory set, `*.json` names from that directory are merged in,
 {"reset":true}
 ```
 
-`GET /control/calls` returns the call log as a JSON array, in call order. `vendor` is `anthropic`, `openai`, `openai-responses` or `gemini`. `seq` is the call's number since the last load or reset, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call was recorded. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](#tool-calls) describes them.
+`GET /control/calls` returns the call log as a JSON array, in call order. `vendor` is `anthropic`, `openai`, `openai-responses` or `gemini`. `seq` is the call's number since the last load or reset, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call arrived, before any wait. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](#tool-calls) describes them. `firstByteDelayMs` and `streamInterChunkDelayMs` are the delays the call's step applied: `streamInterChunkDelayMs` only when the response was an event stream, and both 0 when no step served the call.
 
 ```json
 [
@@ -611,7 +632,9 @@ With a scenario directory set, `*.json` names from that directory are merged in,
     "timestampMs": 1710000000000,
     "promptSample": "Hello\n",
     "toolCalls": [],
-    "toolResults": []
+    "toolResults": [],
+    "firstByteDelayMs": 0,
+    "streamInterChunkDelayMs": 0
   }
 ]
 ```
@@ -644,6 +667,8 @@ Anthropic Messages, OpenAI Chat Completions and Responses, and Gemini all stream
 A call after the scenario's last step, and in strict mode (the default) a call with no scenario loaded, gets HTTP 400 and a JSON body on every vendor route. On `POST /anthropic/v1/messages`, `POST /openai/v1/chat/completions` and `POST /openai/v1/responses` with `"stream": true`, and on `POST /gemini/…:streamGenerateContent`, the response is `application/json`, and no server-sent events are written. With no scenario loaded, lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) returns the canned assistant reply instead. For a streamed Anthropic, OpenAI (either route) or Gemini request, that reply is a normal text stream.
 
 The Anthropic Batches API is not implemented. Every request under `/anthropic/v1/messages/batches` returns HTTP 501.
+
+Delays are fixed per step: there is no jitter. Each waiting call holds one of the server's 16 request threads until its wait ends, even after the client has gone, and more requests queue when all 16 are busy.
 
 Token counts are constants, not a count of the prompt or the reply. Anthropic reports `input_tokens` 100 and `output_tokens` 50. `cache_creation_input_tokens` is 20 and `cache_read_input_tokens` is 10 when the request carries a `cache_control` breakpoint, and both are 0 otherwise. A breakpoint is a `cache_control` object on a block in the `system` array or in a message `content` array. `type` must be `ephemeral`, and `ttl`, if present, must be `5m` or `1h`. On a stream, the input and cache figures are on `message_start`, and `output_tokens` 50 is on `message_delta`. OpenAI reports `prompt_tokens` 100, `completion_tokens` 50, and `total_tokens` 150. On an OpenAI stream, usage is sent only when `stream_options.include_usage` is true, in a final chunk with no choices. Gemini reports `promptTokenCount` 100, `candidatesTokenCount` 50, and `totalTokenCount` 150. On a Gemini stream, `usageMetadata` is only on the last chunk. OpenAI Responses reports `input_tokens` 100, `output_tokens` 50 and `total_tokens` 150, with `cached_tokens` and `reasoning_tokens` 0; on a stream, usage is on `response.completed` (or `response.incomplete`).
 

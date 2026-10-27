@@ -208,7 +208,9 @@
                 "name": "get_time"
               }
             ],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           },
           {
             "seq": 2,
@@ -240,7 +242,9 @@
                 },
                 "isError": false
               }
-            ]
+            ],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           }
         ]
       }

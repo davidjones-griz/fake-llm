@@ -233,3 +233,36 @@ def test_stream_raw_arguments(fake, openai_client):
     assert chunks[0].choices[0].delta.content is None
     assert chunks[-1].choices[0].finish_reason == "tool_calls"
     assert fake.log() == [call(1, "tool-calls", 1)]
+
+
+def short_timeout_client(server, max_retries=0):
+    return openai.OpenAI(api_key="not-used", base_url=f"{server}/openai/v1", timeout=0.5, max_retries=max_retries)
+
+
+def test_first_byte_delay_timeout(fake, server):
+    fake.load([{"text": "slow", "firstByteDelayMs": 2000}, {"text": "fast"}])
+    with short_timeout_client(server) as client:
+        with pytest.raises(openai.APITimeoutError):
+            create(client)
+        fake.wait_for_calls(1)
+        assert create(client).choices[0].message.content == "fast"
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]
+    assert fake.delays() == [(2000, 0), (0, 0)]
+
+
+def test_stream_first_byte_delay_timeout(fake, server):
+    fake.load([{"text": "slow", "firstByteDelayMs": 2000, "streamInterChunkDelayMs": 5}, {"text": "fast"}])
+    with short_timeout_client(server) as client:
+        with pytest.raises(openai.APITimeoutError):
+            stream(client)
+        fake.wait_for_calls(1)
+        assert content(list(stream(client))) == ["", "fast", None]
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]
+    assert fake.delays() == [(2000, 5), (0, 0)]
+
+
+def test_timeout_retried_takes_next_step(fake, server):
+    fake.load([{"text": "slow", "firstByteDelayMs": 2000}, {"text": "fast"}])
+    with short_timeout_client(server, max_retries=1) as client:
+        assert create(client).choices[0].message.content == "fast"
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]

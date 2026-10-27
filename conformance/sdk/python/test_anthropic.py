@@ -1,6 +1,7 @@
 """The official anthropic SDK against fake-llm's Anthropic Messages route, buffered and streaming."""
 
 import json
+import time
 
 import anthropic
 import pytest
@@ -254,3 +255,37 @@ def test_raw_arguments_buffered_not_a_call(fake, anthropic_client):
     starts = [e.content_block for e in create(anthropic_client, stream=True) if e.type == "content_block_start"]
     assert [(block.type, block.id) for block in starts] == [("tool_use", "toolu_fake_1_1")]
     assert fake.log() == [call(1, "tool-calls", 1)]
+
+
+def test_first_byte_delay(fake, anthropic_client):
+    fake.load([{"text": "Late reply.", "firstByteDelayMs": 300}])
+    started = time.monotonic()
+    message = create(anthropic_client)
+    assert time.monotonic() - started >= 0.3
+    assert message.content[0].text == "Late reply."
+    assert fake.log() == [call(1, "text", 1)]
+    assert fake.delays() == [(300, 0)]
+
+
+def test_first_byte_delay_timeout(fake, server):
+    fake.load([{"text": "slow", "firstByteDelayMs": 2000}, {"text": "fast"}])
+    with anthropic.Anthropic(api_key="not-used", base_url=f"{server}/anthropic", timeout=0.5, max_retries=0) as client:
+        with pytest.raises(anthropic.APITimeoutError):
+            create(client)
+        fake.wait_for_calls(1)
+        assert create(client).content[0].text == "fast"
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]
+
+
+def test_stream_error_step_first_byte_delay(fake, anthropic_client):
+    fake.load([{**error_step(529, OVERLOADED), "firstByteDelayMs": 300, "streamInterChunkDelayMs": 50}])
+    started = time.monotonic()
+    with pytest.raises(anthropic.APIStatusError) as raised:
+        with anthropic_client.with_options(max_retries=0).messages.stream(model="example-model", max_tokens=64, messages=MESSAGES) as events:
+            for _ in events:
+                pass
+    assert raised.value.status_code == 529
+    assert time.monotonic() - started >= 0.3
+    assert raised.value.body == OVERLOADED
+    assert fake.log() == [call(1, "error:529", 1)]
+    assert fake.delays() == [(300, 0)]

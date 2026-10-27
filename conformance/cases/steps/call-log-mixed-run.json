@@ -147,7 +147,9 @@
             "promptSample": "first\n",
             "step": 1,
             "toolCalls": [],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           },
           {
             "seq": 2,
@@ -162,7 +164,9 @@
             "promptSample": "second\n",
             "step": 2,
             "toolCalls": [],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           },
           {
             "seq": 3,
@@ -177,7 +181,9 @@
             "promptSample": "third\n",
             "step": null,
             "toolCalls": [],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           }
         ]
       }

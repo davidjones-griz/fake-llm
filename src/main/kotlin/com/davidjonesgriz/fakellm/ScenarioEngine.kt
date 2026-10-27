@@ -12,6 +12,7 @@ internal data class FakeResponse(
     val status: Int,
     val body: String,
     val headers: Map<String, String> = emptyMap(),
+    val firstByteDelayMs: Long = 0,
 )
 
 /**
@@ -52,6 +53,13 @@ public data class CallRecord internal constructor(
      * `tool` messages, OpenAI Responses `function_call_output` items, Gemini `functionResponse` parts.
      */
     val toolResults: List<ToolResultRecord> = emptyList(),
+    /** The step's [Step.firstByteDelayMs]; 0 when no step served the call. */
+    val firstByteDelayMs: Long = 0,
+    /**
+     * The step's [Step.streamInterChunkDelayMs] when the response was an event stream (a streamed
+     * request, and a reply or an error with [Step.streamErrorAfterChunks]); 0 otherwise.
+     */
+    val streamInterChunkDelayMs: Long = 0,
 )
 
 /** One tool call a response carried, as [CallRecord.toolCalls] records it. */
@@ -188,9 +196,13 @@ public class ScenarioEngine(
         val r = resolve(vendor, req)
         val step = r.step
         return if (step.error != null) {
-            FakeResponse(step.error.status, step.error.body, step.error.headers)
+            FakeResponse(step.error.status, step.error.body, step.error.headers, step.firstByteDelayMs)
         } else {
-            FakeResponse(HTTP_OK, vendorEnvelope(vendor, step, r.seq, req.hasCacheBreakpoint))
+            FakeResponse(
+                HTTP_OK,
+                vendorEnvelope(vendor, step, r.seq, req.hasCacheBreakpoint),
+                firstByteDelayMs = step.firstByteDelayMs,
+            )
         }
     }
 
@@ -204,6 +216,8 @@ public class ScenarioEngine(
      * Throws [IllegalArgumentException] when the next step has a tool call with
      * [ToolCall.rawArguments] that [vendor]'s reply can't carry (a buffered Anthropic or a Gemini
      * request). The request then takes no number and no log entry, and the step stays next.
+     *
+     * It returns before any wait the step sets, so a call is numbered and logged when it arrives.
      */
     internal fun resolve(
         vendor: String,
@@ -345,6 +359,8 @@ private fun callRecord(
         step = if (step != null) n.toInt() else null,
         toolCalls = step?.let { sentToolCalls(vendor, it, n) }.orEmpty().map { ToolCallRecord(it.id, it.name) },
         toolResults = req.toolResults,
+        firstByteDelayMs = step?.firstByteDelayMs ?: 0,
+        streamInterChunkDelayMs = step?.let { appliedInterChunkDelayMs(it, req.stream) } ?: 0,
     )
 
 /** The buffered reply to call [seq] from [step], a reply step, in [vendor]'s format. */

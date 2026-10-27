@@ -65,9 +65,13 @@ class ScenarioMessagesTest {
             "step 1: \$.steps[0].error.status: expected an integer, got \"500\"",
             messageFor("""{"name":"x","steps":[{"error":{"status":"500"}}]}"""),
         )
-        // A Long field takes the whole Long range, and nothing past it.
-        val max = """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":9223372036854775807}]}"""
-        assertEquals(Long.MAX_VALUE, ScenarioLoader.decode(Json.parseToJsonElement(max)).steps[0].streamInterChunkDelayMs)
+        // A Long field's shape check takes the whole Long range, and the cap rejects what is past 600000.
+        assertEquals(
+            "step 1: streamInterChunkDelayMs must be from 0 to 600000 (10 minutes), got 9223372036854775807",
+            messageFor("""{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":9223372036854775807}]}"""),
+        )
+        val max = """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":600000}]}"""
+        assertEquals(600_000L, ScenarioLoader.decode(Json.parseToJsonElement(max)).steps[0].streamInterChunkDelayMs)
         assertEquals(
             "step 1: \$.steps[0].streamInterChunkDelayMs: expected an integer from -9223372036854775808 to 9223372036854775807, " +
                 "got 9223372036854775808",

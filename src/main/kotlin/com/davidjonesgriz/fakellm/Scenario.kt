@@ -63,7 +63,7 @@ public data class Step(
     /**
      * Milliseconds to wait between SSE deltas (Anthropic, OpenAI Chat Completions and Responses, and
      * Gemini), for injecting latency. `0` waits nothing, so the default stays immediate. Streaming
-     * only; see [streamChunkChars].
+     * only; see [streamChunkChars]. At most [MAX_DELAY_MS].
      */
     val streamInterChunkDelayMs: Long = 0,
     /**
@@ -84,6 +84,12 @@ public data class Step(
     val streamErrorAfterChunks: Int? = null,
     /** Tool calls the reply makes, in order, after any `text`. */
     val toolCalls: List<ToolCall>? = null,
+    /**
+     * Milliseconds to wait before any response bytes, status and headers included, on every vendor
+     * route: a buffered or streamed reply, and an error step. The call is numbered and logged when it
+     * arrives, before the wait. `0` waits nothing. At most [MAX_DELAY_MS].
+     */
+    val firstByteDelayMs: Long = 0,
 ) {
     init {
         require(((text != null) || (toolCalls != null)) xor (error != null)) {
@@ -94,8 +100,11 @@ public data class Step(
             "stopReason must be end_turn or tool_use on a step with toolCalls, got '$stopReason'"
         }
         require(streamChunkChars > 0) { "streamChunkChars must be positive, got $streamChunkChars" }
-        require(streamInterChunkDelayMs >= 0) {
-            "streamInterChunkDelayMs must be >= 0, got $streamInterChunkDelayMs"
+        require(streamInterChunkDelayMs in 0..MAX_DELAY_MS) {
+            "streamInterChunkDelayMs must be from 0 to $MAX_DELAY_MS (10 minutes), got $streamInterChunkDelayMs"
+        }
+        require(firstByteDelayMs in 0..MAX_DELAY_MS) {
+            "firstByteDelayMs must be from 0 to $MAX_DELAY_MS (10 minutes), got $firstByteDelayMs"
         }
         require(streamErrorAfterChunks == null || error != null) {
             "streamErrorAfterChunks is only valid on an error-bearing step"

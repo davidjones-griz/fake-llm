@@ -257,3 +257,13 @@ def test_stream_call_after_last_step(fake, openai_client):
         list(stream(openai_client))
     assert raised.value.body["fake_llm_error"] == "no more steps"
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
+
+
+def test_first_byte_delay_timeout(fake, server):
+    fake.load([{"text": "slow", "firstByteDelayMs": 2000}, {"text": "fast"}])
+    with openai.OpenAI(api_key="not-used", base_url=f"{server}/openai/v1", timeout=0.5, max_retries=0) as client:
+        with pytest.raises(openai.APITimeoutError):
+            create(client)
+        fake.wait_for_calls(1)
+        assert create(client).output_text == "fast"
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]

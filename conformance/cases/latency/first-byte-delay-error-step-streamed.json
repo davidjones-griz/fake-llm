@@ -1,0 +1,84 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "first-byte-delay-error-step-streamed",
+  "description": "A first-byte delay on a streamed request leaves a plain HTTP error step unchanged, and the call log records (50, 0).",
+  "scenario": {
+    "name": "overloaded",
+    "steps": [
+      {
+        "error": {
+          "status": 529,
+          "body": "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}"
+        },
+        "firstByteDelayMs": 50,
+        "streamInterChunkDelayMs": 20
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 529,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "type": "error",
+          "error": {
+            "type": "overloaded_error",
+            "message": "Overloaded"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "error:529",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 50,
+            "streamInterChunkDelayMs": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -222,7 +222,9 @@
                 "name": "get_weather"
               }
             ],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           }
         ]
       }
