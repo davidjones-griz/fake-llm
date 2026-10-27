@@ -140,13 +140,16 @@ The spec does not describe the vendor routes' success bodies field by field, so 
 them, exactly. That includes the values fake-llm fixes:
 
 - token counts: Anthropic `input_tokens` 100 and `output_tokens` 50, and cache tokens 20 (creation)
-  and 10 (read) with a `cache_control` breakpoint, 0 and 0 without; OpenAI 100, 50 and 150; Gemini
-  100, 50 and 150;
-- response IDs from the call number: `fake-msg-<n>`, `fake-openai-<n>`, and Gemini's `fake_llm_seq`;
-- OpenAI's `"model": "fake-openai"`, and Anthropic's buffered reply having no `model`;
+  and 10 (read) with a `cache_control` breakpoint, 0 and 0 without; OpenAI 100, 50 and 150; OpenAI
+  Responses 100, 50 and 150; Gemini 100, 50 and 150;
+- response IDs from the call number: `fake-msg-<n>`, `fake-openai-<n>`, Gemini's `fake_llm_seq`,
+  and `resp_fake_<n>`, `msg_fake_<n>` and `fc_fake_<n>_<i>` on OpenAI Responses;
+- OpenAI's `"model": "fake-openai"` (Chat Completions and Responses), and Anthropic's buffered
+  reply having no `model`;
 - the thinking signature `fake-thinking-signature`;
 - the streamed-error filler text (`Thinking this through before the connection drops. `, repeated)
-  and the generic stream error body for an error step with a blank body;
+  and the generic stream error body for an error step with a blank body, including the OpenAI
+  Responses `error` event;
 - the lenient canned reply, `This is a canned response from fake-llm.`;
 - the bundled scenario names, and the contents of `hello`.
 
@@ -179,7 +182,7 @@ conformance/sdk/python/
   requirements.txt   the lock: every package pinned, with hashes (pip-compile output)
   pytest.ini
   conftest.py        the server and client fixtures
-  test_anthropic.py  test_openai.py  test_gemini.py
+  test_anthropic.py  test_openai.py  test_openai_responses.py  test_gemini.py
 ```
 
 From the repository root:
