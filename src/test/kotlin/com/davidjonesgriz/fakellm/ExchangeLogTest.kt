@@ -368,7 +368,9 @@ class ExchangeLogTest {
             val response = engine.exchanges().single().response!!
             assertEquals("aborted", response.state)
             assertEquals(200, response.status)
-            assertEquals("", response.body)
+            // Writes to a reset socket can still return until the JDK notices (Java 25 accepts the
+            // first frames); the body holds exactly the bytes whose writes returned.
+            assertTrue(response.body.isEmpty() || response.body.startsWith("event: message_start"), response.body)
         }
     }
 
@@ -431,7 +433,8 @@ class ExchangeLogTest {
         val response = engine.exchanges().single().response!!
         assertEquals("aborted", response.state)
         assertEquals(400, response.status)
-        assertEquals("", response.body)
+        // The attempted exception 400: Java 21 fails sending its headers, Java 25 its close.
+        assertTrue(response.body.isEmpty() || response.body.contains("\"fake_llm_error\":\"exception\""), response.body)
     }
 
     @Test
