@@ -1,0 +1,150 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "exchanges-no-more-steps",
+  "description": "fake-llm's own no-more-steps 400 is recorded as call 2.",
+  "scenario": {
+    "name": "no-more-steps",
+    "steps": [
+      {
+        "text": "only"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "only"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no more steps",
+          "scenario": "no-more-steps",
+          "steps": 1,
+          "seq": 2,
+          "vendor": "anthropic",
+          "model": "example-model",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "Hello\n"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/exchanges"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "request": {
+              "method": "POST",
+              "path": "/anthropic/v1/messages",
+              "headers": {
+                "$type": "object"
+              },
+              "body": "{\"model\":\"example-model\",\"max_tokens\":64,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
+            },
+            "response": {
+              "status": 200,
+              "headers": {
+                "content-type": [
+                  "application/json"
+                ]
+              },
+              "body": "{\"id\":\"fake-msg-1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"only\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":100,\"output_tokens\":50,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}",
+              "state": "complete"
+            }
+          },
+          {
+            "seq": 2,
+            "request": {
+              "method": "POST",
+              "path": "/anthropic/v1/messages",
+              "headers": {
+                "$type": "object"
+              },
+              "body": "{\"model\":\"example-model\",\"max_tokens\":64,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
+            },
+            "response": {
+              "status": 400,
+              "headers": {
+                "content-type": [
+                  "application/json"
+                ]
+              },
+              "body": "{\"fake_llm_error\":\"no more steps\",\"scenario\":\"no-more-steps\",\"steps\":1,\"seq\":2,\"vendor\":\"anthropic\",\"model\":\"example-model\",\"system_shape\":\"absent\",\"message_count\":1,\"prompt_preview\":\"Hello\\n\"}",
+              "state": "complete"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

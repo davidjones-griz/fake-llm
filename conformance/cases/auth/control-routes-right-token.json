@@ -91,6 +91,22 @@
         },
         "body": []
       }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/exchanges",
+        "headers": {
+          "authorization": "Bearer conformance-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
     }
   ]
 }

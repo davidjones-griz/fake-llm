@@ -167,7 +167,9 @@ startFakeLlmServer(port = 0, engine = ScenarioEngine(), controlToken = null).use
 }
 ```
 
-`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, call log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. For scenario files kept elsewhere, point the engine's scenario directory at them, so they get the same checks and messages as any load by name. The library depends on `kotlinx-serialization-json` as an API dependency, so `Json.decodeFromString<Scenario>(text)` also decodes a scenario file, but it rejects a `"$schema"` key (remove it first) and gives kotlinx's own error messages.
+`engine.exchanges()` returns each call's full request and response; see [`GET /control/exchanges`](#control-api).
+
+`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, call log, exchange log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. For scenario files kept elsewhere, point the engine's scenario directory at them, so they get the same checks and messages as any load by name. The library depends on `kotlinx-serialization-json` as an API dependency, so `Json.decodeFromString<Scenario>(text)` also decodes a scenario file, but it rejects a `"$schema"` key (remove it first) and gives kotlinx's own error messages.
 
 A name is looked up in this order, and the first match wins: the engine's scenario directory, then your project's classpath `/scenarios/<name>.json` (the first on the classpath, if several modules have one), then the bundled scenarios, which fake-llm keeps under its own resource path, so your `index.txt` no longer hides the bundled list. So a scenario of yours with a bundled name, such as `scenarios/rate-limit-429.json`, replaces the bundled one, on purpose. `GET /control/scenarios` lists the directory's `*.json` names, the names in every `/scenarios/index.txt` on the classpath, and the bundled names. To have your classpath scenarios listed, add an `index.txt` beside them, one name per line (blank lines and whole-line `#` comments are skipped, and surrounding spaces are trimmed); without one they still load by name. A listed name is only as good as its index: a name whose file is missing still fails to load, and names that are not legal scenario names are skipped.
 
@@ -182,6 +184,7 @@ FakeLlmClient("http://localhost:8080", controlToken = System.getenv("FAKE_LLM_CO
     client.load("rate-limit-429")          // or client.loadInline(Scenario(...))
     // ... exercise the code under test against http://localhost:8080 ...
     val calls: List<CallRecord> = client.calls()
+    val exchanges: List<ExchangeRecord> = client.exchanges()
     client.reset()
 }
 ```
@@ -223,7 +226,7 @@ class MyClientTest {
 ```
 
 - **One server per class.** The server starts on an ephemeral port when the class first needs it, and stops when the class finishes. `@Nested` classes share it, and subclasses inherit `@FakeLlmTest`.
-- **A scenario per test.** Before each test, the nearest `@FakeLlmScenario` is loaded: the method's, then the class's (its own, then its interfaces', then its superclasses'), then each enclosing class's, the same way. Loading starts the scenario over, so every test's first call gets step 1 and the call log holds only that test's calls. A test with no `@FakeLlmScenario` anywhere runs with no scenario loaded (`ScenarioEngine.unload()`), so a scenario loaded by hand in `@BeforeAll` is gone again by the first test; put the scenario on each test method; a class-level `@FakeLlmScenario` is supported, but it shares one scenario between tests (see Writing scenarios for tests). The extension runs before your own `@BeforeEach` methods, so they see the scenario and can replace it.
+- **A scenario per test.** Before each test, the nearest `@FakeLlmScenario` is loaded: the method's, then the class's (its own, then its interfaces', then its superclasses'), then each enclosing class's, the same way. Loading starts the scenario over, so every test's first call gets step 1 and the call log and the exchange log hold only that test's calls. A test with no `@FakeLlmScenario` anywhere runs with no scenario loaded (`ScenarioEngine.unload()`), so a scenario loaded by hand in `@BeforeAll` is gone again by the first test; put the scenario on each test method; a class-level `@FakeLlmScenario` is supported, but it shares one scenario between tests (see Writing scenarios for tests). The extension runs before your own `@BeforeEach` methods, so they see the scenario and can replace it.
 - **Every call must get a step.** Right after the test method, before your `@AfterEach` methods, the test fails if a call made during `@BeforeEach` or the test got no step: a call after the scenario's last step, or a call with no scenario loaded in strict mode. The failure lists those calls. An app can catch the 400 and carry on, so without this check such a test could pass. A test that makes such a call on purpose, to test how the app handles it, opts out with `@FakeLlmAllowUnservedCalls` on the method or the class (found the same way as `@FakeLlmScenario`). An aborted test (a failed assumption) is not checked. For a `@TestFactory`, the check runs once around the whole factory. A `reset()` or `load()` in the middle of a test erases the calls made before it from the log, so the check does not see those.
 - **Injection.** Constructors, `@BeforeAll`, `@BeforeEach` and test methods can take a `FakeLlmServer` (`baseUrl`, `port`, `engine`) or the `ScenarioEngine` itself.
 - **Configuration.** `@FakeLlmTest(scenarioDirectory = "src/test/scenarios", lenient = true)` sets the engine's scenario directory (searched first; relative to the working directory) and lenient mode. The server ignores `FAKE_LLM_CONTROL_TOKEN`. Both annotations also work inside your own composed annotation or on an interface the test class implements. When the outer class runs the extension, a `@Nested` class uses the outer class's server, so options on the nested class's own `@FakeLlmTest` have no effect.
@@ -243,7 +246,7 @@ The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6
 
 ### API stability
 
-The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ToolCall`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `ToolCallRecord`, `ToolResultRecord`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord` or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
+The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ToolCall`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `ToolCallRecord`, `ToolResultRecord`, `ExchangeRecord`, `ExchangeRequest`, `ExchangeResponse`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord`, the three exchange records or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()` or `GET /control/exchanges` with `ExchangeRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
 
 [examples/](examples/) is a complete consumer: a small client with retry logic, tested against the published artifact.
 
@@ -479,7 +482,7 @@ At startup, `--scenario <name>` overrides `FAKE_LLM_SCENARIO`. With neither set,
 
 `--scenario-dir <path>` overrides `FAKE_LLM_SCENARIO_DIR`. A name is read from `<dir>/<name>.json` when that file exists, and otherwise from the bundled scenarios. `GET /control/scenarios` lists the `*.json` stems in that directory plus the bundled names. The combined list is deduplicated and sorted. (In-process use can add your project's classpath scenarios; see [Use as a library](#use-as-a-library).)
 
-`POST /control/scenario` loads a scenario in the running process and starts it over: the call log is emptied, and the next call is call 1 and gets step 1. The body is a JSON object with exactly one of `name` or `scenario`:
+`POST /control/scenario` loads a scenario in the running process and starts it over: the call log and the exchange log are emptied, and the next call is call 1 and gets step 1. The body is a JSON object with exactly one of `name` or `scenario`:
 
 ```bash
 curl -s -X POST http://localhost:8080/control/scenario \
@@ -611,7 +614,7 @@ Vendor routes and `/health` stay open. With no token configured, the control rou
 
 With a scenario directory set, `*.json` names from that directory are merged in, and the list is sorted again.
 
-`POST /control/reset` starts the loaded scenario over, as loading it again would: the call log is emptied, and the next call is call 1 and gets step 1, with response IDs from `fake-msg-1` again. The body is ignored.
+`POST /control/reset` starts the loaded scenario over, as loading it again would: the call log and the exchange log are emptied, and the next call is call 1 and gets step 1, with response IDs from `fake-msg-1` again. The body is ignored.
 
 ```json
 {"reset":true}
@@ -639,10 +642,50 @@ With a scenario directory set, `*.json` names from that directory are merged in,
 ]
 ```
 
+`GET /control/exchanges` returns the exchange log: one entry per call, in `seq` order, matching `GET /control/calls` entry for entry, with the request as fake-llm received it and the response as fake-llm wrote it. Each entry has `seq`, `request` and `response`:
+
+- `request.method` is the HTTP method, and `request.path` the raw path, then `?` and the raw query when there is one, still percent-encoded.
+- `request.headers` has every request header, names lowercased and sorted, each with its values in the order received.
+- `request.body` is the raw request body, decoded as UTF-8 and not re-serialized, so whitespace and key order are kept.
+- Secrets are redacted: each value of the `authorization`, `proxy-authorization`, `x-api-key`, `x-goog-api-key` and `api-key` headers is recorded as `[redacted]`, and so is the value of a query parameter named exactly `key` (`key=[redacted]`).
+- `response.status` is the status fake-llm sent, or started to send, and `response.headers` the headers fake-llm set, in the same form, without the `Date`, `Content-length` and `Transfer-encoding` headers the server adds as it sends.
+- `response.body` is every byte written to the response body, in order: the JSON text, or the whole event stream, every frame, including a mid-stream error frame and OpenAI's `data: [DONE]`.
+- `response.state` is `open` while the body is still being written (`body` holds what has been written so far), `complete` once fake-llm finished the response and closed the body normally, and `aborted` when sending the headers, or a write, flush or close, failed (usually because the client disconnected), or the server stopped mid-response. An `aborted` body holds the bytes written before the failure; the client may have received fewer. A server stopped while a call waits out its `firstByteDelayMs` records the `exception` 400 it tried to send, `aborted`, while the call log still names the step.
+- `response` is `null` until fake-llm starts sending the response, for example during a step's `firstByteDelayMs` wait.
+
+Requests that are not calls (the `exception` 400s, 404s, the Batches 501, and health and control requests) are not listed. Bodies are not capped. The log is emptied with the call log by a load, a reset or an unload.
+
+```json
+[
+  {
+    "seq": 1,
+    "request": {
+      "method": "POST",
+      "path": "/anthropic/v1/messages",
+      "headers": {
+        "content-length": ["88"],
+        "content-type": ["application/json"],
+        "host": ["127.0.0.1:8080"],
+        "x-api-key": ["[redacted]"]
+      },
+      "body": "{\"model\":\"example-model\",\"max_tokens\":64,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
+    },
+    "response": {
+      "status": 200,
+      "headers": { "content-type": ["application/json"] },
+      "body": "{\"id\":\"fake-msg-1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Hi.\"}],…}",
+      "state": "complete"
+    }
+  }
+]
+```
+
 From Kotlin or Java, [`FakeLlmClient`](#control-api-client) makes these calls and parses the responses. With curl, pass the bearer token on each control call when one is configured:
 
 ```bash
 curl -s http://localhost:8080/control/calls \
+  -H "authorization: Bearer $FAKE_LLM_CONTROL_TOKEN"
+curl -s http://localhost:8080/control/exchanges \
   -H "authorization: Bearer $FAKE_LLM_CONTROL_TOKEN"
 ```
 
@@ -676,7 +719,7 @@ Tool calls are scripted per step; request fields such as `tools`, `tool_choice` 
 
 The OpenAI Responses route keeps no state. `previous_response_id`, `store` and `conversation` are accepted and ignored, and `GET /openai/v1/responses/{id}` and the other Responses subpaths are not routes. An app that sends only the new turn with `previous_response_id` gets the next step, and the call log shows only that turn's input.
 
-Each process holds one scenario and one call log in memory. Nothing is written to disk. Another process does not share that state.
+Each process holds one scenario, one call log and one exchange log in memory. Exchange bodies are not capped, so a run with very large requests or streams holds them until the next load, reset or unload. Nothing is written to disk. Another process does not share that state.
 
 ## Development
 

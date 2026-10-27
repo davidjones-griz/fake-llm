@@ -123,7 +123,7 @@
       ]
     },
     "expected": {
-      "description": "An expected JSON value. The only matcher is {\"$type\": \"integer\"} or {\"$type\": \"string\"}; any other object with a key starting with $ is rejected.",
+      "description": "An expected JSON value. A matcher is {\"$type\": \"integer\"}, {\"$type\": \"string\"} or {\"$type\": \"object\"}; any other object with a key starting with $ is rejected.",
       "anyOf": [
         { "$ref": "#/$defs/matcher" },
         { "type": ["string", "number", "boolean", "null"] },
@@ -139,7 +139,7 @@
       "type": "object",
       "required": ["$type"],
       "additionalProperties": false,
-      "properties": { "$type": { "enum": ["integer", "string"] } }
+      "properties": { "$type": { "enum": ["integer", "string", "object"] } }
     }
   }
 }

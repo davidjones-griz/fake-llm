@@ -117,6 +117,9 @@ class Fake:
     def calls(self):
         return httpx.get(f"{self.base_url}/control/calls").json()
 
+    def exchanges(self):
+        return httpx.get(f"{self.base_url}/control/exchanges").json()
+
     def wait_for_calls(self, count, timeout=5.0):
         """Waits until the call log holds count records, so a timed-out call is logged before the next is sent."""
         deadline = time.monotonic() + timeout

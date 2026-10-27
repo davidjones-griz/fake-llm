@@ -125,10 +125,11 @@ Turns every skip into a failure. CI sets it: with a command target, nothing shou
 - **Headers:** names match case-insensitively; values exactly, except that an expected
   `content-type` without parameters matches by media type (`application/json; charset=utf-8`
   passes for `application/json`). Headers a case does not list are ignored.
-- **The only matcher** is `{ "$type": "integer" }` or `{ "$type": "string" }`, which accepts any
-  value of that type. Cases use it only for values that vary (`timestampMs`) and for the messages
-  the spec says are diagnostics, not contract (`detail`, and the `fake_llm_error` text of a 401,
-  404 or 501).
+- **Matchers**: `{ "$type": "integer" }`, `{ "$type": "string" }` and `{ "$type": "object" }`,
+  which accept any value of that type. Cases use them only for values that vary (`timestampMs`)
+  and for the messages the spec says are diagnostics, not contract (`detail`, and the
+  `fake_llm_error` text of a 401, 404 or 501). Cases use `object` only for the request headers in
+  `GET /control/exchanges` entries, which depend on the client.
 - **Timeouts:** each response, body included, must arrive within 10 seconds, so a stream that
   stalls fails its case.
 - **Not checked:** a JSON body that repeats a key is read as its last value; the runner does not
@@ -169,7 +170,8 @@ them, exactly. That includes the values fake-llm fixes:
 `conformance/sdk/python/` checks that the official client libraries accept what the server sends:
 the `anthropic`, `openai` and `google-genai` Python SDKs, at the versions pinned in
 `requirements.txt`. Each test loads its own scenario, makes calls through an SDK, and asserts on
-what the SDK parsed or raised and on the exact call log (`GET /control/calls`). It covers what the
+what the SDK parsed or raised and on the exact call log (`GET /control/calls`) and, in
+`test_exchanges.py`, the exchange log (`GET /control/exchanges`). It covers what the
 server supports today: Anthropic Messages buffered and streaming, OpenAI Chat Completions and
 Responses buffered and streaming, and Gemini `generateContent` buffered and
 `streamGenerateContent` streaming. It also covers client timeouts against `firstByteDelayMs`. The
@@ -184,6 +186,7 @@ conformance/sdk/python/
   pytest.ini
   conftest.py        the server and client fixtures
   test_anthropic.py  test_openai.py  test_openai_responses.py  test_gemini.py
+  test_exchanges.py
 ```
 
 From the repository root:

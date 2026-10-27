@@ -39,7 +39,7 @@ private const val CONCURRENT_TESTS =
  *
  * One server serves the whole class and its `@Nested` classes. It starts on first use and stops
  * when the class finishes. Before each test the [FakeLlmScenario] that applies is loaded, which
- * starts it over (empty call log, the next call gets step 1); a test with none runs after
+ * starts it over (empty call and exchange logs, the next call gets step 1); a test with none runs after
  * [ScenarioEngine.unload]. `FakeLlmServer` and `ScenarioEngine` parameters are injected anywhere
  * JUnit resolves parameters.
  *

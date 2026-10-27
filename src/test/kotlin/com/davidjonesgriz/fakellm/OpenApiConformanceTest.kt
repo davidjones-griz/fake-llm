@@ -362,7 +362,11 @@ class OpenApiConformanceTest {
     private fun withSamples(node: JsonNode): JsonNode =
         when {
             node.isObject && node.propertyNames().toList() == listOf("\$type") -> {
-                if (node.path("\$type").asString() == "integer") json.readTree("0") else json.readTree("\"sample\"")
+                when (node.path("\$type").asString()) {
+                    "integer" -> json.readTree("0")
+                    "object" -> json.readTree("{}")
+                    else -> json.readTree("\"sample\"")
+                }
             }
 
             node.isObject -> {
@@ -801,6 +805,24 @@ class OpenApiConformanceTest {
                     "GET",
                     "/control/calls",
                     Target.Operation("/control/calls"),
+                    serverToken = TOKEN,
+                    expectStatus = 401,
+                ),
+                Exchange(
+                    "exchanges after calls on every vendor",
+                    "GET",
+                    "/control/exchanges",
+                    Target.Operation("/control/exchanges"),
+                    lenient = true,
+                    expectStatus = 200,
+                    setup = ::callVendors,
+                    assertBody = { assertTrue(it.contains("\"complete\""), it) },
+                ),
+                Exchange(
+                    "exchanges without the token",
+                    "GET",
+                    "/control/exchanges",
+                    Target.Operation("/control/exchanges"),
                     serverToken = TOKEN,
                     expectStatus = 401,
                 ),

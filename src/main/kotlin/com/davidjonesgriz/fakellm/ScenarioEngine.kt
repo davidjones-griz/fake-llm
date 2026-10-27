@@ -115,8 +115,12 @@ internal data class Resolution(
  * it. So the log is always in call order, and a call that overlaps a reset belongs entirely to the
  * run before it or the run after it.
  *
- * Each engine has its own scenario, call counter, call log and [scenarioDirectory], so engines in
- * the same JVM do not affect each other.
+ * Next to the call log the engine keeps an exchange log ([exchanges]): for each call received over
+ * HTTP, the request as received and the response as written. It is kept under the same lock and
+ * emptied with the call log.
+ *
+ * Each engine has its own scenario, call counter, call log, exchange log and [scenarioDirectory], so
+ * engines in the same JVM do not affect each other.
  */
 public class ScenarioEngine(
     /**
@@ -139,19 +143,22 @@ public class ScenarioEngine(
     private var scenario: Scenario? = null
     private var callCount = 0L
     private var log = mutableListOf<CallRecord>()
+    private var exchangeLog = mutableListOf<Pair<Long, ExchangeCapture>>()
 
     /**
      * Loads the scenario [name] and installs it as [loadInline] does. Reads
      * `<scenarioDirectory>/<name>.json` when [scenarioDirectory] is set and that file exists, then
      * the project's classpath resource `/scenarios/<name>.json`, then the bundled scenario. Throws
      * when the name is not `[A-Za-z0-9_-]+`, no such scenario exists, the file does not decode, or
-     * its declared name differs from [name]; the engine is then unchanged.
+     * its declared name differs from [name]; the engine is then unchanged. Empties the call log and
+     * the exchange log.
      */
     public fun load(name: String): Scenario = loadInline(ScenarioLoader.load(name, scenarioDirectory))
 
     /**
-     * Installs [s] as the loaded scenario and starts it over, as [reset] does.
-     * By-name [load] delegates here. `POST /control/scenario` with a `scenario` object does too.
+     * Installs [s] as the loaded scenario and starts it over, as [reset] does: empties the call log
+     * and the exchange log. By-name [load] delegates here. `POST /control/scenario` with a
+     * `scenario` object does too.
      */
     public fun loadInline(s: Scenario): Scenario {
         replace(s)
@@ -159,16 +166,16 @@ public class ScenarioEngine(
     }
 
     /**
-     * Removes the loaded scenario and empties the call log; the next call is call 1. Calls then get
-     * the strict-mode 400 or the lenient canned reply.
+     * Removes the loaded scenario and empties the call log and the exchange log; the next call is
+     * call 1. Calls then get the strict-mode 400 or the lenient canned reply.
      */
     public fun unload() {
         replace(null)
     }
 
     /**
-     * Starts the loaded scenario over: empties the call log, and the next call is call 1 and gets
-     * step 1. Keeps the loaded scenario.
+     * Starts the loaded scenario over: empties the call log and the exchange log, and the next call
+     * is call 1 and gets step 1. Keeps the loaded scenario.
      */
     public fun reset() {
         synchronized(lock) { replace(scenario) }
@@ -179,6 +186,7 @@ public class ScenarioEngine(
             scenario = s
             callCount = 0
             log = mutableListOf()
+            exchangeLog = mutableListOf()
         }
     }
 
@@ -188,12 +196,19 @@ public class ScenarioEngine(
     /** A snapshot of the call log, in call order. */
     public fun calls(): List<CallRecord> = synchronized(lock) { log.toList() }
 
+    /**
+     * A snapshot of the exchange log: for each call received over HTTP, in call order, the request
+     * as received and the response as written so far, with the same `seq` values as [calls].
+     */
+    public fun exchanges(): List<ExchangeRecord> = synchronized(lock) { exchangeLog.toList() }.map { (seq, c) -> c.snapshot(seq) }
+
     /** Whole JSON response for one request. */
     internal fun handle(
         vendor: String,
         req: ParsedRequest,
+        capture: ExchangeCapture? = null,
     ): FakeResponse {
-        val r = resolve(vendor, req)
+        val r = resolve(vendor, req, capture)
         val step = r.step
         return if (step.error != null) {
             FakeResponse(step.error.status, step.error.body, step.error.headers, step.firstByteDelayMs)
@@ -218,10 +233,12 @@ public class ScenarioEngine(
      * request). The request then takes no number and no log entry, and the step stays next.
      *
      * It returns before any wait the step sets, so a call is numbered and logged when it arrives.
+     * [capture] is the request's exchange recorder; it joins the exchange log with the call's number.
      */
     internal fun resolve(
         vendor: String,
         req: ParsedRequest,
+        capture: ExchangeCapture? = null,
     ): Resolution {
         val (n, loaded, served) =
             synchronized(lock) {
@@ -256,6 +273,7 @@ public class ScenarioEngine(
                         }
                     }
                 log.add(callRecord(n, vendor, req, outcome, step))
+                capture?.let { exchangeLog.add(n to it) }
                 Triple(n, s, step)
             }
         val step =

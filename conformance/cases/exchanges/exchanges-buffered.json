@@ -1,0 +1,93 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "exchanges-buffered",
+  "description": "A buffered call's exchange: the request as received and the JSON reply as written.",
+  "scenario": {
+    "name": "buffered",
+    "steps": [
+      {
+        "text": "Mild and dry tomorrow."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Mild and dry tomorrow."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/exchanges"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "request": {
+              "method": "POST",
+              "path": "/anthropic/v1/messages",
+              "headers": {
+                "$type": "object"
+              },
+              "body": "{\"model\":\"example-model\",\"max_tokens\":64,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
+            },
+            "response": {
+              "status": 200,
+              "headers": {
+                "content-type": [
+                  "application/json"
+                ]
+              },
+              "body": "{\"id\":\"fake-msg-1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Mild and dry tomorrow.\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":100,\"output_tokens\":50,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}",
+              "state": "complete"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

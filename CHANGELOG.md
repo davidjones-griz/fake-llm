@@ -12,6 +12,14 @@ change the public API.
 - `firstByteDelayMs` on a step: a wait before any response bytes on every vendor route, for
   buffered and streamed replies and error steps, to test client timeouts. The call log records the
   delays each call applied (`firstByteDelayMs`, `streamInterChunkDelayMs`).
+- Exchange log: `GET /control/exchanges`, `ScenarioEngine.exchanges()` and
+  `FakeLlmClient.exchanges()` return, for each call in `seq` order, the request as received
+  (method, path with query, headers, raw body) and the response as written (status, the headers
+  fake-llm set, every body byte including a whole SSE stream, and `open`, `complete` or
+  `aborted`). The values of `authorization`, `proxy-authorization`, `x-api-key`, `x-goog-api-key`
+  and `api-key` and of a `key` query parameter are recorded as `[redacted]`. Requests that are not
+  calls are not logged. Loading, resetting and unloading empty it with the call log.
+- The conformance case format's `{"$type": "object"}` matcher.
 
 ### Changed
 
