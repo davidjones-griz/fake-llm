@@ -55,6 +55,15 @@ class ComparisonTest {
     }
 
     @Test
+    fun `the object matcher accepts any object, empty or not, and nothing else`() {
+        assertNull(diff("""{"h":{"${'$'}type":"object"}}""", """{"h":{"host":["x"],"user-agent":["y","z"]}}"""))
+        assertNull(diff("""{"h":{"${'$'}type":"object"}}""", """{"h":{}}"""))
+        assertEquals("$.h: expected any object, got an array []", diff("""{"h":{"${'$'}type":"object"}}""", """{"h":[]}"""))
+        assertEquals("$.h: expected any object, got null", diff("""{"h":{"${'$'}type":"object"}}""", """{"h":null}"""))
+        assertNotNull(diff("""{"h":{"${'$'}type":"object"}}""", """{"h":"{}"}"""))
+    }
+
+    @Test
     fun `SSE frames parse into named events with joined data, as a client dispatches them`() {
         val body = "event: a\ndata: {\"x\":1}\n\n: a comment\n\nretry: 100\n\nevent: b\ndata: line 1\ndata: line 2\n\ndata:no-name\n\n"
         assertEquals(

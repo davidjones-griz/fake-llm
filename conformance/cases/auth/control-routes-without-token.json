@@ -28,6 +28,24 @@
     {
       "request": {
         "method": "GET",
+        "path": "/control/exchanges"
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "www-authenticate": "Bearer"
+        },
+        "body": {
+          "fake_llm_error": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
         "path": "/control/scenarios"
       },
       "response": {

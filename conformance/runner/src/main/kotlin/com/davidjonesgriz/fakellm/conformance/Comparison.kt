@@ -9,8 +9,8 @@ import kotlinx.serialization.json.JsonPrimitive
 /**
  * Compares [actual] with [expected] exactly: the same JSON types, the same object keys, the same
  * array lengths and equal values. An expected integer requires an integer token, so `100.0` does
- * not match `100`. The only matcher, `{"$type": "integer"}` or `{"$type": "string"}`, accepts any
- * value of that type. Returns the first difference, or null when they match.
+ * not match `100`. A matcher, `{"$type": "integer"}`, `{"$type": "string"}` or `{"$type": "object"}`,
+ * accepts any value of that type. Returns the first difference, or null when they match.
  */
 fun firstDifference(
     expected: JsonElement,
@@ -87,13 +87,12 @@ private fun hasType(
     actual: JsonElement,
     type: String,
 ): Boolean =
-    actual is JsonPrimitive &&
-        actual !is JsonNull &&
-        when (type) {
-            "string" -> actual.isString
-            "integer" -> !actual.isString && isIntegerToken(actual.content)
-            else -> false
-        }
+    when (type) {
+        "object" -> actual is JsonObject
+        "string" -> actual is JsonPrimitive && actual !is JsonNull && actual.isString
+        "integer" -> actual is JsonPrimitive && actual !is JsonNull && !actual.isString && isIntegerToken(actual.content)
+        else -> false
+    }
 
 private val INTEGER_TOKEN = Regex("-?(0|[1-9][0-9]*)")
 

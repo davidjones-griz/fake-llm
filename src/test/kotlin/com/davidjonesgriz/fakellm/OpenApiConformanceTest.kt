@@ -362,7 +362,11 @@ class OpenApiConformanceTest {
     private fun withSamples(node: JsonNode): JsonNode =
         when {
             node.isObject && node.propertyNames().toList() == listOf("\$type") -> {
-                if (node.path("\$type").asString() == "integer") json.readTree("0") else json.readTree("\"sample\"")
+                when (node.path("\$type").asString()) {
+                    "integer" -> json.readTree("0")
+                    "object" -> json.readTree("{}")
+                    else -> json.readTree("\"sample\"")
+                }
             }
 
             node.isObject -> {
