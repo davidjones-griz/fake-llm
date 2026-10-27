@@ -170,7 +170,7 @@
         "stopReason": {
           "type": "string",
           "default": "end_turn",
-          "description": "The `stop_reason` of a reply; `max_tokens` reports a truncated reply. On a step with\n`toolCalls` it must be `end_turn` or `tool_use`, and every format reports a tool-call stop.\n"
+          "description": "The `stop_reason` of a reply; `max_tokens` reports a truncated reply, and is an\n`incomplete` OpenAI Responses reply (`max_output_tokens`). On a step with `toolCalls` it\nmust be `end_turn` or `tool_use`, and every format with a stop reason reports a tool-call\nstop; an OpenAI Responses reply with tool calls is `completed`.\n"
         },
         "error": {
           "oneOf": [
@@ -187,14 +187,14 @@
           "minimum": 1,
           "maximum": 2147483647,
           "default": 24,
-          "description": "Size of each streamed delta, in Unicode code points (Anthropic, OpenAI and Gemini streams)."
+          "description": "Size of each streamed delta, in Unicode code points (Anthropic, OpenAI Chat Completions and\nResponses, and Gemini streams).\n"
         },
         "streamInterChunkDelayMs": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9223372036854775807,
           "default": 0,
-          "description": "Milliseconds to wait before each streamed delta (Anthropic, OpenAI and Gemini streams;\na Gemini functionCall chunk has no wait).\n"
+          "description": "Milliseconds to wait before each streamed delta (Anthropic, OpenAI Chat Completions and\nResponses, and Gemini streams; a Gemini functionCall chunk has no wait).\n"
         },
         "streamErrorAfterChunks": {
           "type": [
@@ -203,7 +203,7 @@
           ],
           "minimum": 1,
           "maximum": 2147483647,
-          "description": "Only on an error step, and only when streamed (Anthropic, OpenAI or Gemini): send this many text\ndeltas, then an in-stream error.\n"
+          "description": "Only on an error step, and only when streamed (Anthropic, OpenAI Chat Completions and\nResponses, and Gemini): send this many text deltas, then an in-stream error.\n"
         },
         "toolCalls": {
           "type": [
@@ -284,7 +284,7 @@
             "string",
             "null"
           ],
-          "description": "The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI format and a\nstreamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step\nhas it gets `ExceptionError`, and the step is not used.\n"
+          "description": "The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI formats (Chat\nCompletions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step\nhas it gets `ExceptionError`, and the step is not used.\n"
         },
         "id": {
           "type": [
@@ -292,7 +292,7 @@
             "null"
           ],
           "minLength": 1,
-          "description": "The call's id. Default: `toolu_fake_<seq>_<n>` (Anthropic) and `call_fake_<seq>_<n>`\n(OpenAI), where `n` is the call's 1-based position in the step. Gemini sends an id only when\none is set.\n"
+          "description": "The call's id. Default: `toolu_fake_<seq>_<n>` (Anthropic) and `call_fake_<seq>_<n>`\n(OpenAI; the `call_id` on Responses), where `n` is the call's 1-based position in the step. Gemini sends an id only when\none is set.\n"
         }
       }
     }

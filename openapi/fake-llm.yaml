@@ -36,14 +36,18 @@ info:
     404 and the Batches 501 are not calls. That includes a request whose next step has a tool call
     with `rawArguments` that its format can't carry (a buffered Anthropic request, or a Gemini
     request). That step is not used, and the next call gets it. A Gemini `streamGenerateContent`
-    request without `alt=sse` is not a call either.
+    request without `alt=sse` is not a call either. On the OpenAI Responses route,
+    `previous_response_id`, `store` and `conversation` are accepted and ignored: fake-llm stores
+    nothing, each call gets the next step, and only the request's own `instructions` and `input`
+    are read.
 
     **Vendor bodies.** The success bodies and event streams of the vendor routes follow each
     provider's API, and this document does not describe them field by field. The conformance
     cases in `conformance/cases` define them exactly, including the values fake-llm fixes: the
-    token counts, the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`), OpenAI's
-    `model`, the thinking signature, the streamed-error filler text and generic error body, the
-    OpenAI and Gemini generic stream error bodies, and the lenient canned reply.
+    token counts, the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`,
+    `resp_fake_<n>`, `msg_fake_<n>`, `fc_fake_<n>_<i>`), OpenAI's `model` (both routes), the
+    thinking signature, the streamed-error filler text and generic error body, the OpenAI, OpenAI
+    Responses and Gemini generic stream error bodies, and the lenient canned reply.
 
     **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
     cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.
@@ -291,6 +295,39 @@ paths:
           $ref: "#/components/responses/VendorBadRequest"
         default:
           $ref: "#/components/responses/ScriptedError"
+  /openai/v1/responses:
+    post:
+      tags: [vendor]
+      operationId: createOpenAiResponse
+      summary: OpenAI Responses API stand-in
+      description: |
+        Request and success response follow the OpenAI Responses API
+        (https://platform.openai.com/docs/api-reference/responses). Server-sent events when the
+        request sets `"stream": true`: named events from `response.created` to
+        `response.completed` (`response.incomplete` for a truncated reply). `previous_response_id`,
+        `store` and `conversation` are accepted and ignored: nothing is stored or resolved, and the
+        call gets the next step. A step's scripted error can return any status and body.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A reply in the OpenAI Responses format, or an SSE stream.
+          content:
+            application/json:
+              schema:
+                type: object
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/VendorBadRequest"
+        default:
+          $ref: "#/components/responses/ScriptedError"
   /gemini/{version}/models/{model}:generateContent:
     parameters:
       - name: version
@@ -429,9 +466,10 @@ components:
         fake-llm's own 400s, not the provider's. A call after the loaded scenario's last step gets
         `NoMoreStepsError`, in strict and lenient mode. A call when no scenario is loaded gets
         `NoScenarioError` in strict mode (the default); lenient mode serves the canned reply. On
-        the Anthropic and OpenAI routes with `"stream": true`, and on Gemini `streamGenerateContent`,
-        both are JSON, with no SSE bytes. A request body that is not valid JSON, or lacks the `messages`
-        (Anthropic, OpenAI) or `contents` (Gemini) array, gets `ExceptionError`. A step's scripted
+        the Anthropic, OpenAI and OpenAI Responses routes with `"stream": true`, and on Gemini
+        `streamGenerateContent`, both are JSON, with no SSE bytes. A request body that is not valid
+        JSON, or lacks the `messages` (Anthropic, OpenAI) or `contents` (Gemini) array, gets
+        `ExceptionError`. On OpenAI Responses, only a body that is not a JSON object gets it. A step's scripted
         error is outside these schemas, even when its status is 400: see `ScriptedError`.
       content:
         application/json:
@@ -537,7 +575,8 @@ components:
             when no step served it (`outcome` is `default`, `no-scenario` or `no-more-steps`).
         vendor:
           type: string
-          enum: [anthropic, openai, gemini]
+          enum: [anthropic, openai, openai-responses, gemini]
+          description: "`openai` is Chat Completions and `openai-responses` the Responses API."
         model:
           type: string
         systemShape:
@@ -546,7 +585,10 @@ components:
           type: integer
           minimum: 0
           maximum: 2147483647
-          description: The length of the request's `messages` (Anthropic, OpenAI) or `contents` (Gemini) array.
+          description: |
+            The length of the request's `messages` (Anthropic, OpenAI Chat Completions) or `contents`
+            (Gemini) array. OpenAI Responses: the number of `input` items, 1 for a string `input`, and
+            0 when `input` is absent or neither a string nor an array.
         outcome:
           type: string
           pattern: "^(text|tool-calls|default|no-scenario|no-more-steps|error:[1-5][0-9]{2})$"
@@ -567,7 +609,9 @@ components:
             or an array of text blocks, then each message `content` that is a string or an array
             of text blocks (other blocks contribute nothing). OpenAI: each message `content` that
             is a JSON string, including a system message (array content is skipped). Gemini: each
-            `contents[].parts[].text`.
+            `contents[].parts[].text`. OpenAI Responses: `instructions` when it is a string, then
+            `input` when it is a string, or for each `input` item a message's string `content` or the
+            string `text` of its content parts, and a `function_call_output`'s string `output`.
         toolCalls:
           type: array
           items:
@@ -579,14 +623,15 @@ components:
             $ref: "#/components/schemas/ToolResultRecord"
           description: |
             Every tool result in the request, in request order: Anthropic `tool_result` blocks, OpenAI
-            `tool` messages, Gemini `functionResponse` parts.
+            `tool` messages, OpenAI Responses `function_call_output` items, Gemini `functionResponse`
+            parts.
     ToolCallRecord:
       type: object
       required: [id, name]
       properties:
         id:
           type: [string, "null"]
-          description: The id sent, or null for a Gemini call with no scripted id.
+          description: The id sent (the `call_id` on OpenAI Responses), or null for a Gemini call with no scripted id.
         name:
           type: string
     ToolResultRecord:
@@ -595,19 +640,22 @@ components:
       properties:
         id:
           type: [string, "null"]
-          description: Anthropic `tool_use_id`, OpenAI `tool_call_id`, Gemini `functionResponse.id`; null when absent or not a string.
+          description: |
+            Anthropic `tool_use_id`, OpenAI `tool_call_id`, OpenAI Responses `call_id`, Gemini
+            `functionResponse.id`; null when absent or not a string.
         name:
           type: [string, "null"]
           description: |
             Gemini: `functionResponse.name`. Anthropic and OpenAI: the name of the tool call in the
-            same request whose id matches (the first such call), or null when none does.
+            same request whose id matches (the first such call), or null when none does. OpenAI
+            Responses: the name of the first `function_call` input item with the same `call_id`.
         content:
           description: |
             The result as the request sent it, any JSON value: Anthropic `content`, OpenAI `content`,
-            Gemini `response`. Null when absent.
+            OpenAI Responses `output`, Gemini `response`. Null when absent.
         isError:
           type: boolean
-          description: Anthropic `is_error` is `true`. Always false for OpenAI and Gemini.
+          description: Anthropic `is_error` is `true`. Always false for OpenAI (both routes) and Gemini.
     RequestSystemShape:
       type: string
       enum: [blocks, string, absent, unknown]
@@ -615,7 +663,10 @@ components:
         The shape of the request's system prompt. Anthropic: `absent` when `system` is missing or
         `null`, `string` when it is a JSON string, `blocks` when it is an array, `unknown` for any
         other value (an object, a number or a boolean). OpenAI: `blocks` when a message has role
-        `system`, else `absent`. Gemini: always `absent` (`systemInstruction` is not read).
+        `system`, else `absent`. Gemini: always `absent` (`systemInstruction` is not read). OpenAI
+        Responses: `string` when `instructions` is a string, `unknown` for any other non-null value;
+        without `instructions`, `blocks` when an `input` item has role `system` or `developer`, else
+        `absent`.
     MessageError:
       type: object
       required: [fake_llm_error]
@@ -694,12 +745,15 @@ components:
       description: The call's number since the last load or reset, as `seq` in the call log.
     Vendor:
       type: string
-      enum: [anthropic, openai, gemini]
+      enum: [anthropic, openai, openai-responses, gemini]
     MessageCount:
       type: integer
       minimum: 0
       maximum: 2147483647
-      description: The length of the request's `messages` (Anthropic, OpenAI) or `contents` (Gemini) array.
+      description: |
+        The length of the request's `messages` (Anthropic, OpenAI Chat Completions) or `contents`
+        (Gemini) array. OpenAI Responses: the number of `input` items, 1 for a string `input`, and 0
+        when `input` is absent or neither a string nor an array.
     PromptPreview:
       type: string
       description: The first 200 UTF-16 code units of the combined prompt text (see `CallRecord.promptSample`).
@@ -791,8 +845,10 @@ components:
           type: string
           default: end_turn
           description: |
-            The `stop_reason` of a reply; `max_tokens` reports a truncated reply. On a step with
-            `toolCalls` it must be `end_turn` or `tool_use`, and every format reports a tool-call stop.
+            The `stop_reason` of a reply; `max_tokens` reports a truncated reply, and is an
+            `incomplete` OpenAI Responses reply (`max_output_tokens`). On a step with `toolCalls` it
+            must be `end_turn` or `tool_use`, and every format with a stop reason reports a tool-call
+            stop; an OpenAI Responses reply with tool calls is `completed`.
         error:
           oneOf:
             - $ref: "#/components/schemas/ErrorStep"
@@ -802,22 +858,24 @@ components:
           minimum: 1
           maximum: 2147483647
           default: 24
-          description: Size of each streamed delta, in Unicode code points (Anthropic, OpenAI and Gemini streams).
+          description: |
+            Size of each streamed delta, in Unicode code points (Anthropic, OpenAI Chat Completions and
+            Responses, and Gemini streams).
         streamInterChunkDelayMs:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
           default: 0
           description: |
-            Milliseconds to wait before each streamed delta (Anthropic, OpenAI and Gemini streams;
-            a Gemini functionCall chunk has no wait).
+            Milliseconds to wait before each streamed delta (Anthropic, OpenAI Chat Completions and
+            Responses, and Gemini streams; a Gemini functionCall chunk has no wait).
         streamErrorAfterChunks:
           type: [integer, "null"]
           minimum: 1
           maximum: 2147483647
           description: |
-            Only on an error step, and only when streamed (Anthropic, OpenAI or Gemini): send this many text
-            deltas, then an in-stream error.
+            Only on an error step, and only when streamed (Anthropic, OpenAI Chat Completions and
+            Responses, and Gemini): send this many text deltas, then an in-stream error.
         toolCalls:
           type: [array, "null"]
           minItems: 1
@@ -847,15 +905,15 @@ components:
         rawArguments:
           type: [string, "null"]
           description: |
-            The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI format and a
-            streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step
+            The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI formats (Chat
+            Completions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step
             has it gets `ExceptionError`, and the step is not used.
         id:
           type: [string, "null"]
           minLength: 1
           description: |
             The call's id. Default: `toolu_fake_<seq>_<n>` (Anthropic) and `call_fake_<seq>_<n>`
-            (OpenAI), where `n` is the call's 1-based position in the step. Gemini sends an id only when
+            (OpenAI; the `call_id` on Responses), where `n` is the call's 1-based position in the step. Gemini sends an id only when
             one is set.
     ErrorStep:
       type: object
