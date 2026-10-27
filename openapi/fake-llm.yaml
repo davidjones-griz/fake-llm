@@ -466,8 +466,8 @@ components:
         fake-llm's own 400s, not the provider's. A call after the loaded scenario's last step gets
         `NoMoreStepsError`, in strict and lenient mode. A call when no scenario is loaded gets
         `NoScenarioError` in strict mode (the default); lenient mode serves the canned reply. On
-        the Anthropic, OpenAI and OpenAI Responses routes with `"stream": true`, and on Gemini
-        `streamGenerateContent`, both are JSON, with no SSE bytes. A request body that is not valid
+        the Anthropic and OpenAI routes with `"stream": true`, the OpenAI Responses route with
+        `"stream": true`, and on Gemini `streamGenerateContent`, both are JSON, with no SSE bytes. A request body that is not valid
         JSON, or lacks the `messages` (Anthropic, OpenAI) or `contents` (Gemini) array, gets
         `ExceptionError`. On OpenAI Responses, only a body that is not a JSON object gets it. A step's scripted
         error is outside these schemas, even when its status is 400: see `ScriptedError`.
@@ -845,10 +845,10 @@ components:
           type: string
           default: end_turn
           description: |
-            The `stop_reason` of a reply; `max_tokens` reports a truncated reply, and is an
-            `incomplete` OpenAI Responses reply (`max_output_tokens`). On a step with `toolCalls` it
-            must be `end_turn` or `tool_use`, and every format with a stop reason reports a tool-call
-            stop; an OpenAI Responses reply with tool calls is `completed`.
+            The `stop_reason` of a reply; `max_tokens` reports a truncated reply. On a step with
+            `toolCalls` it must be `end_turn` or `tool_use`, and every format with a stop reason
+            reports a tool-call stop; an OpenAI Responses reply with tool calls is `completed`.
+            `max_tokens` is an `incomplete` OpenAI Responses reply (`max_output_tokens`).
         error:
           oneOf:
             - $ref: "#/components/schemas/ErrorStep"

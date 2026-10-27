@@ -170,7 +170,7 @@
         "stopReason": {
           "type": "string",
           "default": "end_turn",
-          "description": "The `stop_reason` of a reply; `max_tokens` reports a truncated reply, and is an\n`incomplete` OpenAI Responses reply (`max_output_tokens`). On a step with `toolCalls` it\nmust be `end_turn` or `tool_use`, and every format with a stop reason reports a tool-call\nstop; an OpenAI Responses reply with tool calls is `completed`.\n"
+          "description": "The `stop_reason` of a reply; `max_tokens` reports a truncated reply. On a step with\n`toolCalls` it must be `end_turn` or `tool_use`, and every format with a stop reason\nreports a tool-call stop; an OpenAI Responses reply with tool calls is `completed`.\n`max_tokens` is an `incomplete` OpenAI Responses reply (`max_output_tokens`).\n"
         },
         "error": {
           "oneOf": [

@@ -199,7 +199,7 @@ public class ScenarioEngine(
      * lock; the 400 bodies are built after it. Shared by the buffered [handle] and the Anthropic, OpenAI
      * Chat Completions, OpenAI Responses and Gemini SSE paths, so a request is counted and logged once
      * whichever transport renders it. The 400s are error steps with [Step.streamErrorAfterChunks]
-     * unset, so every streaming path sends their JSON and writes no SSE bytes.
+     * unset, so every streaming path sends its JSON and writes no SSE bytes.
      *
      * Throws [IllegalArgumentException] when the next step has a tool call with
      * [ToolCall.rawArguments] that [vendor]'s reply can't carry (a buffered Anthropic or a Gemini

@@ -54,10 +54,10 @@ public data class Step(
     val error: ErrorStep? = null,
     /**
      * SSE streaming (Anthropic, OpenAI Chat Completions and Responses, and Gemini): delta size in
-     * Unicode code points, not UTF-16 chars. A boundary inside a
-     * surrogate pair would encode that half as its own UTF-8 frame and replace it with U+FFFD,
-     * so the chunks would no longer reassemble to the original text. Consulted only when the
-     * request is streamed; a buffered request ignores it.
+     * Unicode code points, not UTF-16 chars. A boundary inside a surrogate pair would encode that
+     * half as its own UTF-8 frame and replace it with U+FFFD, so the chunks would no longer
+     * reassemble to the original text. Consulted only when the request is streamed; a buffered
+     * request ignores it.
      */
     val streamChunkChars: Int = DEFAULT_STREAM_CHUNK_CHARS,
     /**
