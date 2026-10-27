@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "first-byte-delay-openai-stream",
-  "description": "Latency: A streamed text step is data-only chunk frames: the role chunk, the content pieces, the finish chunk, then [DONE]; the call is logged once.",
+  "description": "A first-byte and inter-chunk delay leave an OpenAI Chat Completions stream unchanged, and the call log records (50, 20).",
   "scenario": {
     "name": "stream-text",
     "steps": [

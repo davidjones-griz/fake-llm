@@ -1,5 +1,10 @@
 package com.davidjonesgriz.fakellm
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.net.Socket
 import java.net.URI
 import java.net.http.HttpClient
@@ -29,6 +34,55 @@ class LatencyTest {
         assertEquals(count, calls().size)
     }
 
+    /** The element at [path] (object keys and array indexes), or null when any part is missing. */
+    private fun JsonElement.at(vararg path: Any): JsonElement? =
+        path.fold(this as JsonElement?) { e, k -> if (k is Int) (e as? JsonArray)?.getOrNull(k) else (e as? JsonObject)?.get(k as String) }
+
+    private fun JsonElement?.text(): String = (this as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+
+    /** The reply text of a buffered response from [path]. */
+    private fun bufferedText(
+        path: String,
+        body: String,
+    ): String {
+        val json = Json.parseToJsonElement(body)
+        return when {
+            path.startsWith("/anthropic") -> anthropicText(body)
+            path.endsWith("/chat/completions") -> json.at("choices", 0, "message", "content").text()
+            path.endsWith("/responses") -> json.at("output", 0, "content", 0, "text").text()
+            else -> json.at("candidates", 0, "content", "parts", 0, "text").text()
+        }
+    }
+
+    /** The text pieces of a stream from [path], joined. */
+    private fun streamedText(
+        path: String,
+        body: String,
+    ): String =
+        when {
+            path.startsWith("/anthropic") -> {
+                namedFrames(body).filter { it.first == "content_block_delta" }.joinToString("") {
+                    Json.parseToJsonElement(it.second).at("delta", "text").text()
+                }
+            }
+
+            path.endsWith("/chat/completions") -> {
+                dataFrames(body).filter { it != "[DONE]" }.joinToString("") {
+                    Json.parseToJsonElement(it).at("choices", 0, "delta", "content").text()
+                }
+            }
+
+            path.endsWith("/responses") -> {
+                namedFrames(body).filter { it.first == "response.output_text.delta" }.joinToString("") {
+                    Json.parseToJsonElement(it.second).at("delta").text()
+                }
+            }
+
+            else -> {
+                dataFrames(body).joinToString("") { Json.parseToJsonElement(it).at("candidates", 0, "content", "parts", 0, "text").text() }
+            }
+        }
+
     private val openAi = """{"model":"example-gpt","messages":[{"role":"user","content":"Hi"}]}"""
     private val openAiStream = """{"model":"example-gpt","stream":true,"messages":[{"role":"user","content":"Hi"}]}"""
 
@@ -44,7 +98,7 @@ class LatencyTest {
                 lateinit var response: HttpResponse<String>
                 val ms = timedMs { response = client.post(path, body) }
                 assertEquals(200, response.statusCode())
-                assertTrue(response.body().contains("\"late\""), path)
+                assertEquals("late", bufferedText(path, response.body()), path)
                 assertTrue(ms >= 200, "$path took $ms ms")
             }
         }
@@ -66,6 +120,7 @@ class LatencyTest {
             while (engine.calls().isEmpty() && System.nanoTime() < deadline) Thread.sleep(10)
             assertEquals(1, engine.calls().size)
             assertFalse(future.isDone)
+            assertEquals(1L, engine.calls().single().seq)
             assertEquals(2000L, engine.calls().single().firstByteDelayMs)
             assertEquals(200, future.get().statusCode())
         }
@@ -171,7 +226,7 @@ class LatencyTest {
                         .get()
                         .startsWith("text/event-stream"),
                 )
-                assertTrue(response.body().contains("late"), path)
+                assertEquals("late", streamedText(path, response.body()), path)
                 assertTrue(ms >= 200, "$path took $ms ms")
             }
         }

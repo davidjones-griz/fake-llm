@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "first-byte-delay-buffered",
-  "description": "Latency: A text step is one buffered Messages reply with fixed usage and an id from the call number.",
+  "description": "A first-byte and inter-chunk delay leave a buffered Messages reply unchanged, and the call log records (50, 0).",
   "scenario": {
     "name": "text",
     "steps": [

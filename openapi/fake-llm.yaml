@@ -36,11 +36,11 @@ info:
     last step gets `NoMoreStepsError`; the last step does not repeat. A request that gets
     `ExceptionError`, a 404 and the Batches 501 are not calls. That includes a request whose next
     step has a tool call with `rawArguments` that its format can't carry (a buffered Anthropic
-    request, or a Gemini request). That step is not used, and the next call gets it. A Gemini `streamGenerateContent`
-    request without `alt=sse` is not a call either. On the OpenAI Responses route,
-    `previous_response_id`, `store` and `conversation` are accepted and ignored: fake-llm stores
-    nothing, each call gets the next step, and only the request's own `instructions` and `input`
-    are read.
+    request, or a Gemini request). That step is not used, and the next call gets it. A Gemini
+    `streamGenerateContent` request without `alt=sse` is not a call either. On the OpenAI Responses
+    route, `previous_response_id`, `store` and `conversation` are accepted and ignored: fake-llm
+    stores nothing, each call gets the next step, and only the request's own `instructions` and
+    `input` are read.
 
     **Vendor bodies.** The success bodies and event streams of the vendor routes follow each
     provider's API, and this document does not describe them field by field. The conformance

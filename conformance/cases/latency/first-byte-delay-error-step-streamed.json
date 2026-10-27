@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "first-byte-delay-error-step-streamed",
-  "description": "Latency: An error step without streamErrorAfterChunks is a plain HTTP error even when the request streams.",
+  "description": "A first-byte delay on a streamed request leaves a plain HTTP error step unchanged, and the call log records (50, 0).",
   "scenario": {
     "name": "overloaded",
     "steps": [

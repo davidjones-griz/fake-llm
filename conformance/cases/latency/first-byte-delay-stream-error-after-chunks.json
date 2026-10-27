@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "first-byte-delay-stream-error-after-chunks",
-  "description": "Latency: streamErrorAfterChunks sends the role chunk and that many filler chunks, then the error body as a data frame, with no finish chunk or [DONE].",
+  "description": "A first-byte and inter-chunk delay leave an in-stream error unchanged, and the call log records (50, 20).",
   "scenario": {
     "name": "stream-error-after-chunks",
     "steps": [

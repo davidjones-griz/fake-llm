@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "first-byte-delay-gemini-stream",
-  "description": "Latency: A streamed text step is data-only frames, one text part per chunk; only the last chunk carries finishReason and usageMetadata, and the call is logged once.",
+  "description": "A first-byte and inter-chunk delay leave a Gemini stream unchanged, and the call log records (50, 20).",
   "scenario": {
     "name": "gemini-stream-text",
     "steps": [

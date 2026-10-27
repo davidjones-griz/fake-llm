@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "first-byte-delay-responses-stream",
-  "description": "Latency: A streamed text step is the named events from response.created to response.completed, numbered from 0, with no [DONE].",
+  "description": "A first-byte and inter-chunk delay leave an OpenAI Responses stream unchanged, and the call log records (50, 20).",
   "scenario": {
     "name": "responses-stream-text",
     "steps": [
