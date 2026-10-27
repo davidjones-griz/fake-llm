@@ -37,6 +37,8 @@ import kotlin.system.exitProcess
  *    `GenerateContentResponse` data frames; without `alt=sse` it is the exception 400. The model
  *    id is the path segment between `/models/` and `:`.
  *  - The vendor routes share the scenario's steps: call N, on whichever route, gets step N.
+ *    A step's `firstByteDelayMs` holds back the whole response, and its `streamInterChunkDelayMs`
+ *    spaces out streamed deltas.
  *  - `GET /health` — liveness, the loaded scenario name, and whether lenient mode is on. Always
  *    open, including when a control token is configured.
  *  - `POST /control/scenario` with exactly one of `{"name": "..."}` or `{"scenario": { ... }}` —
@@ -139,8 +141,7 @@ internal fun handleMessages(
     if (parsed.stream) {
         streamAnthropicMessages(ex, engine, parsed)
     } else {
-        val response = engine.handle(vendor = "anthropic", req = parsed)
-        respond(ex, response.status, response.body, response.headers)
+        respondFake(ex, engine.handle(vendor = "anthropic", req = parsed))
     }
 }
 
@@ -153,8 +154,7 @@ internal fun handleOpenAi(
     if (parsed.stream) {
         streamOpenAiChatCompletion(ex, engine, parsed)
     } else {
-        val response = engine.handle(vendor = "openai", req = parsed)
-        respond(ex, response.status, response.body, response.headers)
+        respondFake(ex, engine.handle(vendor = "openai", req = parsed))
     }
 }
 
@@ -170,8 +170,7 @@ internal fun handleGemini(
     if (streamed) {
         streamGeminiGenerateContent(ex, engine, parsed)
     } else {
-        val response = engine.handle(vendor = "gemini", req = parsed)
-        respond(ex, response.status, response.body, response.headers)
+        respondFake(ex, engine.handle(vendor = "gemini", req = parsed))
     }
 }
 
@@ -189,6 +188,7 @@ internal fun handleGemini(
  * text deltas, then an in-stream `event: error`. The "no more steps" and "no scenario loaded" 400s
  * are that same plain HTTP error: [ScenarioEngine.resolve] returns them as error steps with
  * [Step.streamErrorAfterChunks] unset, and the branch below returns before any SSE bytes.
+ * [Step.firstByteDelayMs] is waited out first, before any bytes.
  */
 private fun streamAnthropicMessages(
     ex: HttpExchange,
@@ -197,6 +197,7 @@ private fun streamAnthropicMessages(
 ) {
     val resolution = engine.resolve(vendor = "anthropic", req = req)
     val step = resolution.step
+    pauseBeforeFirstByte(step)
     val error = step.error
     if (error != null && step.streamErrorAfterChunks == null) {
         respond(ex, error.status, error.body, error.headers)

@@ -148,7 +148,8 @@ internal fun emitOpenAiContentDeltas(
  * the finish reason is then `tool_calls`. `thinking` is ignored. An error
  * step with `streamErrorAfterChunks` sends that many filler chunks, then the error body as a
  * data frame (or [GENERIC_OPENAI_STREAM_ERROR_BODY] when it is blank), and closes the stream
- * with no finish chunk, usage chunk or `[DONE]`.
+ * with no finish chunk, usage chunk or `[DONE]`. [Step.firstByteDelayMs] is waited out first,
+ * before any bytes.
  */
 internal fun streamOpenAiChatCompletion(
     ex: HttpExchange,
@@ -157,6 +158,7 @@ internal fun streamOpenAiChatCompletion(
 ) {
     val resolution = engine.resolve(vendor = "openai", req = req)
     val step = resolution.step
+    pauseBeforeFirstByte(step)
     val error = step.error
     if (error != null && step.streamErrorAfterChunks == null) {
         respond(ex, error.status, error.body, error.headers)

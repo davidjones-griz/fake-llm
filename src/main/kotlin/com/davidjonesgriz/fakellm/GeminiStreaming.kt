@@ -78,7 +78,7 @@ private fun geminiTextPart(text: String): JsonObject = buildJsonObject { put("te
  * calls it is one last chunk with an empty text part. `thinking` is ignored. An error step with
  * `streamErrorAfterChunks` sends that many filler chunks, then the error body as a data frame (or
  * [GENERIC_GEMINI_STREAM_ERROR_BODY] when it is blank), and closes the stream with no chunk
- * carrying `finishReason`.
+ * carrying `finishReason`. [Step.firstByteDelayMs] is waited out first, before any bytes.
  */
 internal fun streamGeminiGenerateContent(
     ex: HttpExchange,
@@ -87,6 +87,7 @@ internal fun streamGeminiGenerateContent(
 ) {
     val resolution = engine.resolve(vendor = "gemini", req = req)
     val step = resolution.step
+    pauseBeforeFirstByte(step)
     val error = step.error
     if (error != null && step.streamErrorAfterChunks == null) {
         respond(ex, error.status, error.body, error.headers)

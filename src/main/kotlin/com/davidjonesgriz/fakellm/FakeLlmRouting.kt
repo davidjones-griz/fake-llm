@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.SocketException
@@ -53,8 +54,13 @@ internal fun route(
             respond(ex, HTTP_NOT_FOUND, """{"fake_llm_error":"no route: ${ex.requestMethod} ${ex.requestURI.path}"}""")
         }
     }.onFailure { e ->
-        // A parse or handler failure answers 400 with the message. The exchange is not left open.
-        respond(ex, HTTP_BAD_REQUEST, """{"fake_llm_error":"exception","detail":${jsonString(e.message)}}""")
+        if ((e is IOException || e is InterruptedException) && ex.responseCode != -1) {
+            // The client went away, or the server is stopping, mid-response: nothing more can be sent.
+            ex.close()
+        } else {
+            // A parse or handler failure answers 400 with the message. The exchange is not left open.
+            respond(ex, HTTP_BAD_REQUEST, """{"fake_llm_error":"exception","detail":${jsonString(e.message)}}""")
+        }
     }
 }
 

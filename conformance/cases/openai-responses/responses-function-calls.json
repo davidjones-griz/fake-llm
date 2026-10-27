@@ -214,7 +214,9 @@
                 "name": "get_time"
               }
             ],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           },
           {
             "seq": 2,
@@ -242,7 +244,9 @@
                 "content": "unknown timezone",
                 "isError": false
               }
-            ]
+            ],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           }
         ]
       }

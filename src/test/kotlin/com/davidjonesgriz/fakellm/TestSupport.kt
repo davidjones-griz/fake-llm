@@ -23,7 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 internal class TestClient(
-    private val port: Int,
+    val port: Int,
 ) {
     private val http =
         HttpClient
@@ -36,21 +36,23 @@ internal class TestClient(
         path: String,
         body: String,
         authorization: String? = null,
-    ): HttpResponse<String> = send(request(path).POST(HttpRequest.BodyPublishers.ofString(body)), authorization)
+        timeout: Duration = Duration.ofSeconds(15),
+    ): HttpResponse<String> = send(request(path).POST(HttpRequest.BodyPublishers.ofString(body)), authorization, timeout)
 
     fun get(
         path: String,
         authorization: String? = null,
-    ): HttpResponse<String> = send(request(path).GET(), authorization)
+    ): HttpResponse<String> = send(request(path).GET(), authorization, Duration.ofSeconds(15))
 
     private fun request(path: String): HttpRequest.Builder = HttpRequest.newBuilder(URI("http://127.0.0.1:$port$path"))
 
     private fun send(
         builder: HttpRequest.Builder,
         authorization: String?,
+        timeout: Duration,
     ): HttpResponse<String> {
         authorization?.let { builder.header("Authorization", it) }
-        val response = http.send(builder.timeout(Duration.ofSeconds(15)).build(), HttpResponse.BodyHandlers.ofString())
+        val response = http.send(builder.timeout(timeout).build(), HttpResponse.BodyHandlers.ofString())
         return response
     }
 }
@@ -166,6 +168,10 @@ internal val invalidScenarios =
         "an unknown field in an error" to """{"name":"x","steps":[{"error":{"status":500,"extra":1}}]}""",
         "a null description" to """{"name":"x","description":null,"steps":[{"text":"t"}]}""",
         "a null stopReason" to """{"name":"x","steps":[{"text":"t","stopReason":null}]}""",
+        "a delay above the cap" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":600001}]}""",
+        "a negative first-byte delay" to """{"name":"x","steps":[{"text":"t","firstByteDelayMs":-1}]}""",
+        "a first-byte delay above the cap" to """{"name":"x","steps":[{"text":"t","firstByteDelayMs":600001}]}""",
+        "a null first-byte delay" to """{"name":"x","steps":[{"text":"t","firstByteDelayMs":null}]}""",
         "a null delay" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":null}]}""",
         "a null error body" to """{"name":"x","steps":[{"error":{"status":500,"body":null}}]}""",
         "null error headers" to """{"name":"x","steps":[{"error":{"status":500,"headers":null}}]}""",

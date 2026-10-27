@@ -213,7 +213,9 @@
             "promptSample": "Hello\n",
             "step": 1,
             "toolCalls": [],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           },
           {
             "seq": 2,
@@ -228,7 +230,9 @@
             "promptSample": "And tomorrow?\n",
             "step": 2,
             "toolCalls": [],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           },
           {
             "seq": 3,
@@ -243,7 +247,9 @@
             "promptSample": "Hello\n",
             "step": 3,
             "toolCalls": [],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           }
         ]
       }

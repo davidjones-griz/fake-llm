@@ -110,7 +110,9 @@
             "promptSample": "Answer briefly.\nUse metric units.\nHello\n",
             "step": 1,
             "toolCalls": [],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           }
         ]
       }

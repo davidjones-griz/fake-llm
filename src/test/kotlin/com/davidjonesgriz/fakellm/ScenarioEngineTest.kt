@@ -469,6 +469,61 @@ class ScenarioEngineTest {
         assertFailsWith<IllegalArgumentException> { Step(text = "x", streamInterChunkDelayMs = -1) }
         Step(text = "x", thinking = "t", streamInterChunkDelayMs = 0)
         Step(error = ErrorStep(500), streamErrorAfterChunks = 1)
+        assertFailsWith<IllegalArgumentException> { Step(text = "x", streamInterChunkDelayMs = 600_001) }
+        assertFailsWith<IllegalArgumentException> { Step(text = "x", firstByteDelayMs = -1) }
+        assertFailsWith<IllegalArgumentException> { Step(text = "x", firstByteDelayMs = 600_001) }
+        Step(text = "x", streamInterChunkDelayMs = 600_000, firstByteDelayMs = 600_000)
+        Step(error = ErrorStep(500), firstByteDelayMs = 1)
+    }
+
+    @Test
+    fun `a delay outside 0 to 600000 names the field and the cap`() {
+        assertEquals(
+            "firstByteDelayMs must be from 0 to 600000 (10 minutes), got 600001",
+            assertFailsWith<IllegalArgumentException> { Step(text = "x", firstByteDelayMs = 600_001) }.message,
+        )
+        assertEquals(
+            "streamInterChunkDelayMs must be from 0 to 600000 (10 minutes), got -1",
+            assertFailsWith<IllegalArgumentException> { Step(text = "x", streamInterChunkDelayMs = -1) }.message,
+        )
+    }
+
+    @Test
+    fun `the call log records the delays a call used`() {
+        val steps =
+            listOf(
+                Step(text = "a", firstByteDelayMs = 50, streamInterChunkDelayMs = 20),
+                Step(text = "b", firstByteDelayMs = 50, streamInterChunkDelayMs = 20),
+                Step(error = ErrorStep(500), firstByteDelayMs = 50, streamInterChunkDelayMs = 20),
+                Step(error = ErrorStep(500), streamErrorAfterChunks = 1, firstByteDelayMs = 50, streamInterChunkDelayMs = 20),
+            )
+        val engine = engineWith(Scenario(name = "d", steps = steps))
+        engine.handle("anthropic", req())
+        engine.resolve("anthropic", req(stream = true))
+        engine.resolve("anthropic", req(stream = true))
+        engine.resolve("anthropic", req(stream = true))
+        engine.handle("anthropic", req())
+        val lenient = ScenarioEngine(lenient = true).also { it.handle("anthropic", req(stream = true)) }
+        val strict = ScenarioEngine().also { it.handle("anthropic", req()) }
+        val all = engine.calls() + lenient.calls() + strict.calls()
+        assertEquals(
+            listOf(50L to 0L, 50L to 20L, 50L to 0L, 50L to 20L, 0L to 0L, 0L to 0L, 0L to 0L),
+            all.map { it.firstByteDelayMs to it.streamInterChunkDelayMs },
+        )
+    }
+
+    @Test
+    fun `handle carries the step's firstByteDelayMs on the response`() {
+        val engine =
+            engineWith(
+                Scenario(
+                    name = "d",
+                    steps = listOf(Step(text = "a", firstByteDelayMs = 7), Step(error = ErrorStep(500), firstByteDelayMs = 8)),
+                ),
+            )
+        assertEquals(7L, engine.handle("anthropic", req()).firstByteDelayMs)
+        assertEquals(8L, engine.handle("anthropic", req()).firstByteDelayMs)
+        assertEquals(0L, engine.handle("anthropic", req()).firstByteDelayMs)
     }
 
     @Test

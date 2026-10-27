@@ -79,7 +79,9 @@
             "promptSample": "Hello\n",
             "step": 1,
             "toolCalls": [],
-            "toolResults": []
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
           }
         ]
       }

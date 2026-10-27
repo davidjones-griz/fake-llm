@@ -31,11 +31,12 @@ info:
     **Scenarios and calls.** A scenario is an ordered list of steps. Every request to a vendor
     route that does not get `ExceptionError` is a call: it takes the next call number (`seq`,
     from 1) and one call-log entry, and call N after a load or reset gets step N, on any vendor
-    route. Calls are numbered in arrival order. A call after the last step gets
-    `NoMoreStepsError`; the last step does not repeat. A request that gets `ExceptionError`, a
-    404 and the Batches 501 are not calls. That includes a request whose next step has a tool call
-    with `rawArguments` that its format can't carry (a buffered Anthropic request, or a Gemini
-    request). That step is not used, and the next call gets it. A Gemini `streamGenerateContent`
+    route. Calls are numbered in arrival order. A call is numbered and logged before any wait its
+    step sets (`firstByteDelayMs`), so a delayed call can finish after a later one. A call after the
+    last step gets `NoMoreStepsError`; the last step does not repeat. A request that gets
+    `ExceptionError`, a 404 and the Batches 501 are not calls. That includes a request whose next
+    step has a tool call with `rawArguments` that its format can't carry (a buffered Anthropic
+    request, or a Gemini request). That step is not used, and the next call gets it. A Gemini `streamGenerateContent`
     request without `alt=sse` is not a call either. On the OpenAI Responses route,
     `previous_response_id`, `store` and `conversation` are accepted and ignored: fake-llm stores
     nothing, each call gets the next step, and only the request's own `instructions` and `input`
@@ -560,6 +561,8 @@ components:
         - promptSample
         - toolCalls
         - toolResults
+        - firstByteDelayMs
+        - streamInterChunkDelayMs
       properties:
         seq:
           type: integer
@@ -600,7 +603,9 @@ components:
           type: integer
           minimum: 0
           maximum: 9223372036854775807
-          description: Wall-clock time the call was recorded, in milliseconds since the epoch.
+          description: |
+            Wall-clock time the call was recorded, when it arrived and before any `firstByteDelayMs`
+            wait, in milliseconds since the epoch.
         promptSample:
           type: string
           description: |
@@ -625,6 +630,19 @@ components:
             Every tool result in the request, in request order: Anthropic `tool_result` blocks, OpenAI
             `tool` messages, OpenAI Responses `function_call_output` items, Gemini `functionResponse`
             parts.
+        firstByteDelayMs:
+          type: integer
+          minimum: 0
+          maximum: 600000
+          description: The serving step's `firstByteDelayMs`; 0 when no step served the call.
+        streamInterChunkDelayMs:
+          type: integer
+          minimum: 0
+          maximum: 600000
+          description: |
+            The serving step's `streamInterChunkDelayMs` when the response was an event stream (a
+            streamed request answered by a reply, or by an error step with `streamErrorAfterChunks`);
+            0 for a buffered response, a plain HTTP error and a call no step served.
     ToolCallRecord:
       type: object
       required: [id, name]
@@ -864,11 +882,12 @@ components:
         streamInterChunkDelayMs:
           type: integer
           minimum: 0
-          maximum: 9223372036854775807
+          maximum: 600000
           default: 0
           description: |
             Milliseconds to wait before each streamed delta (Anthropic, OpenAI Chat Completions and
-            Responses, and Gemini streams; a Gemini functionCall chunk has no wait).
+            Responses, and Gemini streams; a Gemini functionCall chunk has no wait). At most 600000
+            (10 minutes).
         streamErrorAfterChunks:
           type: [integer, "null"]
           minimum: 1
@@ -876,6 +895,15 @@ components:
           description: |
             Only on an error step, and only when streamed (Anthropic, OpenAI Chat Completions and
             Responses, and Gemini): send this many text deltas, then an in-stream error.
+        firstByteDelayMs:
+          type: integer
+          minimum: 0
+          maximum: 600000
+          default: 0
+          description: |
+            Milliseconds to wait before any response bytes, status and headers included (every vendor
+            route; buffered and streamed replies and error steps). The call is numbered and logged when
+            it arrives, before the wait. At most 600000 (10 minutes).
         toolCalls:
           type: [array, "null"]
           minItems: 1

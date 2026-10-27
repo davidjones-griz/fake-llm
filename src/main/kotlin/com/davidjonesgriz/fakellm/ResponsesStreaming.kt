@@ -24,8 +24,7 @@ internal fun handleOpenAiResponses(
     if (parsed.stream) {
         streamOpenAiResponse(ex, engine, parsed)
     } else {
-        val response = engine.handle(vendor = RESPONSES_VENDOR, req = parsed)
-        respond(ex, response.status, response.body, response.headers)
+        respondFake(ex, engine.handle(vendor = RESPONSES_VENDOR, req = parsed))
     }
 }
 
@@ -42,6 +41,7 @@ internal fun handleOpenAiResponses(
  * `response.incomplete` for `max_tokens`. `thinking` is ignored. An error step with
  * `streamErrorAfterChunks` opens the message, sends that many filler deltas, then `event: error`
  * with the error body (or the API's own error event when it is blank), and closes the stream.
+ * [Step.firstByteDelayMs] is waited out first, before any bytes.
  */
 internal fun streamOpenAiResponse(
     ex: HttpExchange,
@@ -50,6 +50,7 @@ internal fun streamOpenAiResponse(
 ) {
     val resolution = engine.resolve(vendor = RESPONSES_VENDOR, req = req)
     val step = resolution.step
+    pauseBeforeFirstByte(step)
     val error = step.error
     if (error != null && step.streamErrorAfterChunks == null) {
         respond(ex, error.status, error.body, error.headers)
