@@ -1,0 +1,251 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "responses-function-calls",
+  "description": "A tool-call step is function_call output items with the call_id and argument text (rawArguments verbatim); the function_call_output items the next request sends back are logged with their tool names.",
+  "scenario": {
+    "name": "responses-function-calls",
+    "steps": [
+      {
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "arguments": {
+              "city": "Paris"
+            }
+          },
+          {
+            "name": "get_time",
+            "rawArguments": "{\"tz\": Europe/Paris}",
+            "id": "call_custom"
+          }
+        ]
+      },
+      {
+        "text": "It is 18 degrees in Paris."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "input": "Hello",
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_weather",
+              "parameters": {
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "resp_fake_1",
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "fake-openai",
+          "output": [
+            {
+              "id": "fc_fake_1_1",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_fake_1_1",
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}"
+            },
+            {
+              "id": "fc_fake_1_2",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_custom",
+              "name": "get_time",
+              "arguments": "{\"tz\": Europe/Paris}"
+            }
+          ],
+          "parallel_tool_calls": true,
+          "tool_choice": "auto",
+          "tools": [],
+          "usage": {
+            "input_tokens": 100,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 50,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 150
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "input": [
+            {
+              "role": "user",
+              "content": "Hello"
+            },
+            {
+              "id": "fc_fake_1_1",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_fake_1_1",
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}"
+            },
+            {
+              "id": "fc_fake_1_2",
+              "type": "function_call",
+              "status": "completed",
+              "call_id": "call_custom",
+              "name": "get_time",
+              "arguments": "{\"tz\": Europe/Paris}"
+            },
+            {
+              "type": "function_call_output",
+              "call_id": "call_fake_1_1",
+              "output": "18 degrees"
+            },
+            {
+              "type": "function_call_output",
+              "call_id": "call_custom",
+              "output": "unknown timezone"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "resp_fake_2",
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "fake-openai",
+          "output": [
+            {
+              "id": "msg_fake_2",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "It is 18 degrees in Paris.",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "parallel_tool_calls": true,
+          "tool_choice": "auto",
+          "tools": [],
+          "usage": {
+            "input_tokens": 100,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 50,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 150
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "openai-responses",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "tool-calls",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [
+              {
+                "id": "call_fake_1_1",
+                "name": "get_weather"
+              },
+              {
+                "id": "call_custom",
+                "name": "get_time"
+              }
+            ],
+            "toolResults": []
+          },
+          {
+            "seq": 2,
+            "vendor": "openai-responses",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 5,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n18 degrees\nunknown timezone\n",
+            "step": 2,
+            "toolCalls": [],
+            "toolResults": [
+              {
+                "id": "call_fake_1_1",
+                "name": "get_weather",
+                "content": "18 degrees",
+                "isError": false
+              },
+              {
+                "id": "call_custom",
+                "name": "get_time",
+                "content": "unknown timezone",
+                "isError": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

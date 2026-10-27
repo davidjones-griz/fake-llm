@@ -1,0 +1,185 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "responses-stream-raw-arguments",
+  "description": "A streamed tool call without text starts at output_index 0 and sends rawArguments verbatim.",
+  "scenario": {
+    "name": "responses-stream-raw-arguments",
+    "steps": [
+      {
+        "toolCalls": [
+          {
+            "name": "get_weather",
+            "rawArguments": "{\"city\": Paris}",
+            "id": "call_custom"
+          }
+        ],
+        "streamChunkChars": 8
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "input": "Hello",
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "response.created",
+            "data": {
+              "type": "response.created",
+              "response": {
+                "id": "resp_fake_1",
+                "object": "response",
+                "status": "in_progress",
+                "error": null,
+                "incomplete_details": null,
+                "model": "fake-openai",
+                "output": [],
+                "parallel_tool_calls": true,
+                "tool_choice": "auto",
+                "tools": [],
+                "usage": null
+              },
+              "sequence_number": 0
+            }
+          },
+          {
+            "event": "response.in_progress",
+            "data": {
+              "type": "response.in_progress",
+              "response": {
+                "id": "resp_fake_1",
+                "object": "response",
+                "status": "in_progress",
+                "error": null,
+                "incomplete_details": null,
+                "model": "fake-openai",
+                "output": [],
+                "parallel_tool_calls": true,
+                "tool_choice": "auto",
+                "tools": [],
+                "usage": null
+              },
+              "sequence_number": 1
+            }
+          },
+          {
+            "event": "response.output_item.added",
+            "data": {
+              "type": "response.output_item.added",
+              "output_index": 0,
+              "item": {
+                "id": "fc_fake_1_1",
+                "type": "function_call",
+                "status": "in_progress",
+                "call_id": "call_custom",
+                "name": "get_weather",
+                "arguments": ""
+              },
+              "sequence_number": 2
+            }
+          },
+          {
+            "event": "response.function_call_arguments.delta",
+            "data": {
+              "type": "response.function_call_arguments.delta",
+              "item_id": "fc_fake_1_1",
+              "output_index": 0,
+              "delta": "{\"city\":",
+              "sequence_number": 3
+            }
+          },
+          {
+            "event": "response.function_call_arguments.delta",
+            "data": {
+              "type": "response.function_call_arguments.delta",
+              "item_id": "fc_fake_1_1",
+              "output_index": 0,
+              "delta": " Paris}",
+              "sequence_number": 4
+            }
+          },
+          {
+            "event": "response.function_call_arguments.done",
+            "data": {
+              "type": "response.function_call_arguments.done",
+              "item_id": "fc_fake_1_1",
+              "output_index": 0,
+              "arguments": "{\"city\": Paris}",
+              "sequence_number": 5
+            }
+          },
+          {
+            "event": "response.output_item.done",
+            "data": {
+              "type": "response.output_item.done",
+              "output_index": 0,
+              "item": {
+                "id": "fc_fake_1_1",
+                "type": "function_call",
+                "status": "completed",
+                "call_id": "call_custom",
+                "name": "get_weather",
+                "arguments": "{\"city\": Paris}"
+              },
+              "sequence_number": 6
+            }
+          },
+          {
+            "event": "response.completed",
+            "data": {
+              "type": "response.completed",
+              "response": {
+                "id": "resp_fake_1",
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "model": "fake-openai",
+                "output": [
+                  {
+                    "id": "fc_fake_1_1",
+                    "type": "function_call",
+                    "status": "completed",
+                    "call_id": "call_custom",
+                    "name": "get_weather",
+                    "arguments": "{\"city\": Paris}"
+                  }
+                ],
+                "parallel_tool_calls": true,
+                "tool_choice": "auto",
+                "tools": [],
+                "usage": {
+                  "input_tokens": 100,
+                  "input_tokens_details": {
+                    "cached_tokens": 0
+                  },
+                  "output_tokens": 50,
+                  "output_tokens_details": {
+                    "reasoning_tokens": 0
+                  },
+                  "total_tokens": 150
+                }
+              },
+              "sequence_number": 7
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

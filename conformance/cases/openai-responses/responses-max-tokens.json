@@ -1,0 +1,74 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "responses-max-tokens",
+  "description": "max_tokens makes the Response and its message item incomplete, with reason max_output_tokens.",
+  "scenario": {
+    "name": "responses-max-tokens",
+    "steps": [
+      {
+        "text": "cut off",
+        "stopReason": "max_tokens"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "input": "Hello"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "resp_fake_1",
+          "object": "response",
+          "status": "incomplete",
+          "error": null,
+          "incomplete_details": {
+            "reason": "max_output_tokens"
+          },
+          "model": "fake-openai",
+          "output": [
+            {
+              "id": "msg_fake_1",
+              "type": "message",
+              "status": "incomplete",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "cut off",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "parallel_tool_calls": true,
+          "tool_choice": "auto",
+          "tools": [],
+          "usage": {
+            "input_tokens": 100,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 50,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 150
+          }
+        }
+      }
+    }
+  ]
+}

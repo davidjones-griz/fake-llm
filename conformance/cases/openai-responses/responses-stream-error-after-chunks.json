@@ -1,0 +1,147 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "responses-stream-error-after-chunks",
+  "description": "streamErrorAfterChunks opens the message, sends that many filler deltas, then event error with the scripted body, and nothing after it.",
+  "scenario": {
+    "name": "responses-stream-error-after-chunks",
+    "steps": [
+      {
+        "error": {
+          "status": 500,
+          "body": "{\"error\":{\"message\":\"server error\",\"type\":\"server_error\",\"param\":null,\"code\":null}}"
+        },
+        "streamErrorAfterChunks": 2,
+        "streamChunkChars": 10
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "input": "Hello",
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "response.created",
+            "data": {
+              "type": "response.created",
+              "response": {
+                "id": "resp_fake_1",
+                "object": "response",
+                "status": "in_progress",
+                "error": null,
+                "incomplete_details": null,
+                "model": "fake-openai",
+                "output": [],
+                "parallel_tool_calls": true,
+                "tool_choice": "auto",
+                "tools": [],
+                "usage": null
+              },
+              "sequence_number": 0
+            }
+          },
+          {
+            "event": "response.in_progress",
+            "data": {
+              "type": "response.in_progress",
+              "response": {
+                "id": "resp_fake_1",
+                "object": "response",
+                "status": "in_progress",
+                "error": null,
+                "incomplete_details": null,
+                "model": "fake-openai",
+                "output": [],
+                "parallel_tool_calls": true,
+                "tool_choice": "auto",
+                "tools": [],
+                "usage": null
+              },
+              "sequence_number": 1
+            }
+          },
+          {
+            "event": "response.output_item.added",
+            "data": {
+              "type": "response.output_item.added",
+              "output_index": 0,
+              "item": {
+                "id": "msg_fake_1",
+                "type": "message",
+                "status": "in_progress",
+                "role": "assistant",
+                "content": []
+              },
+              "sequence_number": 2
+            }
+          },
+          {
+            "event": "response.content_part.added",
+            "data": {
+              "type": "response.content_part.added",
+              "item_id": "msg_fake_1",
+              "output_index": 0,
+              "content_index": 0,
+              "part": {
+                "type": "output_text",
+                "text": "",
+                "annotations": []
+              },
+              "sequence_number": 3
+            }
+          },
+          {
+            "event": "response.output_text.delta",
+            "data": {
+              "type": "response.output_text.delta",
+              "item_id": "msg_fake_1",
+              "output_index": 0,
+              "content_index": 0,
+              "delta": "Thinking t",
+              "logprobs": [],
+              "sequence_number": 4
+            }
+          },
+          {
+            "event": "response.output_text.delta",
+            "data": {
+              "type": "response.output_text.delta",
+              "item_id": "msg_fake_1",
+              "output_index": 0,
+              "content_index": 0,
+              "delta": "his throug",
+              "logprobs": [],
+              "sequence_number": 5
+            }
+          },
+          {
+            "event": "error",
+            "data": {
+              "error": {
+                "message": "server error",
+                "type": "server_error",
+                "param": null,
+                "code": null
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

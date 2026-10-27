@@ -1,0 +1,49 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "responses-error-step",
+  "description": "An error step is that HTTP status, body and headers.",
+  "scenario": {
+    "name": "responses-error-step",
+    "steps": [
+      {
+        "error": {
+          "status": 429,
+          "body": "{\"error\":{\"message\":\"slow down\",\"type\":\"requests\",\"param\":null,\"code\":\"rate_limit_exceeded\"}}",
+          "headers": {
+            "retry-after": "1"
+          }
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "input": "Hello"
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json",
+          "retry-after": "1"
+        },
+        "body": {
+          "error": {
+            "message": "slow down",
+            "type": "requests",
+            "param": null,
+            "code": "rate_limit_exceeded"
+          }
+        }
+      }
+    }
+  ]
+}
