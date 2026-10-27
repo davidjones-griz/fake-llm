@@ -24,6 +24,7 @@ internal data class FakeResponse(
 public data class CallRecord internal constructor(
     /** The call's number since the last load or reset, from 1. */
     val seq: Long,
+    /** `anthropic`, `openai` (Chat Completions), `openai-responses` or `gemini`. */
     val vendor: String,
     val model: String,
     val systemShape: String,
@@ -48,7 +49,7 @@ public data class CallRecord internal constructor(
     val toolCalls: List<ToolCallRecord> = emptyList(),
     /**
      * Every tool result in the request, in request order: Anthropic `tool_result` blocks, OpenAI
-     * `tool` messages, Gemini `functionResponse` parts.
+     * `tool` messages, OpenAI Responses `function_call_output` items, Gemini `functionResponse` parts.
      */
     val toolResults: List<ToolResultRecord> = emptyList(),
 )
@@ -57,7 +58,7 @@ public data class CallRecord internal constructor(
 @ConsistentCopyVisibility
 @Serializable
 public data class ToolCallRecord internal constructor(
-    /** The id sent, or null for a Gemini call with no scripted id. */
+    /** The id sent (the `call_id` on OpenAI Responses), or null for a Gemini call with no scripted id. */
     val id: String?,
     val name: String,
 )
@@ -66,19 +67,23 @@ public data class ToolCallRecord internal constructor(
 @ConsistentCopyVisibility
 @Serializable
 public data class ToolResultRecord internal constructor(
-    /** Anthropic `tool_use_id`, OpenAI `tool_call_id`, Gemini `functionResponse.id`; null when absent or not a string. */
+    /**
+     * Anthropic `tool_use_id`, OpenAI `tool_call_id`, OpenAI Responses `call_id`, Gemini
+     * `functionResponse.id`; null when absent or not a string.
+     */
     val id: String?,
     /**
      * Gemini: `functionResponse.name`. Anthropic and OpenAI: the name of the tool call in the same
-     * request whose id matches (the first such call), or null when none does.
+     * request whose id matches (the first such call), or null when none does. OpenAI Responses: the
+     * name of the first `function_call` input item with the same `call_id`.
      */
     val name: String?,
     /**
      * The result as the request sent it, any JSON value: Anthropic `content`, OpenAI `content`,
-     * Gemini `response`. Null when absent.
+     * OpenAI Responses `output`, Gemini `response`. Null when absent.
      */
     val content: JsonElement?,
-    /** Anthropic `is_error` is `true`. Always false for OpenAI and Gemini. */
+    /** Anthropic `is_error` is `true`. Always false for OpenAI (both routes) and Gemini. */
     val isError: Boolean,
 )
 
@@ -192,9 +197,9 @@ public class ScenarioEngine(
     /**
      * Numbers the call, picks what answers it, and records its one call-log entry, all under the
      * lock; the 400 bodies are built after it. Shared by the buffered [handle] and the Anthropic, OpenAI
-     * and Gemini SSE paths, so a request is counted and logged once whichever transport renders it.
-     * The 400s are error steps with [Step.streamErrorAfterChunks] unset, so all three streaming paths
-     * send their JSON and write no SSE bytes.
+     * Chat Completions, OpenAI Responses and Gemini SSE paths, so a request is counted and logged once
+     * whichever transport renders it. The 400s are error steps with [Step.streamErrorAfterChunks]
+     * unset, so every streaming path sends their JSON and writes no SSE bytes.
      *
      * Throws [IllegalArgumentException] when the next step has a tool call with
      * [ToolCall.rawArguments] that [vendor]'s reply can't carry (a buffered Anthropic or a Gemini
@@ -352,6 +357,7 @@ internal fun vendorEnvelope(
     val toolCalls = sentToolCalls(vendor, step, seq)
     return when (vendor) {
         "openai" -> openAiEnvelope(step.text, step.stopReason, seq, toolCalls)
+        RESPONSES_VENDOR -> responsesEnvelope(step.text, step.stopReason, seq, toolCalls)
         "gemini" -> geminiEnvelope(step.text, step.stopReason, seq, toolCalls)
         else -> anthropicEnvelope(step.text, step.stopReason, seq, cacheable, step.thinking, toolCalls)
     }
