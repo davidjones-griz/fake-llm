@@ -171,8 +171,8 @@ the `anthropic`, `openai` and `google-genai` Python SDKs, at the versions pinned
 `requirements.txt`. Each test loads its own scenario, makes calls through an SDK, and asserts on
 what the SDK parsed or raised and on the exact call log (`GET /control/calls`). It covers what the
 server supports today: Anthropic Messages buffered and streaming, OpenAI Chat Completions buffered
-and streaming, and Gemini `generateContent` buffered and `streamGenerateContent` streaming. The
-HTTP cases above say what the server sends; this suite says a real client can read it. CI's
+and streaming, and Gemini `generateContent` buffered and `streamGenerateContent` streaming, and
+client timeouts against `firstByteDelayMs`. The HTTP cases above say what the server sends; this suite says a real client can read it. CI's
 `conformance` job runs both against the same fat jar and Docker image.
 
 ```

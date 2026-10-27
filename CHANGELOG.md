@@ -5,6 +5,22 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0, a minor version may
 change the public API.
 
+## [Unreleased]
+
+### Added
+
+- `firstByteDelayMs` on a step: a wait before any response bytes on every vendor route, for
+  buffered and streamed replies and error steps, to test client timeouts. The call log records the
+  delays each call applied (`firstByteDelayMs`, `streamInterChunkDelayMs`).
+
+### Changed
+
+- `streamInterChunkDelayMs` and `firstByteDelayMs` must be from 0 to 600000 (10 minutes); a
+  scenario with a larger value fails to load.
+- `Step` has a new last parameter, `firstByteDelayMs`, and `CallRecord` has two new fields. Code
+  compiled against `Step`'s constructor or `copy` must be recompiled.
+- A request whose client has gone away mid-response is closed without a second response attempt.
+
 ## [0.3.0] - 2026-10-27
 
 ### Added
