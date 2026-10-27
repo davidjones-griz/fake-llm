@@ -85,7 +85,7 @@ internal fun streamGeminiGenerateContent(
     engine: ScenarioEngine,
     req: ParsedRequest,
 ) {
-    val resolution = engine.resolve(vendor = "gemini", req = req)
+    val resolution = engine.resolve(vendor = "gemini", req = req, capture = ex.exchangeCapture())
     val step = resolution.step
     pauseBeforeFirstByte(step)
     val error = step.error

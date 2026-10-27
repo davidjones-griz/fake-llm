@@ -16,7 +16,7 @@ internal fun startEventStream(ex: HttpExchange): OutputStream {
     ex.responseHeaders.add("Content-Type", "text/event-stream")
     ex.responseHeaders.add("Cache-Control", "no-cache")
     ex.responseHeaders.add("Connection", "keep-alive")
-    ex.sendResponseHeaders(HTTP_OK, 0)
+    ex.sendRecordedResponseHeaders(HTTP_OK, 0)
     return ex.responseBody
 }
 

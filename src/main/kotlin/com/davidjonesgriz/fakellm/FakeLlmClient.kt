@@ -65,7 +65,7 @@ public class FakeLlmClient
 
         /**
          * `POST /control/scenario` with a name: loads that scenario on the server and starts it over
-         * (empty call log, next call is call 1), as [ScenarioEngine.load] does.
+         * (empty call and exchange logs, next call is call 1), as [ScenarioEngine.load] does.
          */
         public fun load(name: String) {
             send("POST", "/control/scenario", buildJsonObject { put("name", name) }.toString())
@@ -79,13 +79,16 @@ public class FakeLlmClient
             send("POST", "/control/scenario", encodeLoadInline(scenario))
         }
 
-        /** `POST /control/reset`: starts the server's scenario over (empty call log, next call is call 1). */
+        /** `POST /control/reset`: starts the server's scenario over (empty call and exchange logs, next call is call 1). */
         public fun reset() {
             send("POST", "/control/reset")
         }
 
         /** `GET /control/calls`: the server's call log, oldest first. */
         public fun calls(): List<CallRecord> = get("/control/calls", ListSerializer(CallRecord.serializer()))
+
+        /** `GET /control/exchanges`: each call's request and response, oldest first. */
+        public fun exchanges(): List<ExchangeRecord> = get("/control/exchanges", ListSerializer(ExchangeRecord.serializer()))
 
         /** Releases the underlying HTTP client, waiting for requests still in flight. */
         override fun close() {
@@ -104,27 +107,16 @@ public class FakeLlmClient
             }
         }
 
-        /** Sends one request and returns the response. A non-2xx status throws. */
+        /**
+         * Sends one request and returns the response. A non-2xx status throws. If the thread is
+         * interrupted, the request may already have reached the server, so an interrupted [load] or
+         * [reset] may still have taken effect.
+         */
+        @Suppress("ThrowsCount") // two transport failures and the status failure
         internal fun send(
             method: String,
             path: String,
             body: String? = null,
-        ): HttpResponse<String> {
-            val response = exchange(method, path, body)
-            if (response.statusCode() !in HTTP_SUCCESS) {
-                throw httpFailure(method, path, response.statusCode(), response.body(), controlToken != null)
-            }
-            return response
-        }
-
-        /**
-         * Performs the HTTP exchange. If the thread is interrupted, the request may already have
-         * reached the server, so an interrupted [load] or [reset] may still have taken effect.
-         */
-        private fun exchange(
-            method: String,
-            path: String,
-            body: String?,
         ): HttpResponse<String> {
             val builder =
                 HttpRequest
@@ -133,14 +125,19 @@ public class FakeLlmClient
                     .method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody())
             if (body != null) builder.header("Content-Type", "application/json")
             controlToken?.let { builder.header("Authorization", "Bearer $it") }
-            return try {
-                http.send(builder.build(), HttpResponse.BodyHandlers.ofString())
-            } catch (e: IOException) {
-                throw transportFailure(method, path, e)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                throw transportFailure(method, path, e)
+            val response =
+                try {
+                    http.send(builder.build(), HttpResponse.BodyHandlers.ofString())
+                } catch (e: IOException) {
+                    throw transportFailure(method, path, e)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw transportFailure(method, path, e)
+                }
+            if (response.statusCode() !in HTTP_SUCCESS) {
+                throw httpFailure(method, path, response.statusCode(), response.body(), controlToken != null)
             }
+            return response
         }
     }
 

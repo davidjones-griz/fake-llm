@@ -42,12 +42,15 @@ import kotlin.system.exitProcess
  *  - `GET /health` — liveness, the loaded scenario name, and whether lenient mode is on. Always
  *    open, including when a control token is configured.
  *  - `POST /control/scenario` with exactly one of `{"name": "..."}` or `{"scenario": { ... }}` —
- *    load that scenario and start it over (empty call log, next call is call 1). A name is resolved from the scenario
+ *    load that scenario and start it over (empty call and exchange logs, next call is call 1). A name is resolved from the scenario
  *    directory (`--scenario-dir` or `FAKE_LLM_SCENARIO_DIR`), then the classpath `/scenarios/`, then
  *    the bundled scenarios.
  *  - `GET /control/scenarios` — `{"scenarios": [names]}` from the directory and the indexes.
- *  - `POST /control/reset` — start the loaded scenario over: empty call log, next call is call 1.
+ *  - `POST /control/reset` — start the loaded scenario over: empty call and exchange logs, next call
+ *    is call 1.
  *  - `GET /control/calls` — the call log.
+ *  - `GET /control/exchanges` — each call's request as received (auth header values and a `key`
+ *    query parameter redacted) and response as written, in call order.
  *
  * `fake-llm validate <file|dir>...` checks scenario files instead of starting a server (see
  * [validateScenarios]).
@@ -141,7 +144,7 @@ internal fun handleMessages(
     if (parsed.stream) {
         streamAnthropicMessages(ex, engine, parsed)
     } else {
-        respondFake(ex, engine.handle(vendor = "anthropic", req = parsed))
+        respondFake(ex, engine.handle(vendor = "anthropic", req = parsed, capture = ex.exchangeCapture()))
     }
 }
 
@@ -154,7 +157,7 @@ internal fun handleOpenAi(
     if (parsed.stream) {
         streamOpenAiChatCompletion(ex, engine, parsed)
     } else {
-        respondFake(ex, engine.handle(vendor = "openai", req = parsed))
+        respondFake(ex, engine.handle(vendor = "openai", req = parsed, capture = ex.exchangeCapture()))
     }
 }
 
@@ -170,7 +173,7 @@ internal fun handleGemini(
     if (streamed) {
         streamGeminiGenerateContent(ex, engine, parsed)
     } else {
-        respondFake(ex, engine.handle(vendor = "gemini", req = parsed))
+        respondFake(ex, engine.handle(vendor = "gemini", req = parsed, capture = ex.exchangeCapture()))
     }
 }
 
@@ -195,7 +198,7 @@ private fun streamAnthropicMessages(
     engine: ScenarioEngine,
     req: ParsedRequest,
 ) {
-    val resolution = engine.resolve(vendor = "anthropic", req = req)
+    val resolution = engine.resolve(vendor = "anthropic", req = req, capture = ex.exchangeCapture())
     val step = resolution.step
     pauseBeforeFirstByte(step)
     val error = step.error

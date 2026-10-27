@@ -215,6 +215,36 @@ class FakeLlmClientTest {
     }
 
     @Test
+    fun `exchanges reads the exchange log over HTTP`() {
+        withClient { client, server ->
+            client.load("hello")
+            TestClient(server.port).post("/anthropic/v1/messages", anthropicBody("hi"))
+            val exchanges = client.exchanges()
+            assertEquals(1, exchanges.size)
+            assertEquals(server.engine.exchanges(), exchanges)
+        }
+    }
+
+    @Test
+    fun `exchange records with fields this client does not know still decode`() {
+        val record =
+            """[{"seq":1,"request":{"method":"POST","path":"/p","headers":{},"body":"","extra":1},""" +
+                """"response":{"status":200,"headers":{},"body":"","state":"complete","more":[]},"addedLater":true}]"""
+        withStub({ ex -> respondRaw(ex, 200, record) }) { url ->
+            FakeLlmClient(url).use { client ->
+                assertEquals(
+                    "complete",
+                    client
+                        .exchanges()
+                        .single()
+                        .response
+                        ?.state,
+                )
+            }
+        }
+    }
+
+    @Test
     fun `call records with fields this client does not know still decode`() {
         val record =
             """[{"seq":1,"step":1,"vendor":"openai","model":"m","systemShape":"absent","messageCount":1,""" +

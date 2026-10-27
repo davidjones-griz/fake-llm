@@ -24,7 +24,7 @@ internal fun handleOpenAiResponses(
     if (parsed.stream) {
         streamOpenAiResponse(ex, engine, parsed)
     } else {
-        respondFake(ex, engine.handle(vendor = RESPONSES_VENDOR, req = parsed))
+        respondFake(ex, engine.handle(vendor = RESPONSES_VENDOR, req = parsed, capture = ex.exchangeCapture()))
     }
 }
 
@@ -48,7 +48,7 @@ internal fun streamOpenAiResponse(
     engine: ScenarioEngine,
     req: ParsedRequest,
 ) {
-    val resolution = engine.resolve(vendor = RESPONSES_VENDOR, req = req)
+    val resolution = engine.resolve(vendor = RESPONSES_VENDOR, req = req, capture = ex.exchangeCapture())
     val step = resolution.step
     pauseBeforeFirstByte(step)
     val error = step.error

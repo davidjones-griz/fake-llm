@@ -56,6 +56,7 @@ internal fun route(
     }.onFailure { e ->
         if ((e is IOException || e is InterruptedException) && ex.responseCode != -1) {
             // The client went away, or the server is stopping, mid-response: nothing more can be sent.
+            ex.exchangeCapture()?.abort()
             ex.close()
         } else {
             // A parse or handler failure answers 400 with the message. The exchange is not left open.
@@ -105,6 +106,10 @@ private fun controlRoute(
             respond(ex, HTTP_OK, logJson.encodeToString(engine.calls()))
         }
 
+        "GET /control/exchanges" -> {
+            respond(ex, HTTP_OK, logJson.encodeToString(engine.exchanges()))
+        }
+
         else -> {
             return false
         }
@@ -117,6 +122,8 @@ private fun vendorRoute(
     ex: HttpExchange,
     engine: ScenarioEngine,
 ): Boolean {
+    // Health and the control routes are answered before this, so they are never wrapped.
+    installExchangeCapture(ex)
     val path = ex.requestURI.path
     when {
         ex.requestMethod == "POST" && path == "/anthropic/v1/messages" -> {
@@ -211,7 +218,7 @@ internal fun respond(
     headers.forEach { (k, v) ->
         if (k.equals("Content-Type", ignoreCase = true)) ex.responseHeaders.set(k, v) else ex.responseHeaders.add(k, v)
     }
-    ex.sendResponseHeaders(status, bytes.size.toLong())
+    ex.sendRecordedResponseHeaders(status, bytes.size.toLong())
     ex.responseBody.use { it.write(bytes) }
 }
 

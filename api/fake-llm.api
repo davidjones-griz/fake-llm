@@ -78,6 +78,94 @@ public final class com/davidjonesgriz/fakellm/ErrorStep$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
+public final class com/davidjonesgriz/fakellm/ExchangeRecord {
+	public static final field Companion Lcom/davidjonesgriz/fakellm/ExchangeRecord$Companion;
+	public final fun component1 ()J
+	public final fun component2 ()Lcom/davidjonesgriz/fakellm/ExchangeRequest;
+	public final fun component3 ()Lcom/davidjonesgriz/fakellm/ExchangeResponse;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRequest ()Lcom/davidjonesgriz/fakellm/ExchangeRequest;
+	public final fun getResponse ()Lcom/davidjonesgriz/fakellm/ExchangeResponse;
+	public final fun getSeq ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/davidjonesgriz/fakellm/ExchangeRecord$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/ExchangeRecord$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/ExchangeRecord;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/ExchangeRecord;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/davidjonesgriz/fakellm/ExchangeRecord$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/davidjonesgriz/fakellm/ExchangeRequest {
+	public static final field Companion Lcom/davidjonesgriz/fakellm/ExchangeRequest$Companion;
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun component4 ()Ljava/lang/String;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/String;
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getPath ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/davidjonesgriz/fakellm/ExchangeRequest$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/ExchangeRequest$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/ExchangeRequest;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/ExchangeRequest;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/davidjonesgriz/fakellm/ExchangeRequest$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/davidjonesgriz/fakellm/ExchangeResponse {
+	public static final field Companion Lcom/davidjonesgriz/fakellm/ExchangeResponse$Companion;
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/util/Map;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/String;
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getState ()Ljava/lang/String;
+	public final fun getStatus ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/davidjonesgriz/fakellm/ExchangeResponse$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/ExchangeResponse$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/ExchangeResponse;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/ExchangeResponse;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/davidjonesgriz/fakellm/ExchangeResponse$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
 public final class com/davidjonesgriz/fakellm/FakeLlmAppKt {
 	public static final fun main ([Ljava/lang/String;)V
 	public static final fun startFakeLlmServer (ILcom/davidjonesgriz/fakellm/ScenarioEngine;Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/FakeLlmServer;
@@ -91,6 +179,7 @@ public final class com/davidjonesgriz/fakellm/FakeLlmClient : java/lang/AutoClos
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun calls ()Ljava/util/List;
 	public fun close ()V
+	public final fun exchanges ()Ljava/util/List;
 	public final fun health ()Lcom/davidjonesgriz/fakellm/FakeLlmHealth;
 	public final fun load (Ljava/lang/String;)V
 	public final fun loadInline (Lcom/davidjonesgriz/fakellm/Scenario;)V
@@ -175,6 +264,7 @@ public final class com/davidjonesgriz/fakellm/ScenarioEngine {
 	public synthetic fun <init> (ZLjava/nio/file/Path;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun calls ()Ljava/util/List;
 	public final fun currentScenarioName ()Ljava/lang/String;
+	public final fun exchanges ()Ljava/util/List;
 	public final fun getLenient ()Z
 	public final fun getScenarioDirectory ()Ljava/nio/file/Path;
 	public final fun load (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Scenario;

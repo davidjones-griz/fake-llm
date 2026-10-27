@@ -4,6 +4,7 @@
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -37,7 +38,13 @@ internal class TestClient(
         body: String,
         authorization: String? = null,
         timeout: Duration = Duration.ofSeconds(15),
-    ): HttpResponse<String> = send(request(path).POST(HttpRequest.BodyPublishers.ofString(body)), authorization, timeout)
+        headers: Map<String, String> = emptyMap(),
+    ): HttpResponse<String> =
+        send(
+            request(path).POST(HttpRequest.BodyPublishers.ofString(body)).also { b -> headers.forEach { (k, v) -> b.header(k, v) } },
+            authorization,
+            timeout,
+        )
 
     fun get(
         path: String,
@@ -56,6 +63,9 @@ internal class TestClient(
         return response
     }
 }
+
+/** `GET /control/exchanges`, parsed. */
+internal fun exchanges(client: TestClient): JsonArray = Json.parseToJsonElement(client.get("/control/exchanges").body()).jsonArray
 
 internal fun withServer(
     engine: ScenarioEngine = ScenarioEngine(),

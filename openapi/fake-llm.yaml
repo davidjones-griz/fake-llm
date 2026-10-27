@@ -30,9 +30,10 @@ info:
 
     **Scenarios and calls.** A scenario is an ordered list of steps. Every request to a vendor
     route that does not get `ExceptionError` is a call: it takes the next call number (`seq`,
-    from 1) and one call-log entry, and call N after a load or reset gets step N, on any vendor
-    route. Calls are numbered in arrival order. A call is numbered and logged before any wait its
-    step sets (`firstByteDelayMs`), so a delayed call can finish after a later one. A call after the
+    from 1) and one call-log entry, and one exchange-log entry (`GET /control/exchanges`) with its
+    request and response, and call N after a load or reset gets step N, on any vendor route. Calls
+    are numbered in arrival order. A call is numbered and logged before any wait its step sets
+    (`firstByteDelayMs`), so a delayed call can finish after a later one. A call after the
     last step gets `NoMoreStepsError`; the last step does not repeat. A request that gets
     `ExceptionError`, a 404 and the Batches 501 are not calls. That includes a request whose next
     step has a tool call with `rawArguments` that its format can't carry (a buffered Anthropic
@@ -59,7 +60,7 @@ tags:
   - name: health
     description: Liveness and the loaded scenario.
   - name: control
-    description: Load scenarios, reset state and read the call log.
+    description: Load scenarios, reset state, and read the call log and the exchange log.
   - name: vendor
     description: Stand-ins for the providers' HTTP APIs, driven by the loaded scenario.
 paths:
@@ -101,9 +102,9 @@ paths:
       operationId: loadScenario
       summary: Load a scenario by name or inline
       description: |
-        Replaces the loaded scenario and starts it over: the call log is emptied, and the next
-        call is call 1 and gets step 1 (its response IDs restart too). A name is looked up in
-        this order, and the first match wins:
+        Replaces the loaded scenario and starts it over: the call log and the exchange log are
+        emptied, and the next call is call 1 and gets step 1 (its response IDs restart too). A name
+        is looked up in this order, and the first match wins:
 
         1. `<name>.json` in the server's scenario directory, when one is set;
         2. a scenario the embedding project provides under that name (for the JVM library: the
@@ -163,9 +164,9 @@ paths:
       operationId: resetState
       summary: Start the loaded scenario over
       description: |
-        Keeps the loaded scenario and starts it over, as loading it again would: the call log is
-        emptied, and the next call is call 1 and gets step 1 (its response IDs restart too). The
-        request body is ignored.
+        Keeps the loaded scenario and starts it over, as loading it again would: the call log and
+        the exchange log are emptied, and the next call is call 1 and gets step 1 (its response IDs
+        restart too). The request body is ignored.
       security:
         - controlToken: []
         - {}
@@ -195,6 +196,32 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/CallRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /control/exchanges:
+    get:
+      tags: [control]
+      operationId: listExchanges
+      summary: Read each call's request and response, in call order
+      description: |
+        One entry per call since the last load or reset, in `seq` order, matching
+        `GET /control/calls` entry for entry: the request as fake-llm received it and the response
+        as fake-llm wrote it, byte for byte, including a whole SSE stream. The values of the
+        `authorization`, `proxy-authorization`, `x-api-key`, `x-goog-api-key` and `api-key`
+        request headers, and of a `key` query parameter, are replaced by `[redacted]`. Requests
+        that are not calls are not listed.
+      security:
+        - controlToken: []
+        - {}
+      responses:
+        "200":
+          description: The exchanges since the last load or reset, in `seq` order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExchangeRecord"
         "401":
           $ref: "#/components/responses/Unauthorized"
   /anthropic/v1/messages:
@@ -674,6 +701,74 @@ components:
         isError:
           type: boolean
           description: Anthropic `is_error` is `true`. Always false for OpenAI (both routes) and Gemini.
+    ExchangeRecord:
+      type: object
+      description: One call's request and response.
+      required: [seq, request, response]
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+          maximum: 9223372036854775807
+          description: The call's number, as `seq` in the call log.
+        request:
+          $ref: "#/components/schemas/ExchangeRequest"
+        response:
+          oneOf:
+            - $ref: "#/components/schemas/ExchangeResponse"
+            - type: "null"
+          description: Null until fake-llm starts sending the response.
+    ExchangeRequest:
+      type: object
+      required: [method, path, headers, body]
+      properties:
+        method:
+          type: string
+        path:
+          type: string
+          description: |
+            The raw path, then `?` and the raw query when there is one. A query element named
+            exactly `key` is recorded as `key=[redacted]`.
+        headers:
+          $ref: "#/components/schemas/RecordedHeaders"
+        body:
+          type: string
+          description: The request body as received, decoded as UTF-8; not re-serialized.
+    ExchangeResponse:
+      type: object
+      required: [status, headers, body, state]
+      properties:
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+          description: The status fake-llm sent, or started to send.
+        headers:
+          $ref: "#/components/schemas/RecordedHeaders"
+        body:
+          type: string
+          description: |
+            Every byte written to the response body, in order, decoded as UTF-8: the JSON text, or
+            the whole event stream including a mid-stream error frame.
+        state:
+          type: string
+          enum: [open, complete, aborted]
+          description: |
+            `open` while the body is still being written, `complete` when fake-llm finished the
+            response and closed the body normally, and `aborted` when sending the headers, or a
+            write, flush or close, failed, or the server stopped mid-response; `body` then holds the
+            bytes written before the failure.
+    RecordedHeaders:
+      type: object
+      description: |
+        Header names, lowercased and sorted, each with its values in order. In a request, the
+        values of `authorization`, `proxy-authorization`, `x-api-key`, `x-goog-api-key` and
+        `api-key` are `[redacted]`. In a response, the headers fake-llm set, without the `Date`,
+        `Content-length` and `Transfer-encoding` headers the server adds as it sends.
+      additionalProperties:
+        type: array
+        items:
+          type: string
     RequestSystemShape:
       type: string
       enum: [blocks, string, absent, unknown]
