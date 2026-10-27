@@ -1,0 +1,269 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "first-byte-delay-responses-stream",
+  "description": "Latency: A streamed text step is the named events from response.created to response.completed, numbered from 0, with no [DONE].",
+  "scenario": {
+    "name": "responses-stream-text",
+    "steps": [
+      {
+        "text": "Mild and dry tomorrow.",
+        "streamChunkChars": 8,
+        "firstByteDelayMs": 50,
+        "streamInterChunkDelayMs": 20
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "input": "Hello",
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "events": [
+          {
+            "event": "response.created",
+            "data": {
+              "type": "response.created",
+              "response": {
+                "id": "resp_fake_1",
+                "object": "response",
+                "status": "in_progress",
+                "error": null,
+                "incomplete_details": null,
+                "model": "fake-openai",
+                "output": [],
+                "parallel_tool_calls": true,
+                "tool_choice": "auto",
+                "tools": [],
+                "usage": null
+              },
+              "sequence_number": 0
+            }
+          },
+          {
+            "event": "response.in_progress",
+            "data": {
+              "type": "response.in_progress",
+              "response": {
+                "id": "resp_fake_1",
+                "object": "response",
+                "status": "in_progress",
+                "error": null,
+                "incomplete_details": null,
+                "model": "fake-openai",
+                "output": [],
+                "parallel_tool_calls": true,
+                "tool_choice": "auto",
+                "tools": [],
+                "usage": null
+              },
+              "sequence_number": 1
+            }
+          },
+          {
+            "event": "response.output_item.added",
+            "data": {
+              "type": "response.output_item.added",
+              "output_index": 0,
+              "item": {
+                "id": "msg_fake_1",
+                "type": "message",
+                "status": "in_progress",
+                "role": "assistant",
+                "content": []
+              },
+              "sequence_number": 2
+            }
+          },
+          {
+            "event": "response.content_part.added",
+            "data": {
+              "type": "response.content_part.added",
+              "item_id": "msg_fake_1",
+              "output_index": 0,
+              "content_index": 0,
+              "part": {
+                "type": "output_text",
+                "text": "",
+                "annotations": []
+              },
+              "sequence_number": 3
+            }
+          },
+          {
+            "event": "response.output_text.delta",
+            "data": {
+              "type": "response.output_text.delta",
+              "item_id": "msg_fake_1",
+              "output_index": 0,
+              "content_index": 0,
+              "delta": "Mild and",
+              "logprobs": [],
+              "sequence_number": 4
+            }
+          },
+          {
+            "event": "response.output_text.delta",
+            "data": {
+              "type": "response.output_text.delta",
+              "item_id": "msg_fake_1",
+              "output_index": 0,
+              "content_index": 0,
+              "delta": " dry tom",
+              "logprobs": [],
+              "sequence_number": 5
+            }
+          },
+          {
+            "event": "response.output_text.delta",
+            "data": {
+              "type": "response.output_text.delta",
+              "item_id": "msg_fake_1",
+              "output_index": 0,
+              "content_index": 0,
+              "delta": "orrow.",
+              "logprobs": [],
+              "sequence_number": 6
+            }
+          },
+          {
+            "event": "response.output_text.done",
+            "data": {
+              "type": "response.output_text.done",
+              "item_id": "msg_fake_1",
+              "output_index": 0,
+              "content_index": 0,
+              "text": "Mild and dry tomorrow.",
+              "logprobs": [],
+              "sequence_number": 7
+            }
+          },
+          {
+            "event": "response.content_part.done",
+            "data": {
+              "type": "response.content_part.done",
+              "item_id": "msg_fake_1",
+              "output_index": 0,
+              "content_index": 0,
+              "part": {
+                "type": "output_text",
+                "text": "Mild and dry tomorrow.",
+                "annotations": []
+              },
+              "sequence_number": 8
+            }
+          },
+          {
+            "event": "response.output_item.done",
+            "data": {
+              "type": "response.output_item.done",
+              "output_index": 0,
+              "item": {
+                "id": "msg_fake_1",
+                "type": "message",
+                "status": "completed",
+                "role": "assistant",
+                "content": [
+                  {
+                    "type": "output_text",
+                    "text": "Mild and dry tomorrow.",
+                    "annotations": []
+                  }
+                ]
+              },
+              "sequence_number": 9
+            }
+          },
+          {
+            "event": "response.completed",
+            "data": {
+              "type": "response.completed",
+              "response": {
+                "id": "resp_fake_1",
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "model": "fake-openai",
+                "output": [
+                  {
+                    "id": "msg_fake_1",
+                    "type": "message",
+                    "status": "completed",
+                    "role": "assistant",
+                    "content": [
+                      {
+                        "type": "output_text",
+                        "text": "Mild and dry tomorrow.",
+                        "annotations": []
+                      }
+                    ]
+                  }
+                ],
+                "parallel_tool_calls": true,
+                "tool_choice": "auto",
+                "tools": [],
+                "usage": {
+                  "input_tokens": 100,
+                  "input_tokens_details": {
+                    "cached_tokens": 0
+                  },
+                  "output_tokens": 50,
+                  "output_tokens_details": {
+                    "reasoning_tokens": 0
+                  },
+                  "total_tokens": 150
+                }
+              },
+              "sequence_number": 10
+            }
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "openai-responses",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 50,
+            "streamInterChunkDelayMs": 20
+          }
+        ]
+      }
+    }
+  ]
+}

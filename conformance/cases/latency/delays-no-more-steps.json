@@ -1,0 +1,149 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "delays-no-more-steps",
+  "description": "A call no step served records no delays.",
+  "scenario": {
+    "name": "latency-no-more-steps",
+    "steps": [
+      {
+        "text": "only",
+        "firstByteDelayMs": 50,
+        "streamInterChunkDelayMs": 20
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:generateContent",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "only"
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 100,
+            "candidatesTokenCount": 50,
+            "totalTokenCount": 150
+          },
+          "fake_llm_seq": 1
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Again"
+            }
+          ],
+          "stream": true
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no more steps",
+          "scenario": "latency-no-more-steps",
+          "steps": 1,
+          "seq": 2,
+          "vendor": "openai",
+          "model": "example-gpt",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "Again\n"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "gemini",
+            "model": "example-gemini",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 50,
+            "streamInterChunkDelayMs": 0
+          },
+          {
+            "seq": 2,
+            "vendor": "openai",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "no-more-steps",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Again\n",
+            "step": null,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
+          }
+        ]
+      }
+    }
+  ]
+}
