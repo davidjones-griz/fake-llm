@@ -240,6 +240,7 @@ public final class com/davidjonesgriz/fakellm/Scenario {
 	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/Scenario;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public fun equals (Ljava/lang/Object;)Z
+	public static final fun fromJson (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public final fun getDescription ()Ljava/lang/String;
 	public final fun getName ()Ljava/lang/String;
 	public final fun getSteps ()Ljava/util/List;
@@ -259,6 +260,7 @@ public final synthetic class com/davidjonesgriz/fakellm/Scenario$$serializer : k
 }
 
 public final class com/davidjonesgriz/fakellm/Scenario$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
