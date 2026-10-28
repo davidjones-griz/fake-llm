@@ -41,6 +41,12 @@ tasks.test {
     useJUnitPlatform()
 }
 
+// The Java tests in src/test/java use fake-llm as a Java project would. javac's lint warnings fail
+// the build, as compiler warnings do in the Kotlin code.
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
+}
+
 // -PtestJavaVersion=<major> runs the tests on that Java version, while the code is still
 // compiled for Java 21. A copy of the block in the root build.gradle.kts (examples/ is a
 // separate build); keep the two in sync.
