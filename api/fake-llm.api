@@ -166,8 +166,8 @@ public final class com/davidjonesgriz/fakellm/ExchangeResponse$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
-public final class com/davidjonesgriz/fakellm/FakeLlmAppKt {
-	public static final fun main ([Ljava/lang/String;)V
+public final class com/davidjonesgriz/fakellm/FakeLlm {
+	public static final fun startFakeLlmServer (ILcom/davidjonesgriz/fakellm/ScenarioEngine;)Lcom/davidjonesgriz/fakellm/FakeLlmServer;
 	public static final fun startFakeLlmServer (ILcom/davidjonesgriz/fakellm/ScenarioEngine;Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/FakeLlmServer;
 	public static synthetic fun startFakeLlmServer$default (ILcom/davidjonesgriz/fakellm/ScenarioEngine;Ljava/lang/String;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/FakeLlmServer;
 }
@@ -217,6 +217,10 @@ public final synthetic class com/davidjonesgriz/fakellm/FakeLlmHealth$$serialize
 
 public final class com/davidjonesgriz/fakellm/FakeLlmHealth$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/davidjonesgriz/fakellm/FakeLlmMain {
+	public static final fun main ([Ljava/lang/String;)V
 }
 
 public final class com/davidjonesgriz/fakellm/FakeLlmServer : java/lang/AutoCloseable {

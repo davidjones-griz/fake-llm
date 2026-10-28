@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets
 // `message_start` → `content_block_start` → `content_block_delta`… → `content_block_stop` →
 // `message_delta` → `message_stop`.
 // [chunkText] turns a step's text into ordered deltas. The buffered path
-// ([ScenarioEngine.handle] / [anthropicEnvelope]) is separate; FakeLlmApp.kt's streaming branch
+// ([ScenarioEngine.handle] / [anthropicEnvelope]) is separate; VendorHandlers.kt's streaming branch
 // is what calls these functions.
 
 /**
