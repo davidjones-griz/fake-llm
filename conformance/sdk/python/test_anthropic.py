@@ -117,6 +117,17 @@ def test_call_after_last_step(fake, anthropic_client):
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
 
 
+def test_call_after_unload(fake, anthropic_client):
+    fake.load([{"text": "once"}])
+    assert create(anthropic_client).content[0].text == "once"
+    fake.unload()
+    assert fake.log() == []
+    with pytest.raises(anthropic.BadRequestError) as raised:
+        create(anthropic_client)
+    assert raised.value.body["fake_llm_error"] == "no scenario loaded"
+    assert fake.log() == [call(1, "no-scenario", None)]
+
+
 def test_stream_text(fake, anthropic_client):
     fake.load([{"text": "Streaming text that is long enough.", "streamChunkChars": 8}])
     with stream(anthropic_client) as events:

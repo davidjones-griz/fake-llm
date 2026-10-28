@@ -99,6 +99,17 @@ def test_call_after_last_step(fake, openai_client):
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
 
 
+def test_call_after_unload(fake, openai_client):
+    fake.load([{"text": "once"}])
+    assert create(openai_client).choices[0].message.content == "once"
+    fake.unload()
+    assert fake.log() == []
+    with pytest.raises(openai.BadRequestError) as raised:
+        create(openai_client)
+    assert raised.value.body["fake_llm_error"] == "no scenario loaded"
+    assert fake.log() == [call(1, "no-scenario", None)]
+
+
 def content(chunks):
     return [chunk.choices[0].delta.content for chunk in chunks]
 
