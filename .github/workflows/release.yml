@@ -32,6 +32,18 @@ jobs:
             echo "::error::$GITHUB_REF_NAME does not match version=$declared in gradle.properties"
             exit 1
           fi
+          # The CI recipe and the README name the image by its release tag; the release PR moves them.
+          example=examples/github-actions/fake-llm-tests.yml
+          pinned=$(yq '.jobs.test.services.fake-llm.image' "$example")
+          if [ "$pinned" != "ghcr.io/davidjones-griz/fake-llm:$version" ]; then
+            echo "::error file=$example::the service image is $pinned, not ghcr.io/davidjones-griz/fake-llm:$version"
+            exit 1
+          fi
+          stale=$(grep -o 'ghcr\.io/davidjones-griz/fake-llm:[0-9][0-9.]*[0-9]' README.md | sort -u | grep -vxF "ghcr.io/davidjones-griz/fake-llm:$version" || true)
+          if [ -n "$stale" ]; then
+            echo "::error file=README.md::README.md names an image tag other than $version: $stale"
+            exit 1
+          fi
       - name: Extract the release notes
         run: |
           set -euo pipefail
