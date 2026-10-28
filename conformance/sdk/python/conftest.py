@@ -114,6 +114,12 @@ class Fake:
         assert response.status_code == 200, response.text
         assert response.json() == {"loaded": self.name, "steps": len(steps)}
 
+    def unload(self):
+        """Removes the loaded scenario and empties the call log; calls then get the no-scenario 400."""
+        response = httpx.post(f"{self.base_url}/control/unload")
+        assert response.status_code == 200, response.text
+        assert response.json() == {"unloaded": True}
+
     def calls(self):
         return httpx.get(f"{self.base_url}/control/calls").json()
 

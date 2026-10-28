@@ -78,6 +78,24 @@
     },
     {
       "request": {
+        "method": "POST",
+        "path": "/control/unload",
+        "headers": {
+          "authorization": "Bearer conformance-token"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "unloaded": true
+        }
+      }
+    },
+    {
+      "request": {
         "method": "GET",
         "path": "/control/calls",
         "headers": {

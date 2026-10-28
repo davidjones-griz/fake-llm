@@ -83,6 +83,25 @@
     {
       "request": {
         "method": "POST",
+        "path": "/control/unload",
+        "headers": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "content-type": "application/json",
+          "www-authenticate": "Bearer"
+        },
+        "body": {
+          "fake_llm_error": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
         "path": "/control/scenario",
         "headers": {
           "content-type": "application/json"

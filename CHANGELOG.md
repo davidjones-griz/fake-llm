@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0, a minor version may
 change the public API.
 
+## [Unreleased]
+
+### Added
+
+- `POST /control/unload` and `FakeLlmClient.unload()`: remove the loaded scenario and empty the
+  call log and the exchange log, as `ScenarioEngine.unload()` does, so a test that reaches the
+  server over HTTP can return it to having no scenario loaded.
+
 ## [0.4.0] - 2026-10-27
 
 ### Added

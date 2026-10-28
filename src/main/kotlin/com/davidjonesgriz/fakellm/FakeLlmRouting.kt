@@ -102,6 +102,11 @@ private fun controlRoute(
             respond(ex, HTTP_OK, """{"reset":true}""")
         }
 
+        "POST /control/unload" -> {
+            engine.unload()
+            respond(ex, HTTP_OK, """{"unloaded":true}""")
+        }
+
         "GET /control/calls" -> {
             respond(ex, HTTP_OK, logJson.encodeToString(engine.calls()))
         }

@@ -103,6 +103,18 @@ def test_call_after_last_step(fake, gemini_client):
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
 
 
+def test_call_after_unload(fake, gemini_client):
+    fake.load([{"text": "once"}])
+    assert generate(gemini_client).text == "once"
+    fake.unload()
+    assert fake.log() == []
+    with pytest.raises(errors.ClientError) as raised:
+        generate(gemini_client)
+    assert raised.value.code == 400
+    assert raised.value.details["fake_llm_error"] == "no scenario loaded"
+    assert fake.log() == [call(1, "no-scenario", None)]
+
+
 def test_function_call(fake, gemini_client):
     fake.load([{"toolCalls": [{"name": "get_weather", "arguments": {"city": "Paris"}}, {"name": "get_time", "id": "t2"}]}])
     response = generate(gemini_client)

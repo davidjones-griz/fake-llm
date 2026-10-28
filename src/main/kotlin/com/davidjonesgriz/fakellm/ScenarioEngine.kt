@@ -23,7 +23,7 @@ internal data class FakeResponse(
 @ConsistentCopyVisibility
 @Serializable
 public data class CallRecord internal constructor(
-    /** The call's number since the last load or reset, from 1. */
+    /** The call's number since the last load, reset or unload, from 1. */
     val seq: Long,
     /** `anthropic`, `openai` (Chat Completions), `openai-responses` or `gemini`. */
     val vendor: String,
@@ -167,7 +167,8 @@ public class ScenarioEngine(
 
     /**
      * Removes the loaded scenario and empties the call log and the exchange log; the next call is
-     * call 1. Calls then get the strict-mode 400 or the lenient canned reply.
+     * call 1. Calls then get the strict-mode 400 or the lenient canned reply. `POST /control/unload`
+     * and [FakeLlmClient.unload] call it over HTTP.
      */
     public fun unload() {
         replace(null)

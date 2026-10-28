@@ -776,6 +776,22 @@ class OpenApiConformanceTest {
                     serverToken = TOKEN,
                     expectStatus = 401,
                 ),
+                Exchange(
+                    "unload",
+                    "POST",
+                    "/control/unload",
+                    Target.Operation("/control/unload"),
+                    expectStatus = 200,
+                    setup = { it.engine.load("hello") },
+                ),
+                Exchange(
+                    "unload without the token",
+                    "POST",
+                    "/control/unload",
+                    Target.Operation("/control/unload"),
+                    serverToken = TOKEN,
+                    expectStatus = 401,
+                ),
                 Exchange("calls, empty", "GET", "/control/calls", Target.Operation("/control/calls"), expectStatus = 200),
                 Exchange(
                     "calls after strict no-scenario calls on every vendor",

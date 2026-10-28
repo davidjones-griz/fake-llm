@@ -42,6 +42,42 @@ class FakeLlmClientTest {
     }
 
     @Test
+    fun `unload removes the server's scenario and empties its call log`() {
+        withClient { client, server ->
+            client.load("hello")
+            TestClient(server.port).post("/anthropic/v1/messages", anthropicBody("hi"))
+            client.unload()
+            assertNull(client.health().scenario)
+            assertTrue(client.calls().isEmpty())
+
+            assertEquals(400, TestClient(server.port).post("/anthropic/v1/messages", anthropicBody("hi")).statusCode())
+            val call = client.calls().single()
+            assertEquals("no-scenario", call.outcome)
+            assertNull(call.step)
+
+            client.unload()
+            assertTrue(client.calls().isEmpty())
+        }
+    }
+
+    @Test
+    fun `unload sends the control token, and a wrong one is a clear 401`() {
+        withServerToken("t") { server ->
+            FakeLlmClient(server.baseUrl, controlToken = "t").use { client ->
+                client.load("hello")
+                client.unload()
+                assertNull(client.health().scenario)
+            }
+            FakeLlmClient(server.baseUrl, controlToken = "wrong").use { client ->
+                val wrong = assertFailsWith<FakeLlmClientException> { client.unload() }
+                assertEquals(401, wrong.statusCode)
+                assertContains(wrong.message!!, "POST /control/unload returned HTTP 401")
+                assertContains(wrong.message!!, "rejected the control token")
+            }
+        }
+    }
+
+    @Test
     fun `loadInline sends only the fields that are set`() {
         val scenario = Scenario(name = "inline", steps = listOf(Step(text = "from the client")))
         // No "description", "stopReason" or other defaults that a server without those fields would reject.

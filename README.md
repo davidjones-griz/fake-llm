@@ -186,10 +186,11 @@ FakeLlmClient("http://localhost:8080", controlToken = System.getenv("FAKE_LLM_CO
     val calls: List<CallRecord> = client.calls()
     val exchanges: List<ExchangeRecord> = client.exchanges()
     client.reset()
+    client.unload()                        // no scenario: calls get the strict 400, or the lenient canned reply
 }
 ```
 
-From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's name and whether the server is lenient, and `scenarioNames()` lists what the server can load by name. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
+From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's name and whether the server is lenient, and `scenarioNames()` lists what the server can load by name. `unload()` returns the server to the state it has when started without a scenario: no scenario loaded and empty logs. Against a server older than 0.5.0 it fails with status 404. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
 
 Every failed call throws `FakeLlmClientException`. `statusCode` is the HTTP status, or null when no response arrived (a refused connection, a timeout or an interrupt, kept as the `cause`). For an error status, `serverMessage` is the server's explanation, verbatim, such as `unknown scenario 'x' — ...`. A 401 says whether the token was missing or rejected.
 
@@ -406,7 +407,7 @@ Two step fields add latency. `firstByteDelayMs` holds back the whole response: t
 
 Only a step's own fields wait. The responses that come from no step never wait: the no-more-steps and no-scenario 400s, the lenient canned reply, and the `exception` 400s, 401s, 404s and the Batches 501.
 
-A call is numbered and logged when it arrives, before the wait, and the wait runs outside the engine's lock. Other calls are served while one waits, so a later call can finish first, and a reset or load during the wait doesn't change the waiting call's response. The call log records the delays each call used (`firstByteDelayMs`, and `streamInterChunkDelayMs` only when the response was an event stream: a streamed request answered by a reply, or by an error step with `streamErrorAfterChunks`), not measured time.
+A call is numbered and logged when it arrives, before the wait, and the wait runs outside the engine's lock. Other calls are served while one waits, so a later call can finish first, and a reset, load or unload during the wait doesn't change the waiting call's response. The call log records the delays each call used (`firstByteDelayMs`, and `streamInterChunkDelayMs` only when the response was an event stream: a streamed request answered by a reply, or by an error step with `streamErrorAfterChunks`), not measured time.
 
 A client whose timeout is shorter than `firstByteDelayMs` times out. Its call was logged once, when it arrived, and stays in the log. The server finishes the wait (it does not stop early), its response goes nowhere, and the next request is served normally with the next step. A client that retries the request, such as the `openai` SDK with its default `max_retries`, makes a new call, which gets the next step. A client that disconnects between streamed chunks is handled the same way.
 
@@ -620,7 +621,13 @@ With a scenario directory set, `*.json` names from that directory are merged in,
 {"reset":true}
 ```
 
-`GET /control/calls` returns the call log as a JSON array, in call order. `vendor` is `anthropic`, `openai`, `openai-responses` or `gemini`. `seq` is the call's number since the last load or reset, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call arrived, before any wait. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](#tool-calls) describes them. `firstByteDelayMs` and `streamInterChunkDelayMs` are the delays the call's step applied: `streamInterChunkDelayMs` only when the response was an event stream, and both 0 when no step served the call.
+`POST /control/unload` removes the loaded scenario, as `ScenarioEngine.unload()` does. The call log and the exchange log are emptied, and the next call is call 1. Until a scenario is loaded again, a call gets the `no scenario loaded` 400, or the canned reply on a lenient server, and `GET /health` reports `"scenario": null`. With no scenario loaded, it succeeds, and still empties both logs and restarts numbering. The body is ignored. Use it between tests that share one server, so that each one starts like a server started without a scenario.
+
+```json
+{"unloaded":true}
+```
+
+`GET /control/calls` returns the call log as a JSON array, in call order. `vendor` is `anthropic`, `openai`, `openai-responses` or `gemini`. `seq` is the call's number since the last load, reset or unload, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call arrived, before any wait. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](#tool-calls) describes them. `firstByteDelayMs` and `streamInterChunkDelayMs` are the delays the call's step applied: `streamInterChunkDelayMs` only when the response was an event stream, and both 0 when no step served the call.
 
 ```json
 [
