@@ -59,7 +59,7 @@ class UnloadRouteTest {
     @Test
     fun `after unload a lenient server answers the canned reply`() {
         withServer(ScenarioEngine(lenient = true)) { client, _ ->
-            client.post("/control/scenario", twoSteps)
+            assertEquals(200, client.post("/control/scenario", twoSteps).statusCode())
             assertEquals(200, client.post("/control/unload", "").statusCode())
             val next = client.post("/anthropic/v1/messages", anthropicBody("hi"))
             assertEquals(200, next.statusCode())

@@ -23,7 +23,7 @@ internal data class FakeResponse(
 @ConsistentCopyVisibility
 @Serializable
 public data class CallRecord internal constructor(
-    /** The call's number since the last load or reset, from 1. */
+    /** The call's number since the last load, reset or unload, from 1. */
     val seq: Long,
     /** `anthropic`, `openai` (Chat Completions), `openai-responses` or `gemini`. */
     val vendor: String,
