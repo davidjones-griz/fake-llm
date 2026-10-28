@@ -169,9 +169,35 @@ startFakeLlmServer(port = 0, engine = ScenarioEngine(), controlToken = null).use
 }
 ```
 
+From Java, `startFakeLlmServer` is a static method of the class `FakeLlm`. Pass `null` as the token for open control routes, or leave the argument out to read `FAKE_LLM_CONTROL_TOKEN`, as the Kotlin default does:
+
+```java
+ScenarioEngine engine = new ScenarioEngine();
+try (FakeLlmServer server = FakeLlm.startFakeLlmServer(0, engine, null)) {
+    engine.load("hello");
+    MyClient client = new MyClient(server.getBaseUrl() + "/anthropic");
+    // ... exercise the code under test ...
+    assertEquals("text", engine.calls().get(0).getOutcome());
+}
+```
+
 `engine.exchanges()` returns each call's full request and response; see [`GET /control/exchanges`](#control-api).
 
-`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, call log, exchange log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. For scenario files kept elsewhere, point the engine's scenario directory at them, so they get the same checks and messages as any load by name. The library depends on `kotlinx-serialization-json` as an API dependency, so `Json.decodeFromString<Scenario>(text)` also decodes a scenario file, but it rejects a `"$schema"` key (remove it first) and gives kotlinx's own error messages.
+`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, call log, exchange log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. For scenario files kept elsewhere, point the engine's scenario directory at them, so they get the same checks and messages as any load by name.
+
+`Scenario.fromJson(text)` decodes a scenario written in the scenario file format, with the checks and messages of an inline load: a `"$schema"` key is ignored, and the name need not match a file. From Java, it builds a scenario in code with a text block:
+
+```java
+engine.loadInline(Scenario.fromJson("""
+        {
+          "name": "rate-limited-once",
+          "steps": [
+            {"error": {"status": 429, "headers": {"retry-after": "0"}}},
+            {"text": "Recovered."}
+          ]
+        }
+        """));
+```
 
 A name is looked up in this order, and the first match wins: the engine's scenario directory, then your project's classpath `/scenarios/<name>.json` (the first on the classpath, if several modules have one), then the bundled scenarios, which fake-llm keeps under its own resource path, so your `index.txt` no longer hides the bundled list. So a scenario of yours with a bundled name, such as `scenarios/rate-limit-429.json`, replaces the bundled one, on purpose. `GET /control/scenarios` lists the directory's `*.json` names, the names in every `/scenarios/index.txt` on the classpath, and the bundled names. To have your classpath scenarios listed, add an `index.txt` beside them, one name per line (blank lines and whole-line `#` comments are skipped, and surrounding spaces are trimmed); without one they still load by name. A listed name is only as good as its index: a name whose file is missing still fails to load, and names that are not legal scenario names are skipped.
 
@@ -249,9 +275,9 @@ The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6
 
 ### API stability
 
-The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ToolCall`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `ToolCallRecord`, `ToolResultRecord`, `ExchangeRecord`, `ExchangeRequest`, `ExchangeResponse`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord`, the three exchange records or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()` or `GET /control/exchanges` with `ExchangeRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
+The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. From Java, the top-level functions are in two classes whose names are set with `@file:JvmName`, not taken from source file names: `FakeLlm` has `startFakeLlmServer`, and `FakeLlmMain` has `main`. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ToolCall`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `ToolCallRecord`, `ToolResultRecord`, `ExchangeRecord`, `ExchangeRequest`, `ExchangeResponse`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord`, the three exchange records or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()` or `GET /control/exchanges` with `ExchangeRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
 
-[examples/](examples/) is a complete consumer: a small client with retry logic, tested against the published artifact.
+[examples/](examples/) is a complete consumer: a small client with retry logic, tested from Kotlin and from Java against the published artifact.
 
 ## Run in CI
 
@@ -842,7 +868,7 @@ The example project tests the published artifact, not the source, so publish it 
 
 ### Public API
 
-Kotlin explicit API mode is on, so a new public declaration in `src/main` (or `junit-jupiter/src/main`) needs an explicit `public` modifier. `./gradlew check`, and so `./gradlew build` and CI, compares the compiled public API with `api/fake-llm.api` and `junit-jupiter/api/fake-llm-junit-jupiter.api` and fails on any difference. For an intended change, run `./gradlew apiDump`, commit the updated `.api` file with the change, and add a CHANGELOG entry. Add new fields to the scenario model classes last, with a default value, so existing Kotlin call sites still compile. A scenario field also goes in the spec's `Scenario`, `Step`, `ToolCall` or `ErrorStep` schema (a test fails until it does); then run `./gradlew updateScenarioSchema` and commit the regenerated `schema/scenario.schema.json`. A Kotlin or kotlinx-serialization upgrade can change the generated members in the dump, so run `apiDump` after one and review the diff.
+Kotlin explicit API mode is on, so a new public declaration in `src/main` (or `junit-jupiter/src/main`) needs an explicit `public` modifier. `./gradlew check`, and so `./gradlew build` and CI, compares the compiled public API with `api/fake-llm.api` and `junit-jupiter/api/fake-llm-junit-jupiter.api` and fails on any difference. For an intended change, run `./gradlew apiDump`, commit the updated `.api` file with the change, and add a CHANGELOG entry. A public top-level function goes in `FakeLlmServer.kt`, whose `@file:JvmName("FakeLlm")` makes it a static method of `FakeLlm` for Java, or in a file with its own `@file:JvmName`: a file without one gives Java a class named after the file, such as `FooKt`. Give a public function with default arguments `@JvmOverloads` when Java callers would otherwise have to pass the defaults. The scenario model classes don't have it, because Java builds scenarios with `Scenario.fromJson`. Add new fields to the scenario model classes last, with a default value, so existing Kotlin call sites still compile. A scenario field also goes in the spec's `Scenario`, `Step`, `ToolCall` or `ErrorStep` schema (a test fails until it does); then run `./gradlew updateScenarioSchema` and commit the regenerated `schema/scenario.schema.json`. A Kotlin or kotlinx-serialization upgrade can change the generated members in the dump, so run `apiDump` after one and review the diff.
 
 ### Quality gates
 
