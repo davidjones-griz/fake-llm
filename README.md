@@ -98,7 +98,7 @@ curl -s -X POST http://localhost:8080/control/reset
 The image is on GHCR, for linux/amd64 and linux/arm64:
 
 ```bash
-docker run -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.3.0 --scenario hello
+docker run -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.4.0 --scenario hello
 ```
 
 The libraries are on Maven Central. With Gradle:
@@ -106,9 +106,9 @@ The libraries are on Maven Central. With Gradle:
 ```kotlin
 repositories { mavenCentral() }
 dependencies {
-    testImplementation("com.davidjonesgriz:fake-llm:0.3.0")
+    testImplementation("com.davidjonesgriz:fake-llm:0.4.0")
     // Optional: the JUnit Jupiter extension.
-    testImplementation("com.davidjonesgriz:fake-llm-junit-jupiter:0.3.0")
+    testImplementation("com.davidjonesgriz:fake-llm-junit-jupiter:0.4.0")
 }
 ```
 
@@ -118,14 +118,14 @@ With Maven:
 <dependency>
   <groupId>com.davidjonesgriz</groupId>
   <artifactId>fake-llm</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
   <scope>test</scope>
 </dependency>
 <!-- Optional: the JUnit Jupiter extension. -->
 <dependency>
   <groupId>com.davidjonesgriz</groupId>
   <artifactId>fake-llm-junit-jupiter</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
   <scope>test</scope>
 </dependency>
 ```
@@ -138,7 +138,7 @@ java -jar fake-llm-all.jar --scenario hello
 
 ## Use as a library
 
-Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `com.davidjonesgriz:fake-llm:0.3.0`. Classes are in the `com.davidjonesgriz.fakellm` package. To build from a checkout instead, publish it to your local Maven repository:
+Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `com.davidjonesgriz:fake-llm:0.4.0`. Classes are in the `com.davidjonesgriz.fakellm` package. To build from a checkout instead, publish it to your local Maven repository:
 
 ```bash
 ./gradlew publishToMavenLocal
@@ -146,7 +146,7 @@ Kotlin and Java tests can start the server in the same JVM instead of running a 
 
 ```kotlin
 repositories { mavenLocal() }
-dependencies { testImplementation("com.davidjonesgriz:fake-llm:0.3.0") }
+dependencies { testImplementation("com.davidjonesgriz:fake-llm:0.4.0") }
 ```
 
 or include it as a composite build. Gradle then substitutes the dependency with the checkout's source, with no publishing step. The included build runs on your project's Gradle, which must be 9.2 or newer (and so run on JDK 17 or newer); it compiles with a JDK 21 toolchain, and your tests must run on Java 21 or newer:
@@ -197,7 +197,7 @@ The client ignores response fields it does not know, so a server that has gained
 
 ### JUnit Jupiter extension
 
-`com.davidjonesgriz:fake-llm-junit-jupiter:0.3.0` runs an in-process server for each test class, so a test needs no setup or teardown of its own. Its classes are in the `com.davidjonesgriz.fakellm.junit` package, and it brings `fake-llm` with it. It works with JUnit Jupiter 5.10.5 or newer, including 6.x. Your project supplies JUnit; the extension does not add it. Kotlin's `kotlin("test")` brings JUnit 5.10.1 on its own, so a Kotlin project should also add a newer BOM, such as `testImplementation(platform("org.junit:junit-bom:5.14.4"))`.
+`com.davidjonesgriz:fake-llm-junit-jupiter:0.4.0` runs an in-process server for each test class, so a test needs no setup or teardown of its own. Its classes are in the `com.davidjonesgriz.fakellm.junit` package, and it brings `fake-llm` with it. It works with JUnit Jupiter 5.10.5 or newer, including 6.x. Your project supplies JUnit; the extension does not add it. Kotlin's `kotlin("test")` brings JUnit 5.10.1 on its own, so a Kotlin project should also add a newer BOM, such as `testImplementation(platform("org.junit:junit-bom:5.14.4"))`.
 
 ```kotlin
 @FakeLlmTest
