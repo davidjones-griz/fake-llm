@@ -101,6 +101,8 @@ The image is on GHCR, for linux/amd64 and linux/arm64:
 docker run -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.4.0 --scenario hello
 ```
 
+To run it beside an app's tests in CI, see [Run in CI](#run-in-ci).
+
 The libraries are on Maven Central. With Gradle:
 
 ```kotlin
@@ -250,6 +252,103 @@ The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6
 The public API is exactly what [api/fake-llm.api](api/fake-llm.api) and [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ToolCall`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `ToolCallRecord`, `ToolResultRecord`, `ExchangeRecord`, `ExchangeRequest`, `ExchangeResponse`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord`, the three exchange records or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()` or `GET /control/exchanges` with `ExchangeRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
 
 [examples/](examples/) is a complete consumer: a small client with retry logic, tested against the published artifact.
+
+## Run in CI
+
+In CI, fake-llm runs as a separate server beside an app's tests. The app can be in any language: point its LLM base URL at fake-llm, and have its tests load scenarios and read the call log over the [control API](#control-api).
+
+### GitHub Actions
+
+[examples/github-actions/fake-llm-tests.yml](examples/github-actions/fake-llm-tests.yml) is a complete workflow. It runs fake-llm as a service container, and runs a small Python app's tests, [examples/github-actions/test_greeting.py](examples/github-actions/test_greeting.py), against it. This repository's CI runs it against the image built from each commit. To use it, copy it to `.github/workflows/` in your repository, and change the `examples/github-actions/` paths to where your tests and scenarios are.
+
+The service:
+
+```yaml
+services:
+  fake-llm:
+    image: ghcr.io/davidjones-griz/fake-llm:0.5.0
+    ports:
+      - 8080:8080
+    env:
+      FAKE_LLM_SCENARIO_DIR: /scenarios
+      FAKE_LLM_CONTROL_TOKEN: fake-llm-ci-token
+    options: >-
+      --health-cmd "curl -fsS http://127.0.0.1:8080/health"
+      --health-interval 2s
+      --health-timeout 5s
+      --health-retries 30
+```
+
+- **Pin a release tag**, such as `0.5.0`, not `latest` or `0.5`. Those two tags move with each release, so a new release could change your tests' results with no change in your repository. The recipe needs 0.5.0 or later, for `POST /control/unload`.
+- **Configure it with environment variables.** A service container takes no command-line arguments, so use the variables under [Configuration](#configuration): `FAKE_LLM_SCENARIO` (a scenario loaded at startup), `FAKE_LLM_SCENARIO_DIR`, `FAKE_LLM_LENIENT` and `FAKE_LLM_CONTROL_TOKEN`. Keep the container's port at 8080, and choose the runner's port in `ports`.
+- **The health check** runs inside the container, so it needs a program in the image. The image has `curl`, from its eclipse-temurin base. `GET /health` needs no token. The runner starts the job's steps once the check passes, and fails the job if it never does. Without a health check, the steps can start before the server listens.
+- **The control token is optional.** When it is set, every `/control/` request must send `Authorization: Bearer <token>`. The ports of a GitHub-hosted runner are not reachable from outside the job, so the token can be written in the workflow.
+
+The job's `env` points the app at the service. The steps run on the runner, so the address is `localhost` and the port from `ports`:
+
+```yaml
+env:
+  ANTHROPIC_BASE_URL: http://localhost:8080/anthropic
+  ANTHROPIC_API_KEY: not-used
+  FAKE_LLM_URL: http://localhost:8080
+  FAKE_LLM_CONTROL_TOKEN: fake-llm-ci-token
+```
+
+The official Python SDKs read their base URL from the environment, so the app needs no code change: `ANTHROPIC_BASE_URL` (`http://localhost:8080/anthropic`), `OPENAI_BASE_URL` (`http://localhost:8080/openai/v1`) and `GOOGLE_GEMINI_BASE_URL` (`http://localhost:8080/gemini/`). Each still needs its API key variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY`) set, to any value. Other clients take the same base URLs; see [Quickstart](#quickstart). When the job itself runs in a container (`jobs.<job_id>.container`), the service is at `http://fake-llm:8080` instead.
+
+A service's volumes are mounted when the job starts, before `actions/checkout` runs, so a volume can't show the repository's scenario files. Copy them into the running container after the checkout instead. `FAKE_LLM_SCENARIO_DIR` is read at each load by name, so the directory doesn't have to exist when the server starts:
+
+```yaml
+- name: Copy the scenarios into fake-llm
+  env:
+    FAKE_LLM_CONTAINER: ${{ job.services.fake-llm.id }}
+  run: docker cp examples/github-actions/scenarios/. "$FAKE_LLM_CONTAINER:/scenarios"
+```
+
+A test can also send its scenario inline in `POST /control/scenario` (see [Loading a scenario](#loading-a-scenario)). That needs no copy and no scenario directory.
+
+### A scenario per test
+
+Tests that share one server should each start from a known state. Load the test's scenario at the start of the test: a load replaces the previous scenario, empties the call log and the exchange log, and starts numbering at call 1. After the test, `POST /control/unload` returns the server to the state it has when started without a scenario, so a test that loads nothing gets the `no scenario loaded` 400, not whatever the previous test left. Unload needs fake-llm 0.5.0 or later; an older server answers it with HTTP 404. Within a test, `POST /control/reset` starts the loaded scenario over.
+
+The example's pytest fixture and one of its tests:
+
+```python
+@pytest.fixture
+def fake_llm():
+    token = os.environ.get("FAKE_LLM_CONTROL_TOKEN")
+    headers = {"authorization": f"Bearer {token}"} if token else {}
+    with httpx.Client(base_url=os.environ["FAKE_LLM_URL"], headers=headers) as control:
+        yield control
+        control.post("/control/unload").raise_for_status()
+
+
+def test_greets_by_name(fake_llm):
+    load(fake_llm, {"name": "greeting"})
+
+    assert greet("Ada") == "Hello, Ada."
+
+    [call] = calls(fake_llm)
+    assert call["outcome"] == "text"
+    assert call["promptSample"] == "Greet Ada.\n"
+```
+
+`load` posts the body to `POST /control/scenario` and checks for HTTP 200, and `calls` returns `GET /control/calls`. The same requests work from any language with an HTTP client; from Kotlin or Java, [`FakeLlmClient`](#control-api-client) makes them. One server has one scenario and one call log, so tests that run in parallel against it interleave their calls: run them one at a time, or give each parallel worker its own server.
+
+### Other CI systems
+
+Where the CI system can run `docker`, start the image in a step after the checkout. Arguments and volumes then work as in any `docker run`. The files must be readable by the image's user, UID 10001:
+
+```bash
+docker run -d --name fake-llm -p 8080:8080 \
+  -v "$PWD/tests/scenarios:/scenarios:ro" \
+  ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario-dir /scenarios
+for _ in $(seq 30); do
+  curl -fsS http://127.0.0.1:8080/health > /dev/null && break
+  sleep 1
+done
+curl -fsS http://127.0.0.1:8080/health
+```
 
 ## Scenarios
 
@@ -767,6 +866,7 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
   Drop `--offline` to check links to other sites too.
 - **The HTTP API is spec-first.** [openapi/fake-llm.yaml](openapi/fake-llm.yaml) is the hand-written contract, and a change to the control API starts there. `OpenApiConformanceTest` runs every control route, `/health` and `/openapi` against a real server, and fails when a status, header or body differs from the spec, when a response has a field the spec doesn't document, or when a status the spec documents is never exercised. It also checks every scenario file in the repository against the spec's scenario format. CI's `lint` job validates the spec itself with [Redocly](https://redocly.com/docs/cli/) (`recommended-strict`, configured in `redocly.yaml`; a rule exempted for one location is listed in `.redocly.lint-ignore.yaml` with its reason). Locally, from the repository root: `docker run --rm -v "$PWD:/repo" -w /repo "$(sed -n 's/^FROM //p' .github/linters/redocly.Dockerfile)" lint openapi/fake-llm.yaml`. lychee checks only the Markdown files, so the provider links in the spec are not link-checked.
 - **The conformance suite** in [conformance/](conformance/README.md) defines the server's HTTP behaviour as JSON cases, for this server and for any other implementation. CI's `conformance` job runs it against the fat jar and the Docker image built from the same commit; locally, `./gradlew shadowJar :fake-llm-conformance:test -Pfakellm.command="java -jar build/libs/fake-llm-all.jar"`. A change to HTTP behaviour comes with a case. CI's `conformance` job also runs the official Python SDKs against the same jar and image (see [conformance/README.md](conformance/README.md#sdk-suite)), and the `SDK latest` workflow runs them daily against their newest releases.
+- **The CI recipe** in [examples/github-actions/fake-llm-tests.yml](examples/github-actions/fake-llm-tests.yml) (see [Run in CI](#run-in-ci)) is run by CI's `recipe` job against the image built from the same commit. A service container's image is pulled when the job starts, before any step could build it, so the job starts the image with `docker run`, with the example's service `env`, `ports` and `options`, and waits for its health check as the runner does. It then runs the example's `Copy the scenarios into fake-llm` and `Run the tests` steps with the example job's `env`. It checks that the example pins an `X.Y.Z` tag, and it installs the SDK suite's pinned lock instead of running the example's unpinned install step. CI's `lint` job runs actionlint on the example too.
 - Commits that only reformat code are listed in `.git-blame-ignore-revs`, which GitHub's blame view honours; locally, run `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 
 ### Dependency updates
@@ -777,6 +877,7 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 - A Kotlin or kotlinx-serialization bump can change the generated members in `api/fake-llm.api`; see [Public API](#public-api) for the `apiDump` step. A bump that adds a compiler warning or lowers coverage is fixed on its pull request; the [quality gates](#quality-gates) are not lowered to let it through.
 - `main` only accepts branches that are up to date with it, so merge Dependabot pull requests one at a time. After each merge, comment `@dependabot rebase` on the next one; otherwise Dependabot only rebases it on its next weekly run. Once anyone pushes a commit to a Dependabot branch, such as an `apiDump`, Dependabot stops rebasing it: bring it up to date with "Update branch" instead. `@dependabot recreate` rebuilds the pull request from scratch and discards pushed commits.
 - Actions are pinned to a full commit SHA with the release in a trailing comment (`uses: actions/checkout@<sha> # v4.4.0`), and base images to a digest (`eclipse-temurin:21-jdk@sha256:...`). Keep that form when editing by hand; Dependabot updates both. Java major versions of the base images are ignored on purpose: the images stay on Java 21, the supported minimum ([#39](https://github.com/davidjones-griz/fake-llm/issues/39)), and newer Java versions are tested by CI's `java25` job instead. When a newer LTS becomes the one to test, rename that job and its required check.
+- The CI recipe example, `examples/github-actions/fake-llm-tests.yml`, names its actions by major tag (`actions/checkout@v7`), not by SHA, because it is written for copying and Dependabot updates only the workflows in `.github/workflows/`. Move its majors by hand with the ones in `ci.yml`. actionlint, which CI runs on it, fails on an action whose runtime GitHub no longer supports.
 - The linter images (actionlint, hadolint, lychee and Redocly) are updated in a group of their own, tag and digest together. A new release can bring new findings; fix them on that pull request rather than adding exceptions to get it through.
 - The ktlint version itself (`ktlintVersion` in `gradle.properties`) is not visible to Dependabot. Raise it by hand when a new ktlint release comes out, run `./gradlew ktlintFormat` and `./gradlew -p examples ktlintFormat`, and commit any reformatting separately, adding that commit to `.git-blame-ignore-revs`.
 - CI's `gradle/actions/setup-gradle` and the dependency submission workflow's `gradle/actions/dependency-submission` use `cache-provider: basic`, the MIT-licensed cache built on GitHub's `actions/cache`. From v6 the action defaults to "enhanced" caching, a proprietary component under separate Gradle terms; keeping CI entirely open-source matters more here than its speed-up on a small build. Keep the setting in both when Dependabot updates the actions.
@@ -789,12 +890,12 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 
 A release is published from a `vX.Y.Z` tag on `main` by the [Release](.github/workflows/release.yml) workflow.
 
-1. In a pull request, set `version` in `gradle.properties` and `info.version` in `openapi/fake-llm.yaml` to `X.Y.Z` (a test checks that the two match), and change the CHANGELOG heading from `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`.
+1. In a pull request, set `version` in `gradle.properties` and `info.version` in `openapi/fake-llm.yaml` to `X.Y.Z` (a test checks that the two match), change the CHANGELOG heading from `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, and move every `ghcr.io/davidjones-griz/fake-llm:` tag in `README.md` and the service image in `examples/github-actions/fake-llm-tests.yml` to `X.Y.Z`.
 2. After it merges, tag the merge commit and push the tag: `git tag vX.Y.Z <merge commit> && git push origin vX.Y.Z`.
 
 The workflow then runs four jobs:
 
-- `verify` fails unless the tag is on `main`, matches `version` in `gradle.properties`, and has a dated CHANGELOG heading. It extracts that CHANGELOG section as the release notes, then builds and tests as CI does: the build, `examples/`, and the HTTP conformance suite against the fat jar.
+- `verify` fails unless the tag is on `main`, matches `version` in `gradle.properties`, and has a dated CHANGELOG heading, and unless `README.md` and the CI recipe name the image only as `X.Y.Z`. It extracts that CHANGELOG section as the release notes, then builds and tests as CI does: the build, `examples/`, and the HTTP conformance suite against the fat jar.
 - `image` builds the image for linux/amd64 and linux/arm64, pushes it to `ghcr.io/davidjones-griz/fake-llm` by digest only, and checks `GET /health` on each platform. Only then does it tag it `X.Y.Z`, `X.Y` and `latest`.
 - `maven` runs after `image`, because a Maven Central publish cannot be undone. It signs both artifacts, checks that every file in the bundle is signed, uploads the bundle to the Central Portal, and waits up to 30 minutes for it to publish. It needs four repository secrets: `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD` (a Central Portal user token), `SIGNING_KEY` (the ASCII-armored private key) and `SIGNING_KEY_PASSWORD`. If any is missing, the job passes with a "Maven Central skipped" notice in its log and summary, and the image and GitHub Release are still published.
 - `release` creates the GitHub Release `vX.Y.Z` with the release notes, the fat jar and its `.sha256`. It runs only when the other three jobs succeeded.

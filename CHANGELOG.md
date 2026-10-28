@@ -12,6 +12,10 @@ change the public API.
 - `POST /control/unload` and `FakeLlmClient.unload()`: remove the loaded scenario and empty the
   call log and the exchange log, as `ScenarioEngine.unload()` does, so a test that reaches the
   server over HTTP can return it to having no scenario loaded.
+- A CI recipe: `examples/github-actions/fake-llm-tests.yml` runs fake-llm as a GitHub Actions
+  service container beside an app's tests, which load a scenario per test, check the call log and
+  unload afterwards. "Run in CI" in the README describes it, with a `docker run` step for other CI
+  systems. This repository's CI runs the recipe against the image built from each commit.
 
 ## [0.4.0] - 2026-10-27
 
