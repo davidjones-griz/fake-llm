@@ -166,8 +166,8 @@ public final class com/davidjonesgriz/fakellm/ExchangeResponse$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
-public final class com/davidjonesgriz/fakellm/FakeLlmAppKt {
-	public static final fun main ([Ljava/lang/String;)V
+public final class com/davidjonesgriz/fakellm/FakeLlm {
+	public static final fun startFakeLlmServer (ILcom/davidjonesgriz/fakellm/ScenarioEngine;)Lcom/davidjonesgriz/fakellm/FakeLlmServer;
 	public static final fun startFakeLlmServer (ILcom/davidjonesgriz/fakellm/ScenarioEngine;Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/FakeLlmServer;
 	public static synthetic fun startFakeLlmServer$default (ILcom/davidjonesgriz/fakellm/ScenarioEngine;Ljava/lang/String;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/FakeLlmServer;
 }
@@ -219,6 +219,10 @@ public final class com/davidjonesgriz/fakellm/FakeLlmHealth$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
+public final class com/davidjonesgriz/fakellm/FakeLlmMain {
+	public static final fun main ([Ljava/lang/String;)V
+}
+
 public final class com/davidjonesgriz/fakellm/FakeLlmServer : java/lang/AutoCloseable {
 	public fun close ()V
 	public final fun getBaseUrl ()Ljava/lang/String;
@@ -236,6 +240,7 @@ public final class com/davidjonesgriz/fakellm/Scenario {
 	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/Scenario;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public fun equals (Ljava/lang/Object;)Z
+	public static final fun fromJson (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public final fun getDescription ()Ljava/lang/String;
 	public final fun getName ()Ljava/lang/String;
 	public final fun getSteps ()Ljava/util/List;
@@ -255,6 +260,7 @@ public final synthetic class com/davidjonesgriz/fakellm/Scenario$$serializer : k
 }
 
 public final class com/davidjonesgriz/fakellm/Scenario$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 

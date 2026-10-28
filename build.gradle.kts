@@ -39,7 +39,7 @@ java {
 }
 
 application {
-    mainClass.set("com.davidjonesgriz.fakellm.FakeLlmAppKt")
+    mainClass.set("com.davidjonesgriz.fakellm.FakeLlmMain")
 }
 
 dependencies {

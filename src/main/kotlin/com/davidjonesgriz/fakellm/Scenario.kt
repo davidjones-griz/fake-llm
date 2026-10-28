@@ -31,6 +31,21 @@ public data class Scenario(
     init {
         require(steps.isNotEmpty()) { "scenario '$name' has no steps" }
     }
+
+    public companion object {
+        /**
+         * Decodes [text], one scenario in the scenario file format, with the checks and messages of
+         * an inline load (`POST /control/scenario` with `{"scenario": …}`): an unknown field is an
+         * error, a top-level `$schema` string is ignored, and a failing step is named by its 1-based
+         * number. Unlike a load by name, the scenario's `name` need not match a file name. From
+         * Java, `Scenario.fromJson(text)`.
+         *
+         * @throws IllegalArgumentException when [text] is not JSON or not a valid scenario. The
+         *   message text is diagnostic, not part of the API.
+         */
+        @JvmStatic
+        public fun fromJson(text: String): Scenario = ScenarioLoader.decode(ScenarioShape.parse(Json, text))
+    }
 }
 
 /**

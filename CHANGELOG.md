@@ -5,6 +5,22 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0, a minor version may
 change the public API.
 
+## [Unreleased]
+
+### Added
+
+- `Scenario.fromJson(text)`: decodes a scenario written in the scenario file format, with the
+  checks and messages of an inline load, so Java code can build a scenario from a text block.
+- From Java, `FakeLlm.startFakeLlmServer(port, engine)` without the control token argument, which
+  reads `FAKE_LLM_CONTROL_TOKEN` as the Kotlin default does.
+
+### Changed
+
+- From Java, `startFakeLlmServer` is a static method of `FakeLlm` instead of `FakeLlmAppKt`, and
+  `main` is in `FakeLlmMain`, now the fat jar's `Main-Class`. Kotlin source needs no change, but
+  code compiled against an earlier version must be recompiled, and `fake-llm-junit-jupiter` must
+  be the same version as `fake-llm`.
+
 ## [0.5.0] - 2026-10-28
 
 ### Added

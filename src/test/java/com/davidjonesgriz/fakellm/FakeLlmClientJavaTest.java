@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 class FakeLlmClientJavaTest {
     @Test
     void loadsReadsAndResetsFromJava() {
-        try (FakeLlmServer server = FakeLlmAppKt.startFakeLlmServer(0, new ScenarioEngine(), null);
+        try (FakeLlmServer server = FakeLlm.startFakeLlmServer(0, new ScenarioEngine(), null);
                 FakeLlmClient client = new FakeLlmClient(server.getBaseUrl())) {
             client.load("hello");
             assertEquals("hello", client.health().getScenario());

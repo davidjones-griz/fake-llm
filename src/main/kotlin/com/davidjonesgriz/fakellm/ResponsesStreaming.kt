@@ -13,7 +13,7 @@ import kotlinx.serialization.json.put
 
 /**
  * `POST /openai/v1/responses`: a streamed request is answered by [streamOpenAiResponse], any other
- * by one JSON `Response`. It lives here, not in FakeLlmApp.kt, which is at detekt's function limit.
+ * by one JSON `Response`. The other vendor handlers are in VendorHandlers.kt.
  */
 internal fun handleOpenAiResponses(
     ex: HttpExchange,

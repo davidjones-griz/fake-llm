@@ -1,17 +1,16 @@
+@file:JvmName("FakeLlmMain")
+
 package com.davidjonesgriz.fakellm
 
-import com.sun.net.httpserver.HttpExchange
-import com.sun.net.httpserver.HttpServer
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 import kotlin.system.exitProcess
 
 /**
- * Command-line entry point, used by `java -jar` and the Docker image. The JVM requires it to be
- * public, so it is listed in `api/fake-llm.api`, but it is not meant for library use: code that
- * embeds the server calls [startFakeLlmServer] instead.
+ * Command-line entry point, used by `java -jar` and the Docker image, in the class `FakeLlmMain`.
+ * The JVM requires it to be public, so it is listed in `api/fake-llm.api`, but it is not meant for
+ * library use: code that embeds the server calls [startFakeLlmServer] instead, which is in the class
+ * `FakeLlm`.
  *
  * Deterministic, scenario-driven stand-in for vendor LLM HTTP APIs. Clients send each vendor's
  * usual JSON to this server, and the loaded scenario's steps answer the calls in order.
@@ -93,157 +92,7 @@ public fun main(args: Array<String>) {
     Runtime.getRuntime().addShutdownHook(Thread { server.close() })
 }
 
-/**
- * Starts a server in this process, serving [engine]. Pass `port = 0` for an ephemeral port and
- * read it back from [FakeLlmServer.port]. When [controlToken] is non-null, every `/control/` route
- * requires `Authorization: Bearer <token>`; null leaves them open. The default reads the
- * `FAKE_LLM_CONTROL_TOKEN` environment variable, or the system property of the same name when the
- * variable is absent, so pass `null` explicitly for a server that ignores the environment.
- */
-public fun startFakeLlmServer(
-    port: Int,
-    engine: ScenarioEngine,
-    controlToken: String? = readControlToken(),
-): FakeLlmServer {
-    val server = createFakeLlmHttpServer(port)
-    val executor = Executors.newFixedThreadPool(HTTP_THREADS)
-    server.createContext("/") { ex -> route(ex, engine, controlToken) }
-    server.executor = executor
-    server.start()
-    return FakeLlmServer(server, executor, engine)
-}
-
-/**
- * A running server from [startFakeLlmServer]. Load scenarios and read the call log through
- * [engine], or over HTTP at [baseUrl]. [close] stops the listener and its handler threads.
- */
-public class FakeLlmServer internal constructor(
-    private val server: HttpServer,
-    private val executor: ExecutorService,
-    public val engine: ScenarioEngine,
-) : AutoCloseable {
-    /** The bound port. With `port = 0` this is the ephemeral port the OS chose. */
-    public val port: Int = server.address.port
-
-    /**
-     * `http://127.0.0.1:<port>`. Vendor SDK base URLs append `/anthropic`, `/openai/v1`, or
-     * `/gemini/`.
-     */
-    public val baseUrl: String = "http://127.0.0.1:$port"
-
-    override fun close() {
-        server.stop(0)
-        executor.shutdownNow()
-    }
-}
-
-internal fun handleMessages(
-    ex: HttpExchange,
-    engine: ScenarioEngine,
-) {
-    val body = ex.requestBody.readBytes().decodeToString()
-    val parsed = parseAnthropicRequest(body)
-    if (parsed.stream) {
-        streamAnthropicMessages(ex, engine, parsed)
-    } else {
-        respondFake(ex, engine.handle(vendor = "anthropic", req = parsed, capture = ex.exchangeCapture()))
-    }
-}
-
-internal fun handleOpenAi(
-    ex: HttpExchange,
-    engine: ScenarioEngine,
-) {
-    val body = ex.requestBody.readBytes().decodeToString()
-    val parsed = parseOpenAiRequest(body)
-    if (parsed.stream) {
-        streamOpenAiChatCompletion(ex, engine, parsed)
-    } else {
-        respondFake(ex, engine.handle(vendor = "openai", req = parsed, capture = ex.exchangeCapture()))
-    }
-}
-
-internal fun handleGemini(
-    ex: HttpExchange,
-    engine: ScenarioEngine,
-    path: String,
-) {
-    val body = ex.requestBody.readBytes().decodeToString()
-    val streamed = path.endsWith(":streamGenerateContent")
-    require(!streamed || geminiAltSse(ex.requestURI.rawQuery)) { GEMINI_STREAM_NEEDS_ALT_SSE }
-    val parsed = parseGeminiRequest(body, geminiModelFromPath(path), stream = streamed)
-    if (streamed) {
-        streamGeminiGenerateContent(ex, engine, parsed)
-    } else {
-        respondFake(ex, engine.handle(vendor = "gemini", req = parsed, capture = ex.exchangeCapture()))
-    }
-}
-
-/**
- * SSE variant of [handleMessages]. Takes the call's number and step through the same
- * [ScenarioEngine.resolve] that [ScenarioEngine.handle] uses, so the call log records the request
- * once whichever transport answers it.
- *
- * A reply step is written as Anthropic's SSE sequence: the thinking block, the text block, then
- * one `tool_use` block per tool call, whose argument text is sent as `input_json_delta` pieces
- * (`rawArguments` verbatim), with `stop_reason` `tool_use` when there are tool calls. An error step whose
- * [Step.streamErrorAfterChunks] is null is a plain HTTP error, and no SSE bytes are written
- * first: that is how a provider rejects before generation starts (the usual timing for rate-limit
- * and overload errors). Setting [Step.streamErrorAfterChunks] opts into the other timing — some
- * text deltas, then an in-stream `event: error`. The "no more steps" and "no scenario loaded" 400s
- * are that same plain HTTP error: [ScenarioEngine.resolve] returns them as error steps with
- * [Step.streamErrorAfterChunks] unset, and the branch below returns before any SSE bytes.
- * [Step.firstByteDelayMs] is waited out first, before any bytes.
- */
-private fun streamAnthropicMessages(
-    ex: HttpExchange,
-    engine: ScenarioEngine,
-    req: ParsedRequest,
-) {
-    val resolution = engine.resolve(vendor = "anthropic", req = req, capture = ex.exchangeCapture())
-    val step = resolution.step
-    pauseBeforeFirstByte(step)
-    val error = step.error
-    if (error != null && step.streamErrorAfterChunks == null) {
-        respond(ex, error.status, error.body, error.headers)
-        return
-    }
-    val out = startEventStream(ex)
-    try {
-        writeSse(out, "message_start", messageStartJson(resolution.seq, req.model, req.hasCacheBreakpoint))
-        if (error != null) {
-            writeSse(out, "content_block_start", contentBlockStartJson())
-            val prefix = errorPrefixChunks(step.streamErrorAfterChunks!!, step.streamChunkChars)
-            emitDeltas(out, prefix, step.streamInterChunkDelayMs)
-            writeSse(out, "error", error.body.ifBlank { GENERIC_STREAM_ERROR_BODY })
-        } else {
-            var index = 0
-            step.thinking?.let { thinking ->
-                writeSse(out, "content_block_start", thinkingBlockStartJson(index))
-                emitThinkingDeltas(out, chunkText(thinking, step.streamChunkChars), step.streamInterChunkDelayMs, index)
-                writeSse(out, "content_block_delta", signatureDeltaJson(FAKE_THINKING_SIGNATURE, index))
-                writeSse(out, "content_block_stop", contentBlockStopJson(index++))
-            }
-            step.text?.let { text ->
-                writeSse(out, "content_block_start", contentBlockStartJson(index))
-                emitDeltas(out, chunkText(text, step.streamChunkChars), step.streamInterChunkDelayMs, index)
-                writeSse(out, "content_block_stop", contentBlockStopJson(index++))
-            }
-            sentToolCalls("anthropic", step, resolution.seq).forEach { call ->
-                writeSse(out, "content_block_start", toolUseBlockStartJson(index, call.id!!, call.name))
-                emitInputJsonDeltas(out, chunkText(call.argumentText, step.streamChunkChars), step.streamInterChunkDelayMs, index)
-                writeSse(out, "content_block_stop", contentBlockStopJson(index++))
-            }
-            writeSse(out, "message_delta", messageDeltaJson(if (step.toolCalls == null) step.stopReason else "tool_use"))
-            writeSse(out, "message_stop", messageStopJson())
-        }
-    } finally {
-        out.close()
-    }
-}
-
 private const val DEFAULT_PORT = "8080"
-private const val HTTP_THREADS = 16
 private const val MAX_PORT = 65535
 
 internal class StartupUsageException(
