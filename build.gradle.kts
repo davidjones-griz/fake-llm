@@ -96,8 +96,10 @@ detekt {
 // Coverage floors: raise them when coverage rises; never lower one without a reason in the PR.
 // The README's Development section quotes these values; update it with them.
 // The junit-jupiter module reads the same floors from here.
-val lineCoverageFloor by extra(95)
-val branchCoverageFloor by extra(65)
+val lineCoverageFloor = 95
+val branchCoverageFloor = 65
+extra["lineCoverageFloor"] = lineCoverageFloor
+extra["branchCoverageFloor"] = branchCoverageFloor
 
 kover {
     reports {
@@ -110,6 +112,9 @@ kover {
 
 tasks.shadowJar {
     archiveFileName.set("fake-llm-all.jar")
+    // Shadow's Kotlin module transformer only sees the duplicates that are let through, so these
+    // files skip the default EXCLUDE strategy. Every other path keeps it.
+    filesMatching("META-INF/*.kotlin_module") { duplicatesStrategy = DuplicatesStrategy.INCLUDE }
 }
 
 publishing {

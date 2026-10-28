@@ -88,8 +88,8 @@ detekt {
 }
 
 // The same floors as the root build, read from there.
-val lineCoverageFloor: Int by rootProject.extra
-val branchCoverageFloor: Int by rootProject.extra
+val lineCoverageFloor = rootProject.extra["lineCoverageFloor"] as Int
+val branchCoverageFloor = rootProject.extra["branchCoverageFloor"] as Int
 
 kover {
     reports {
