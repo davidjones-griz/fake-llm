@@ -210,9 +210,11 @@ jobs:
           port_lines=$(yq "$service.ports[] | \"--publish=\" + ." "$EXAMPLE")
           # The options are docker create flags; xargs splits them on spaces outside quotes.
           option_lines=$(yq "$service.options" "$EXAMPLE" | xargs printf '%s\n')
-          mapfile -t env_args <<< "$env_lines"
-          mapfile -t port_args <<< "$port_lines"
-          mapfile -t options <<< "$option_lines"
+          # An empty list stays empty: mapfile would read "" as one empty argument.
+          env_args=() port_args=() options=()
+          [ -z "$env_lines" ] || mapfile -t env_args <<< "$env_lines"
+          [ -z "$port_lines" ] || mapfile -t port_args <<< "$port_lines"
+          [ -z "$option_lines" ] || mapfile -t options <<< "$option_lines"
           docker run -d --name fake-llm-recipe "${env_args[@]}" "${port_args[@]}" "${options[@]}" fake-llm:ci
           # The runner waits for a service the same way, and fails the job when it is unhealthy.
           deadline=$((SECONDS + 90))
