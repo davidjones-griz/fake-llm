@@ -185,6 +185,7 @@ public final class com/davidjonesgriz/fakellm/FakeLlmClient : java/lang/AutoClos
 	public final fun loadInline (Lcom/davidjonesgriz/fakellm/Scenario;)V
 	public final fun reset ()V
 	public final fun scenarioNames ()Ljava/util/List;
+	public final fun unload ()V
 }
 
 public final class com/davidjonesgriz/fakellm/FakeLlmClientException : java/lang/RuntimeException {

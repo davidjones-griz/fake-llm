@@ -5,10 +5,11 @@ import com.sun.net.httpserver.HttpExchange
 /**
  * Bearer-token gate for the control API.
  *
- * When a token is configured, every path under `/control/` (load a scenario, reset, read the call
- * log) requires `Authorization: Bearer <token>`. `/health` stays open: [needsControlAuth] is a
- * strict path-prefix check, and `/health` does not start with `/control/`, so it stays ungated
- * even though [controlRoute] dispatches it next to the control handlers.
+ * When a token is configured, every path under `/control/` (load or unload a scenario, reset,
+ * read the call and exchange logs) requires `Authorization: Bearer <token>`. `/health` stays
+ * open: [needsControlAuth] is a strict path-prefix check, and `/health` does not start with
+ * `/control/`, so it stays ungated even though [controlRoute] dispatches it next to the control
+ * handlers.
  */
 private const val CONTROL_TOKEN_VAR = "FAKE_LLM_CONTROL_TOKEN"
 

@@ -60,7 +60,7 @@ tags:
   - name: health
     description: Liveness and the loaded scenario.
   - name: control
-    description: Load scenarios, reset state, and read the call log and the exchange log.
+    description: Load and unload scenarios, reset state, and read the call log and the exchange log.
   - name: vendor
     description: Stand-ins for the providers' HTTP APIs, driven by the loaded scenario.
 paths:
@@ -179,6 +179,29 @@ paths:
                 $ref: "#/components/schemas/ResetResult"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /control/unload:
+    post:
+      tags: [control]
+      operationId: unloadScenario
+      summary: Remove the loaded scenario
+      description: |
+        Removes the loaded scenario and empties the call log and the exchange log; the next call
+        is call 1. Until a scenario is loaded again, a call gets `NoScenarioError` (400), or the
+        canned reply when the server is lenient, and `GET /health` reports `"scenario": null`.
+        With no scenario loaded, it succeeds, and still empties both logs and restarts
+        numbering. The request body is ignored.
+      security:
+        - controlToken: []
+        - {}
+      responses:
+        "200":
+          description: No scenario is loaded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnloadResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /control/calls:
     get:
       tags: [control]
@@ -189,7 +212,7 @@ paths:
         - {}
       responses:
         "200":
-          description: The calls since the last load or reset, in `seq` order.
+          description: The calls since the last load, reset or unload, in `seq` order.
           content:
             application/json:
               schema:
@@ -204,7 +227,7 @@ paths:
       operationId: listExchanges
       summary: Read each call's request and response, in call order
       description: |
-        One entry per call since the last load or reset, in `seq` order, matching
+        One entry per call since the last load, reset or unload, in `seq` order, matching
         `GET /control/calls` entry for entry: the request as fake-llm received it and the response
         as fake-llm wrote it, byte for byte, including a whole SSE stream. The values of the
         `authorization`, `proxy-authorization`, `x-api-key`, `x-goog-api-key` and `api-key`
@@ -215,7 +238,7 @@ paths:
         - {}
       responses:
         "200":
-          description: The exchanges since the last load or reset, in `seq` order.
+          description: The exchanges since the last load, reset or unload, in `seq` order.
           content:
             application/json:
               schema:
@@ -573,6 +596,13 @@ components:
         reset:
           type: boolean
           const: true
+    UnloadResult:
+      type: object
+      required: [unloaded]
+      properties:
+        unloaded:
+          type: boolean
+          const: true
     CallRecord:
       type: object
       description: One call.
@@ -595,7 +625,7 @@ components:
           type: integer
           minimum: 1
           maximum: 9223372036854775807
-          description: The call's number since the last load or reset, from 1.
+          description: The call's number since the last load, reset or unload, from 1.
         step:
           type: [integer, "null"]
           minimum: 1
@@ -855,7 +885,7 @@ components:
       type: integer
       minimum: 1
       maximum: 9223372036854775807
-      description: The call's number since the last load or reset, as `seq` in the call log.
+      description: The call's number since the last load, reset or unload, as `seq` in the call log.
     Vendor:
       type: string
       enum: [anthropic, openai, openai-responses, gemini]

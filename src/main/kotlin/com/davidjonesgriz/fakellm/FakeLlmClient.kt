@@ -84,6 +84,16 @@ public class FakeLlmClient
             send("POST", "/control/reset")
         }
 
+        /**
+         * `POST /control/unload`: removes the server's scenario and empties its call and exchange logs,
+         * as [ScenarioEngine.unload] does; the next call is call 1. Calls then get the strict-mode 400,
+         * or the canned reply on a lenient server. A server older than 0.5.0 has no such route, and
+         * this throws with status 404.
+         */
+        public fun unload() {
+            send("POST", "/control/unload")
+        }
+
         /** `GET /control/calls`: the server's call log, oldest first. */
         public fun calls(): List<CallRecord> = get("/control/calls", ListSerializer(CallRecord.serializer()))
 
@@ -95,22 +105,10 @@ public class FakeLlmClient
             http.close()
         }
 
-        private fun <T> get(
-            path: String,
-            deserializer: DeserializationStrategy<T>,
-        ): T {
-            val response = send("GET", path)
-            return try {
-                responseJson.decodeFromString(deserializer, response.body())
-            } catch (e: SerializationException) {
-                throw undecodableResponse("GET", path, response.statusCode(), response.body(), e)
-            }
-        }
-
         /**
          * Sends one request and returns the response. A non-2xx status throws. If the thread is
-         * interrupted, the request may already have reached the server, so an interrupted [load] or
-         * [reset] may still have taken effect.
+         * interrupted, the request may already have reached the server, so an interrupted [load],
+         * [reset] or [unload] may still have taken effect.
          */
         @Suppress("ThrowsCount") // two transport failures and the status failure
         internal fun send(
@@ -140,6 +138,19 @@ public class FakeLlmClient
             return response
         }
     }
+
+/** `GET` [path] and decode the body with [deserializer]. A body that does not decode throws. */
+private fun <T> FakeLlmClient.get(
+    path: String,
+    deserializer: DeserializationStrategy<T>,
+): T {
+    val response = send("GET", path)
+    return try {
+        responseJson.decodeFromString(deserializer, response.body())
+    } catch (e: SerializationException) {
+        throw undecodableResponse("GET", path, response.statusCode(), response.body(), e)
+    }
+}
 
 /**
  * A failed [FakeLlmClient] call. [statusCode] is the HTTP status, or null when no response arrived

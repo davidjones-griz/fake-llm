@@ -48,6 +48,8 @@ import kotlin.system.exitProcess
  *  - `GET /control/scenarios` — `{"scenarios": [names]}` from the directory and the indexes.
  *  - `POST /control/reset` — start the loaded scenario over: empty call and exchange logs, next call
  *    is call 1.
+ *  - `POST /control/unload` — remove the loaded scenario: empty call and exchange logs, next call
+ *    is call 1, and calls get the no-scenario 400 (or the canned reply when lenient).
  *  - `GET /control/calls` — the call log.
  *  - `GET /control/exchanges` — each call's request as received (auth header values and a `key`
  *    query parameter redacted) and response as written, in call order.
