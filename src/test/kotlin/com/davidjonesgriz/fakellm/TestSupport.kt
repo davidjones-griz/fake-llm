@@ -212,6 +212,7 @@ internal val scenarioDirectories =
         "examples/src/test/resources/scenarios",
         "examples/src/test/scenarios",
         "junit-jupiter/src/test/fixture-scenarios",
+        "examples/github-actions/scenarios",
     )
 
 private const val MIN_SCENARIO_FILES = 12

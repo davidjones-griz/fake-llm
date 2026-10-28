@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  # Lints the workflows (actionlint, with shellcheck for run: scripts), the Dockerfile (hadolint),
-  # the OpenAPI spec (Redocly) and the links inside the repository (lychee, offline; external
-  # links are checked weekly by links.yml). Each tool runs from the image pinned in
-  # .github/linters/, which Dependabot updates.
+  # Lints the workflows and the CI recipe example (actionlint, with shellcheck for run: scripts),
+  # the Dockerfile (hadolint), the OpenAPI spec (Redocly) and the links inside the repository
+  # (lychee, offline; external links are checked weekly by links.yml). Each tool runs from the
+  # image pinned in .github/linters/, which Dependabot updates.
   # Every step runs even when an earlier one failed, so one run reports every finding.
   lint:
     runs-on: ubuntu-latest
@@ -24,7 +24,11 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |
           img=$(sed -n 's/^FROM //p' .github/linters/actionlint.Dockerfile)
-          docker run --rm -v "$PWD:/repo" -w /repo "$img" -color
+          rc=0
+          docker run --rm -v "$PWD:/repo" -w /repo "$img" -color || rc=$?
+          # A workflow outside .github/workflows/ is linted only when named: the CI recipe example.
+          docker run --rm -v "$PWD:/repo" -w /repo "$img" -color examples/github-actions/fake-llm-tests.yml || rc=$?
+          exit "$rc"
       - name: hadolint
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         run: |
@@ -176,6 +180,91 @@ jobs:
           cat "$RUNNER_TEMP/validate.err"
           [ "$rc" -eq 1 ]
           grep -q "misspelt.json: step 2: \$.steps\[1\]: unknown field 'stopReasn'" "$RUNNER_TEMP/validate.err"
+
+  # Runs the CI recipe, examples/github-actions/fake-llm-tests.yml ("Run in CI" in README.md),
+  # against the image built from this commit. A service container's image must be in a registry
+  # when the job starts, so this job starts the image with docker run instead, with the example's
+  # service settings, and then runs the example's own test steps.
+  recipe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXAMPLE: examples/github-actions/fake-llm-tests.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the image
+        run: docker build -t fake-llm:ci .
+      - name: Start the image with the example's service settings
+        run: |
+          set -euo pipefail
+          service=.jobs.test.services.fake-llm
+          # The example pins a release tag: X.Y.Z, not latest or X.Y.
+          image=$(yq "$service.image" "$EXAMPLE")
+          if ! [[ "$image" =~ ^ghcr\.io/davidjones-griz/fake-llm:[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error file=$EXAMPLE::the service image is $image, not ghcr.io/davidjones-griz/fake-llm:X.Y.Z"
+            exit 1
+          fi
+          # Each list is read into a variable first, so a failing yq or xargs fails this step rather
+          # than leaving the arguments cut short (set -e doesn't see inside a process substitution).
+          env_lines=$(yq "$service.env | to_entries | .[] | \"--env=\" + .key + \"=\" + .value" "$EXAMPLE")
+          port_lines=$(yq "$service.ports[] | \"--publish=\" + ." "$EXAMPLE")
+          # The options are docker create flags; xargs splits them on spaces outside quotes.
+          option_lines=$(yq "$service.options" "$EXAMPLE" | xargs printf '%s\n')
+          # An empty list stays empty: mapfile would read "" as one empty argument.
+          env_args=() port_args=() options=()
+          [ -z "$env_lines" ] || mapfile -t env_args <<< "$env_lines"
+          [ -z "$port_lines" ] || mapfile -t port_args <<< "$port_lines"
+          [ -z "$option_lines" ] || mapfile -t options <<< "$option_lines"
+          docker run -d --name fake-llm-recipe "${env_args[@]}" "${port_args[@]}" "${options[@]}" fake-llm:ci
+          # The runner waits for a service the same way, and fails the job when it is unhealthy.
+          deadline=$((SECONDS + 90))
+          while :; do
+            status=$(docker inspect -f '{{.State.Health.Status}}' fake-llm-recipe)
+            if [ "$status" = healthy ]; then
+              break
+            fi
+            if [ "$status" = unhealthy ] || [ "$SECONDS" -ge "$deadline" ]; then
+              docker logs fake-llm-recipe
+              echo "::error file=$EXAMPLE::the service's health check did not pass (status: $status)"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "fake-llm-recipe is healthy"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: conformance/sdk/python/.python-version
+          cache: pip
+          cache-dependency-path: conformance/sdk/python/requirements.txt
+      # The SDK suite's hash-pinned lock has the example's dependencies (anthropic, httpx, pytest).
+      # The example's own install step is unpinned, for copying, so it is not run here.
+      - name: Install the test dependencies
+        run: python -m pip install --require-hashes -r conformance/sdk/python/requirements.txt
+      - name: Run the example's test steps
+        run: |
+          set -euo pipefail
+          # The job's env, as the runner sets it for every step, and the service's container.
+          while IFS= read -r line; do
+            export "${line?}"
+          done < <(yq '.jobs.test.env | to_entries | .[] | .key + "=" + .value' "$EXAMPLE")
+          export FAKE_LLM_CONTAINER=fake-llm-recipe
+          for step in "Copy the scenarios into fake-llm" "Run the tests"; do
+            script=$(STEP="$step" yq '.jobs.test.steps[] | select(.name == strenv(STEP)) | .run' "$EXAMPLE")
+            if [ -z "$script" ] || [ "$script" = null ]; then
+              echo "::error file=$EXAMPLE::no step named '$step' with a run script"
+              exit 1
+            fi
+            echo "::group::$step"
+            # The shell the runner uses for a run: step on Linux.
+            bash --noprofile --norc -eo pipefail -c "$script"
+            echo "::endgroup::"
+          done
+      - name: Show fake-llm's log
+        if: failure()
+        run: docker logs fake-llm-recipe
+      - name: Remove the container
+        if: always()
+        run: docker rm -f fake-llm-recipe > /dev/null 2>&1 || true
 
   # Runs the HTTP conformance suite (conformance/cases) and the SDK suite (conformance/sdk/python,
   # the official Python SDKs) against the fat jar and the Docker image, both built from this commit.

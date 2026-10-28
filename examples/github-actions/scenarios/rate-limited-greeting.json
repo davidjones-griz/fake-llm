@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
+  "name": "rate-limited-greeting",
+  "description": "A 429 with retry-after, then the greeting: the SDK's retry gets the second step.",
+  "steps": [
+    {
+      "error": {
+        "status": 429,
+        "body": "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}",
+        "headers": { "retry-after": "1" }
+      }
+    },
+    { "text": "Hello, Ada." }
+  ]
+}
