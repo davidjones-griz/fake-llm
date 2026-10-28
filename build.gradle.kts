@@ -57,7 +57,12 @@ tasks.test {
     inputs.dir("conformance/cases").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("conformanceCases")
     // The scenario JSON Schema and the scenario files the tests check against it and the spec.
     inputs.file("schema/scenario.schema.json").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("scenarioSchema")
-    listOf("examples/src/test/resources/scenarios", "examples/src/test/scenarios", "junit-jupiter/src/test/fixture-scenarios").forEach {
+    listOf(
+        "examples/src/test/resources/scenarios",
+        "examples/src/test/scenarios",
+        "junit-jupiter/src/test/fixture-scenarios",
+        "examples/github-actions/scenarios",
+    ).forEach {
         inputs.dir(it).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("scenarios:$it")
     }
 }

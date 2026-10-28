@@ -1,0 +1,6 @@
+{
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
+  "name": "greeting",
+  "description": "One step: the greeting the app returns.",
+  "steps": [{ "text": "Hello, Ada." }]
+}

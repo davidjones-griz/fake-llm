@@ -1,0 +1,64 @@
+# A GitHub Actions workflow that runs an app's tests against fake-llm as a service container.
+# Copy it to .github/workflows/ in your repository, and change the paths under
+# examples/github-actions/ to where your tests and scenarios are. See "Run in CI" in the fake-llm
+# README. fake-llm's own CI runs this file's service settings and test steps against the image
+# built from each commit.
+name: Tests with fake-llm
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      fake-llm:
+        # A release tag, not latest, so a new release can't change your tests' results unannounced.
+        # POST /control/unload, used between tests, needs 0.5.0 or later.
+        image: ghcr.io/davidjones-griz/fake-llm:0.5.0
+        ports:
+          - 8080:8080
+        # A service takes no command-line arguments, so fake-llm is configured by environment.
+        env:
+          # Read when a scenario is loaded by name, so it can be filled after the container starts.
+          FAKE_LLM_SCENARIO_DIR: /scenarios
+          # Optional. When set, every /control/ request must send it as a bearer token.
+          FAKE_LLM_CONTROL_TOKEN: fake-llm-ci-token
+        # The runner starts the steps once this check passes. curl is in the image.
+        options: >-
+          --health-cmd "curl -fsS http://127.0.0.1:8080/health"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      # The app's own Anthropic client reads these, so it talks to fake-llm with no code change.
+      ANTHROPIC_BASE_URL: http://localhost:8080/anthropic
+      ANTHROPIC_API_KEY: not-used
+      # Read by the tests, which load scenarios and check the call log over the control API.
+      FAKE_LLM_URL: http://localhost:8080
+      FAKE_LLM_CONTROL_TOKEN: fake-llm-ci-token
+    steps:
+      - uses: actions/checkout@v7
+      # A service's volumes are mounted before the checkout, so they can't show the repository's
+      # files. Copy the scenarios into the running container instead.
+      - name: Copy the scenarios into fake-llm
+        env:
+          FAKE_LLM_CONTAINER: ${{ job.services.fake-llm.id }}
+        run: docker cp examples/github-actions/scenarios/. "$FAKE_LLM_CONTAINER:/scenarios"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Install the test dependencies
+        run: python -m pip install anthropic httpx pytest
+      - name: Run the tests
+        run: python -m pytest examples/github-actions
+      - name: Show fake-llm's log
+        if: failure()
+        env:
+          FAKE_LLM_CONTAINER: ${{ job.services.fake-llm.id }}
+        run: docker logs "$FAKE_LLM_CONTAINER"
