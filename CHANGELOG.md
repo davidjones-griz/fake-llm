@@ -27,9 +27,13 @@ change the public API.
   a `fake_llm_scenario` marker that loads a scenario; and `FakeLlmClient`, a Python client for the
   control API with typed call records.
 - `ScenarioEngine.unusedSteps`: the steps of the loaded scenario that no call has used since the
-  last load or reset.
+  last load, reset or unload.
 - `@FakeLlmAllowUnusedSteps`, which turns off the JUnit extension's unused-steps check for a test
   or class.
+- `GET /health` reports the loaded scenario's `steps` and `unusedSteps`, the steps no call has used
+  since the last load, reset or unload, so a test that drives the server over HTTP can check that
+  its app made every scripted call. `FakeLlmHealth.steps` and `unusedSteps` read them (null from an
+  older server).
 
 ### Changed
 
