@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytest-fake-llm"
+# fake-llm's version: the plugin starts the image with this tag. A test checks it against gradle.properties.
+version = "0.5.0"
+description = "pytest fixtures for fake-llm: its Docker image or a running server, with a control API client."
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = ["pytest>=8"]
+classifiers = [
+    "Framework :: Pytest",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Source = "https://github.com/davidjones-griz/fake-llm"
+
+[project.entry-points.pytest11]
+fake_llm = "pytest_fake_llm.plugin"
+
+[tool.setuptools.package-data]
+pytest_fake_llm = ["py.typed"]
+
+[tool.pytest.ini_options]
+addopts = ["-p", "pytester"]
+testpaths = ["tests"]
+markers = ["docker: starts containers of its own, so it runs only when the session starts the image"]
