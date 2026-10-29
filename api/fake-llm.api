@@ -274,6 +274,7 @@ public final class com/davidjonesgriz/fakellm/ScenarioEngine {
 	public final fun exchanges ()Ljava/util/List;
 	public final fun getLenient ()Z
 	public final fun getScenarioDirectory ()Ljava/nio/file/Path;
+	public final fun getUnusedSteps ()Ljava/util/List;
 	public final fun load (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public final fun loadInline (Lcom/davidjonesgriz/fakellm/Scenario;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public final fun reset ()V

@@ -234,6 +234,39 @@ class ScenarioEngineTest {
     }
 
     @Test
+    fun `unusedSteps lists the steps no call has used yet, and starts over with the scenario`() {
+        val engine = engineWith(textScenario("one", "two", "three"))
+        assertEquals(listOf(1, 2, 3), engine.unusedSteps)
+        engine.text()
+        assertEquals(listOf(2, 3), engine.unusedSteps)
+        engine.text()
+        engine.text()
+        assertEquals(emptyList(), engine.unusedSteps)
+        engine.handle("anthropic", req())
+        assertEquals(emptyList(), engine.unusedSteps, "a call after the last step uses no step")
+
+        engine.reset()
+        assertEquals(listOf(1, 2, 3), engine.unusedSteps)
+        engine.unload()
+        assertEquals(emptyList(), engine.unusedSteps)
+        engine.handle("anthropic", req())
+        assertEquals(emptyList(), engine.unusedSteps, "no scenario, no steps")
+    }
+
+    @Test
+    fun `a request that is not a call uses no step`() {
+        val engine =
+            engineWith(
+                Scenario(
+                    name = "raw",
+                    steps = listOf(Step(toolCalls = listOf(ToolCall(name = "f", rawArguments = "{"))), Step(text = "two")),
+                ),
+            )
+        assertFailsWith<IllegalArgumentException> { engine.handle("gemini", req()) }
+        assertEquals(listOf(1, 2), engine.unusedSteps)
+    }
+
+    @Test
     fun `lenient mode does not cover a call after the last step`() {
         val engine = engineWith(textScenario("only"), lenient = true)
         engine.text()
