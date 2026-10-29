@@ -1,0 +1,106 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "usage-responses",
+  "description": "A buffered Response reports the step's input, output and total tokens; the details stay 0.",
+  "scenario": {
+    "name": "responses-text",
+    "steps": [
+      {
+        "text": "Mild and dry tomorrow.",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 340
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "input": "Hello"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "resp_fake_1",
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "fake-openai",
+          "output": [
+            {
+              "id": "msg_fake_1",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "Mild and dry tomorrow.",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "parallel_tool_calls": true,
+          "tool_choice": "auto",
+          "tools": [],
+          "usage": {
+            "input_tokens": 1200,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 340,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 1540
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "openai-responses",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
+          }
+        ]
+      }
+    }
+  ]
+}

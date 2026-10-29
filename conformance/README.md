@@ -140,9 +140,10 @@ Turns every skip into a failure. CI sets it: with a command target, nothing shou
 The spec does not describe the vendor routes' success bodies field by field, so the cases define
 them, exactly. That includes the values fake-llm fixes:
 
-- token counts: Anthropic `input_tokens` 100 and `output_tokens` 50, and cache tokens 20 (creation)
-  and 10 (read) with a `cache_control` breakpoint, 0 and 0 without; OpenAI 100, 50 and 150; OpenAI
-  Responses 100, 50 and 150; Gemini 100, 50 and 150;
+- token counts, when the step sets no `usage`: Anthropic `input_tokens` 100 and `output_tokens` 50,
+  and cache tokens 20 (creation) and 10 (read) with a `cache_control` breakpoint, 0 and 0 without;
+  OpenAI 100, 50 and 150; OpenAI Responses 100, 50 and 150; Gemini 100, 50 and 150. The cases in
+  `usage/` fix where a step's scripted counts go; the cache tokens don't change;
 - response IDs from the call number: `fake-msg-<n>`, `fake-openai-<n>`, Gemini's `fake_llm_seq`,
   and `resp_fake_<n>`, `msg_fake_<n>` and `fc_fake_<n>_<i>` on OpenAI Responses;
 - OpenAI's `"model": "fake-openai"` (Chat Completions and Responses), and Anthropic's buffered

@@ -75,7 +75,7 @@ private fun streamAnthropicMessages(
     }
     val out = startEventStream(ex)
     try {
-        writeSse(out, "message_start", messageStartJson(resolution.seq, req.model, req.hasCacheBreakpoint))
+        writeSse(out, "message_start", messageStartJson(resolution.seq, req.model, req.hasCacheBreakpoint, step.appliedUsage.inputTokens))
         if (error != null) {
             writeSse(out, "content_block_start", contentBlockStartJson())
             val prefix = errorPrefixChunks(step.streamErrorAfterChunks!!, step.streamChunkChars)
@@ -99,7 +99,8 @@ private fun streamAnthropicMessages(
                 emitInputJsonDeltas(out, chunkText(call.argumentText, step.streamChunkChars), step.streamInterChunkDelayMs, index)
                 writeSse(out, "content_block_stop", contentBlockStopJson(index++))
             }
-            writeSse(out, "message_delta", messageDeltaJson(if (step.toolCalls == null) step.stopReason else "tool_use"))
+            val stopReason = if (step.toolCalls == null) step.stopReason else "tool_use"
+            writeSse(out, "message_delta", messageDeltaJson(stopReason, step.appliedUsage.outputTokens))
             writeSse(out, "message_stop", messageStopJson())
         }
     } finally {

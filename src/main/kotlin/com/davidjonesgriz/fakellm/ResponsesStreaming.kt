@@ -61,7 +61,7 @@ internal fun streamOpenAiResponse(
     try {
         val writer = ResponsesEventWriter(out)
         val inProgress =
-            buildJsonObject { put("response", responsesResponseObject(seq, "in_progress", JsonArray(emptyList()), usage = false)) }
+            buildJsonObject { put("response", responsesResponseObject(seq, "in_progress", JsonArray(emptyList()), usage = null)) }
         writer.write("response.created", inProgress)
         writer.write("response.in_progress", inProgress)
         if (error != null) {
@@ -78,7 +78,8 @@ internal fun streamOpenAiResponse(
                 writeFunctionCall(writer, firstCallIndex + i, "fc_fake_${seq}_${i + 1}", call, step)
             }
             val status = if (step.stopReason == "max_tokens") "incomplete" else "completed"
-            val final = responsesResponseObject(seq, status, responsesOutput(step.text, step.stopReason, seq, toolCalls), usage = true)
+            val final =
+                responsesResponseObject(seq, status, responsesOutput(step.text, step.stopReason, seq, toolCalls), usage = step.appliedUsage)
             writer.write("response.$status", buildJsonObject { put("response", final) })
         }
     } finally {

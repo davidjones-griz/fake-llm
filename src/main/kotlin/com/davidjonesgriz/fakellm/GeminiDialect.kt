@@ -58,6 +58,7 @@ internal fun geminiEnvelope(
     stopReason: String,
     seq: Long,
     toolCalls: List<SentToolCall> = emptyList(),
+    usage: TokenUsage = DEFAULT_USAGE,
 ): String =
     buildJsonObject {
         put(
@@ -87,9 +88,9 @@ internal fun geminiEnvelope(
         put(
             "usageMetadata",
             buildJsonObject {
-                put("promptTokenCount", FIXED_INPUT_TOKENS)
-                put("candidatesTokenCount", FIXED_OUTPUT_TOKENS)
-                put("totalTokenCount", FIXED_INPUT_TOKENS + FIXED_OUTPUT_TOKENS)
+                put("promptTokenCount", usage.inputTokens)
+                put("candidatesTokenCount", usage.outputTokens)
+                put("totalTokenCount", usage.totalTokens)
             },
         )
         put("fake_llm_seq", seq)

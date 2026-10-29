@@ -46,7 +46,7 @@ info:
     **Vendor bodies.** The success bodies and event streams of the vendor routes follow each
     provider's API, and this document does not describe them field by field. The conformance
     cases in `conformance/cases` define them exactly, including the values fake-llm fixes: the
-    token counts, the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`,
+    token counts (unless the step sets `usage`), the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`,
     `resp_fake_<n>`, `msg_fake_<n>`, `fc_fake_<n>_<i>`), OpenAI's `model` (both routes), the
     thinking signature, the streamed-error filler text and generic error body, the OpenAI, OpenAI
     Responses and Gemini generic stream error bodies, and the lenient canned reply.

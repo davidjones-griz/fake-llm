@@ -50,8 +50,11 @@ internal fun openAiChunkJson(
         if (includeUsage) put("usage", JsonNull)
     }.toString()
 
-/** The usage chunk sent before `[DONE]` when the request set `stream_options.include_usage`: no choices, fixed token counts. */
-internal fun openAiUsageChunkJson(seq: Long): String =
+/** The usage chunk sent before `[DONE]` when the request set `stream_options.include_usage`: no choices, the step's token counts. */
+internal fun openAiUsageChunkJson(
+    seq: Long,
+    usage: TokenUsage = DEFAULT_USAGE,
+): String =
     buildJsonObject {
         put("id", "fake-openai-$seq")
         put("object", "chat.completion.chunk")
@@ -60,9 +63,9 @@ internal fun openAiUsageChunkJson(seq: Long): String =
         put(
             "usage",
             buildJsonObject {
-                put("prompt_tokens", FIXED_INPUT_TOKENS)
-                put("completion_tokens", FIXED_OUTPUT_TOKENS)
-                put("total_tokens", FIXED_INPUT_TOKENS + FIXED_OUTPUT_TOKENS)
+                put("prompt_tokens", usage.inputTokens)
+                put("completion_tokens", usage.outputTokens)
+                put("total_tokens", usage.totalTokens)
             },
         )
     }.toString()
@@ -165,7 +168,7 @@ internal fun streamOpenAiChatCompletion(
         return
     }
     val seq = resolution.seq
-    val usage = req.includeUsage
+    val includeUsage = req.includeUsage
     val out = startEventStream(ex)
     try {
         // A step with tool calls and no text sends "content": null, as the API does.
@@ -174,17 +177,25 @@ internal fun streamOpenAiChatCompletion(
                 put("role", "assistant")
                 put("content", if (step.toolCalls != null && step.text == null) null else "")
             }
-        writeSseData(out, openAiChunkJson(seq, role, null, usage))
+        writeSseData(out, openAiChunkJson(seq, role, null, includeUsage))
         if (error != null) {
             val prefix = errorPrefixChunks(step.streamErrorAfterChunks!!, step.streamChunkChars)
-            emitOpenAiContentDeltas(out, seq, prefix, step.streamInterChunkDelayMs, usage)
+            emitOpenAiContentDeltas(out, seq, prefix, step.streamInterChunkDelayMs, includeUsage)
             writeSseData(out, error.body.ifBlank { GENERIC_OPENAI_STREAM_ERROR_BODY })
         } else {
-            step.text?.let { emitOpenAiContentDeltas(out, seq, chunkText(it, step.streamChunkChars), step.streamInterChunkDelayMs, usage) }
-            emitOpenAiToolCallDeltas(out, seq, sentToolCalls("openai", step, seq), step, usage)
+            step.text?.let {
+                emitOpenAiContentDeltas(
+                    out,
+                    seq,
+                    chunkText(it, step.streamChunkChars),
+                    step.streamInterChunkDelayMs,
+                    includeUsage,
+                )
+            }
+            emitOpenAiToolCallDeltas(out, seq, sentToolCalls("openai", step, seq), step, includeUsage)
             val finishReason = if (step.toolCalls == null) openAiFinishReason(step.stopReason) else "tool_calls"
-            writeSseData(out, openAiChunkJson(seq, buildJsonObject {}, finishReason, usage))
-            if (usage) writeSseData(out, openAiUsageChunkJson(seq))
+            writeSseData(out, openAiChunkJson(seq, buildJsonObject {}, finishReason, includeUsage))
+            if (includeUsage) writeSseData(out, openAiUsageChunkJson(seq, step.appliedUsage))
             writeSseData(out, OPENAI_STREAM_DONE)
         }
     } finally {

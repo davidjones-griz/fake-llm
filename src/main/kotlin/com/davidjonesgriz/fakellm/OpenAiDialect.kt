@@ -74,6 +74,7 @@ internal fun openAiEnvelope(
     stopReason: String,
     seq: Long,
     toolCalls: List<SentToolCall> = emptyList(),
+    usage: TokenUsage = DEFAULT_USAGE,
 ): String =
     buildJsonObject {
         put("id", "fake-openai-$seq")
@@ -103,9 +104,9 @@ internal fun openAiEnvelope(
         put(
             "usage",
             buildJsonObject {
-                put("prompt_tokens", FIXED_INPUT_TOKENS)
-                put("completion_tokens", FIXED_OUTPUT_TOKENS)
-                put("total_tokens", FIXED_INPUT_TOKENS + FIXED_OUTPUT_TOKENS)
+                put("prompt_tokens", usage.inputTokens)
+                put("completion_tokens", usage.outputTokens)
+                put("total_tokens", usage.totalTokens)
             },
         )
     }.toString()

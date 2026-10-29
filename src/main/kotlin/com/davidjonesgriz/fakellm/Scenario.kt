@@ -186,7 +186,16 @@ public data class TokenUsage(
         require(inputTokens >= 0) { "usage.inputTokens must not be negative, got $inputTokens" }
         require(outputTokens >= 0) { "usage.outputTokens must not be negative, got $outputTokens" }
     }
+
+    /** Input plus output, as a Long so the sum of two large counts does not overflow. */
+    internal val totalTokens: Long get() = inputTokens.toLong() + outputTokens
 }
+
+/** The counts a reply from this step reports: [Step.usage], or the defaults. */
+internal val Step.appliedUsage: TokenUsage get() = usage ?: DEFAULT_USAGE
+
+/** The counts a step without `usage` reports, and the builders' default. */
+internal val DEFAULT_USAGE = TokenUsage()
 
 /** The argument text a format that carries text sends: [ToolCall.rawArguments], or the compact JSON of the arguments. */
 internal fun ToolCall.argumentText(): String = rawArguments ?: (arguments ?: JsonObject(emptyMap())).toString()

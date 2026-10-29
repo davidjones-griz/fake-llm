@@ -127,21 +127,22 @@ internal fun responsesEnvelope(
     stopReason: String,
     seq: Long,
     toolCalls: List<SentToolCall> = emptyList(),
+    usage: TokenUsage = DEFAULT_USAGE,
 ): String {
     val status = if (stopReason == "max_tokens") "incomplete" else "completed"
-    return responsesResponseObject(seq, status, responsesOutput(text, stopReason, seq, toolCalls), usage = true).toString()
+    return responsesResponseObject(seq, status, responsesOutput(text, stopReason, seq, toolCalls), usage).toString()
 }
 
 /**
  * The `Response` object in the API's key order. `incomplete_details` is `max_output_tokens` when
- * [status] is `incomplete`, and null otherwise. Without [usage], `usage` is null, as on the
+ * [status] is `incomplete`, and null otherwise. When [usage] is null, `usage` is null, as on the
  * in-progress response a stream starts with.
  */
 internal fun responsesResponseObject(
     seq: Long,
     status: String,
     output: JsonArray,
-    usage: Boolean,
+    usage: TokenUsage?,
 ): JsonObject =
     buildJsonObject {
         put("id", "resp_fake_$seq")
@@ -154,15 +155,15 @@ internal fun responsesResponseObject(
         put("parallel_tool_calls", true)
         put("tool_choice", "auto")
         put("tools", buildJsonArray {})
-        if (usage) {
+        if (usage != null) {
             put(
                 "usage",
                 buildJsonObject {
-                    put("input_tokens", FIXED_INPUT_TOKENS)
+                    put("input_tokens", usage.inputTokens)
                     put("input_tokens_details", buildJsonObject { put("cached_tokens", 0) })
-                    put("output_tokens", FIXED_OUTPUT_TOKENS)
+                    put("output_tokens", usage.outputTokens)
                     put("output_tokens_details", buildJsonObject { put("reasoning_tokens", 0) })
-                    put("total_tokens", FIXED_INPUT_TOKENS + FIXED_OUTPUT_TOKENS)
+                    put("total_tokens", usage.totalTokens)
                 },
             )
         } else {

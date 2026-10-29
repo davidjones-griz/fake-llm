@@ -421,10 +421,10 @@ internal fun vendorEnvelope(
 ): String {
     val toolCalls = sentToolCalls(vendor, step, seq)
     return when (vendor) {
-        "openai" -> openAiEnvelope(step.text, step.stopReason, seq, toolCalls)
-        RESPONSES_VENDOR -> responsesEnvelope(step.text, step.stopReason, seq, toolCalls)
-        "gemini" -> geminiEnvelope(step.text, step.stopReason, seq, toolCalls)
-        else -> anthropicEnvelope(step.text, step.stopReason, seq, cacheable, step.thinking, toolCalls)
+        "openai" -> openAiEnvelope(step.text, step.stopReason, seq, toolCalls, step.appliedUsage)
+        RESPONSES_VENDOR -> responsesEnvelope(step.text, step.stopReason, seq, toolCalls, step.appliedUsage)
+        "gemini" -> geminiEnvelope(step.text, step.stopReason, seq, toolCalls, step.appliedUsage)
+        else -> anthropicEnvelope(step.text, step.stopReason, seq, cacheable, step.thinking, toolCalls, step.appliedUsage)
     }
 }
 
