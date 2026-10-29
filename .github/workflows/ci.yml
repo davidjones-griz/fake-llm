@@ -277,6 +277,52 @@ jobs:
         if: always()
         run: docker rm -f fake-llm-recipe > /dev/null 2>&1 || true
 
+  # The pytest plugin's tests (pytest-fake-llm/) on each supported Python, against the image built
+  # from this commit, which the plugin starts itself, as it does in a project's tests. One job, so
+  # one required check, whatever the list of versions.
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the image
+        run: docker build -t fake-llm:ci .
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: |
+            3.11
+            3.12
+            3.13
+            3.14
+            3.15
+          cache: pip
+          cache-dependency-path: pytest-fake-llm/requirements-test.txt
+      # Each version gets a virtual environment with the hash-pinned lock, then the plugin itself,
+      # built with the lock's setuptools. Every version runs even when an earlier one failed.
+      - name: Test the plugin on Python 3.11 to 3.15
+        run: |
+          set -uo pipefail
+          failed=()
+          for version in 3.11 3.12 3.13 3.14 3.15; do
+            echo "::group::Python $version"
+            venv="$RUNNER_TEMP/venv-$version"
+            if ! { "python$version" -m venv "$venv" &&
+                   "$venv/bin/python" -m pip install --require-hashes -r pytest-fake-llm/requirements-test.txt &&
+                   "$venv/bin/python" -m pip install --no-build-isolation --no-deps ./pytest-fake-llm &&
+                   "$venv/bin/python" -m pytest pytest-fake-llm/tests --fake-llm-image=fake-llm:ci; }; then
+              failed+=("$version")
+            fi
+            echo "::endgroup::"
+          done
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::the plugin's tests failed on Python ${failed[*]}"
+            exit 1
+          fi
+      # A container is the docker CLI's child only through the daemon, so a killed run can leave one.
+      - name: Remove leftover containers
+        if: always()
+        run: docker ps -aq --filter ancestor=fake-llm:ci | xargs -r docker rm -f
+
   # Runs the HTTP conformance suite (conformance/cases) and the SDK suite (conformance/sdk/python,
   # the official Python SDKs) against the fat jar and the Docker image, both built from this commit.
   # Nothing should be skipped with a command target, so a skip fails.

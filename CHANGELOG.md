@@ -21,6 +21,11 @@ change the public API.
 - `examples/` has a three-stage pipeline, `TicketPipeline`, tested end to end in
   `TicketPipelineTest`: one call each to the Anthropic, OpenAI Chat Completions and Gemini
   formats, with a tool call and a streamed reply, and a test for each failure its scenarios script.
+- `pytest-fake-llm`, a pytest plugin in `pytest-fake-llm/`, installed from this repository: a
+  session fixture that starts the Docker image tagged with its version, or uses the server at
+  `--fake-llm-url` or `FAKE_LLM_URL`; a `fake_llm` fixture that unloads the server before each test;
+  a `fake_llm_scenario` marker that loads a scenario; and `FakeLlmClient`, a Python client for the
+  control API with typed call records.
 
 ### Changed
 

@@ -1,5 +1,6 @@
 # Weekly version updates. Minor and patch updates are grouped per ecosystem; other majors arrive
-# as separate pull requests, except in the kotlin and python-sdks groups below. See "Dependency updates" in README.md.
+# as separate pull requests, except in the kotlin, python-sdks and pytest-plugin groups below. See
+# "Dependency updates" in README.md.
 version: 2
 updates:
   - package-ecosystem: gradle
@@ -79,4 +80,14 @@ updates:
       day: monday
     groups:
       python-sdks:
+        patterns: ["*"]
+
+  # The pytest plugin's test lock (pytest-fake-llm/requirements-test.txt), all bumps in one pull request.
+  - package-ecosystem: pip
+    directory: "/pytest-fake-llm"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      pytest-plugin:
         patterns: ["*"]

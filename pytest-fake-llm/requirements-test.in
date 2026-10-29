@@ -1,0 +1,4 @@
+# The plugin's test dependencies, locked with hashes in requirements-test.txt (pip-compile).
+# setuptools is the build backend: CI installs the plugin with --no-build-isolation.
+pytest
+setuptools
