@@ -89,7 +89,8 @@ jobs:
           version=$(sed -n 's/^version=//p' gradle.properties)
           repo=build/local-repo/com/davidjonesgriz
           for jar in "$repo/fake-llm/$version/fake-llm-$version.jar" \
-                     "$repo/fake-llm-junit-jupiter/$version/fake-llm-junit-jupiter-$version.jar"; do
+                     "$repo/fake-llm-junit-jupiter/$version/fake-llm-junit-jupiter-$version.jar" \
+                     "$repo/fake-llm-testcontainers/$version/fake-llm-testcontainers-$version.jar"; do
             # Multi-release classes under META-INF/versions/ would be skipped below; there are none.
             if unzip -Z1 "$jar" | grep -q '^META-INF/versions/'; then
               echo "::error::$jar is a multi-release jar; extend this check to META-INF/versions/"
@@ -180,6 +181,16 @@ jobs:
           cat "$RUNNER_TEMP/validate.err"
           [ "$rc" -eq 1 ]
           grep -q "misspelt.json: step 2: \$.steps\[1\]: unknown field 'stopReasn'" "$RUNNER_TEMP/validate.err"
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+      # The Testcontainers module's tests that start containers, against the image built above.
+      - name: Test the Testcontainers module with the image
+        run: ./gradlew :fake-llm-testcontainers:dockerTest -Pfakellm.image=fake-llm:ci --no-daemon
 
   # Runs the CI recipe, examples/github-actions/fake-llm-tests.yml ("Run in CI" in README.md),
   # against the image built from this commit. A service container's image must be in a registry

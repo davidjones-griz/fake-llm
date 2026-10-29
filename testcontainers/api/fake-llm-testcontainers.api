@@ -1,0 +1,23 @@
+public final class com/davidjonesgriz/fakellm/testcontainers/FakeLlmContainer : org/testcontainers/containers/GenericContainer {
+	public static final field Companion Lcom/davidjonesgriz/fakellm/testcontainers/FakeLlmContainer$Companion;
+	public static final field DEFAULT_IMAGE Lorg/testcontainers/utility/DockerImageName;
+	public static final field IMAGE_REPOSITORY Ljava/lang/String;
+	public static final field PORT I
+	public static final field SCENARIO_DIRECTORY Ljava/lang/String;
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Lorg/testcontainers/utility/DockerImageName;)V
+	public final fun client ()Lcom/davidjonesgriz/fakellm/FakeLlmClient;
+	public final fun getAnthropicBaseUrl ()Ljava/lang/String;
+	public final fun getBaseUrl ()Ljava/lang/String;
+	public final fun getGeminiBaseUrl ()Ljava/lang/String;
+	public final fun getOpenAiBaseUrl ()Ljava/lang/String;
+	public final fun withControlToken (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/testcontainers/FakeLlmContainer;
+	public final fun withLenient ()Lcom/davidjonesgriz/fakellm/testcontainers/FakeLlmContainer;
+	public final fun withScenario (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/testcontainers/FakeLlmContainer;
+	public final fun withScenarioDirectory (Ljava/nio/file/Path;)Lcom/davidjonesgriz/fakellm/testcontainers/FakeLlmContainer;
+}
+
+public final class com/davidjonesgriz/fakellm/testcontainers/FakeLlmContainer$Companion {
+}
+

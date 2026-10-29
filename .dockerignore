@@ -2,6 +2,7 @@ build/
 .gradle/
 .git/
 junit-jupiter/build/
+testcontainers/build/
 examples/build/
 examples/.gradle/
 conformance/runner/build/
