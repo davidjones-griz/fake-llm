@@ -1,8 +1,8 @@
 name: Dependency submission
 
-# Submits the root build's resolved Gradle dependencies (junit-jupiter/ and conformance/runner/
-# included) to GitHub's dependency graph, which Dependabot alerts are based on. GitHub cannot read
-# them from the build files itself. See "Dependency updates" in README.md.
+# Submits the root build's resolved Gradle dependencies (junit-jupiter/, testcontainers/ and
+# conformance/runner/ included) to GitHub's dependency graph, which Dependabot alerts are based on.
+# GitHub cannot read them from the build files itself. See "Dependency updates" in README.md.
 on:
   push:
     branches: [main]

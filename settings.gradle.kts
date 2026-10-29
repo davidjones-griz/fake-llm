@@ -11,3 +11,7 @@ project(":fake-llm-junit-jupiter").projectDir = file("junit-jupiter")
 // The HTTP conformance runner (not published): runs conformance/cases against a server by URL.
 include(":fake-llm-conformance")
 project(":fake-llm-conformance").projectDir = file("conformance/runner")
+
+// The Testcontainers module, published as com.davidjonesgriz:fake-llm-testcontainers.
+include(":fake-llm-testcontainers")
+project(":fake-llm-testcontainers").projectDir = file("testcontainers")

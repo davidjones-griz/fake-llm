@@ -137,8 +137,8 @@ publishing {
     }
 }
 
-// Every published module (this one and junit-jupiter/) shares the POM metadata below and the
-// build-local repository that examples/ and CI read.
+// Every published module (this one, junit-jupiter/ and testcontainers/) shares the POM metadata
+// below and the build-local repository that examples/ and CI read.
 allprojects {
     // -PtestJavaVersion=<major> runs every Test task on that Java version, while the code is still
     // compiled for Java 21; CI's java25 job uses it to test on the current LTS.

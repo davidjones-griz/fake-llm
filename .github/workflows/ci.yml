@@ -89,7 +89,8 @@ jobs:
           version=$(sed -n 's/^version=//p' gradle.properties)
           repo=build/local-repo/com/davidjonesgriz
           for jar in "$repo/fake-llm/$version/fake-llm-$version.jar" \
-                     "$repo/fake-llm-junit-jupiter/$version/fake-llm-junit-jupiter-$version.jar"; do
+                     "$repo/fake-llm-junit-jupiter/$version/fake-llm-junit-jupiter-$version.jar" \
+                     "$repo/fake-llm-testcontainers/$version/fake-llm-testcontainers-$version.jar"; do
             # Multi-release classes under META-INF/versions/ would be skipped below; there are none.
             if unzip -Z1 "$jar" | grep -q '^META-INF/versions/'; then
               echo "::error::$jar is a multi-release jar; extend this check to META-INF/versions/"
