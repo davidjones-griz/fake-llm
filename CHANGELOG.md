@@ -25,7 +25,7 @@ change the public API.
   session fixture that starts the Docker image tagged with its version, or uses the server at
   `--fake-llm-url` or `FAKE_LLM_URL`; a `fake_llm` fixture that unloads the server before each test;
   a `fake_llm_scenario` marker that loads a scenario; and `FakeLlmClient`, a Python client for the
-  control API with typed call records.
+  control API with typed call records, whose `health()` also returns `steps` and `unused_steps`.
 - `ScenarioEngine.unusedSteps`: the steps of the loaded scenario that no call has used since the
   last load, reset or unload.
 - `@FakeLlmAllowUnusedSteps`, which turns off the JUnit extension's unused-steps check for a test
