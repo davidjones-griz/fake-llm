@@ -62,6 +62,7 @@ tasks.test {
         "examples/src/test/scenarios",
         "junit-jupiter/src/test/fixture-scenarios",
         "examples/github-actions/scenarios",
+        "testcontainers/src/test/scenarios",
     ).forEach {
         inputs.dir(it).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("scenarios:$it")
     }
