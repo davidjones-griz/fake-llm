@@ -280,7 +280,7 @@ class MyClientTest {
 
 The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6 deprecates in favour of `computeIfAbsent`. JUnit 5.10 has no `computeIfAbsent`, so the extension moves to it once the minimum supported JUnit version does.
 
-[examples/](examples/) uses the extension in `SummarizerExtensionTest`.
+[examples/](examples/) uses the extension in `SummarizerExtensionTest` and `TicketPipelineTest`.
 
 ### Testcontainers
 
@@ -315,7 +315,7 @@ class MyClientTest {
 
 The public API is exactly what [api/fake-llm.api](api/fake-llm.api), [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) and [testcontainers/api/fake-llm-testcontainers.api](testcontainers/api/fake-llm-testcontainers.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. From Java, the top-level functions are in two classes whose names are set with `@file:JvmName`, not taken from source file names: `FakeLlm` has `startFakeLlmServer`, and `FakeLlmMain` has `main`. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ToolCall`, `ErrorStep`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `ToolCallRecord`, `ToolResultRecord`, `ExchangeRecord`, `ExchangeRequest`, `ExchangeResponse`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord`, the three exchange records or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()` or `GET /control/exchanges` with `ExchangeRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
 
-[examples/](examples/) is a complete consumer: a small client with retry logic, tested from Kotlin and from Java against the published artifact.
+[examples/](examples/) is a complete consumer, tested against the published artifact: a small client with retry logic, tested from Kotlin and from Java, and a three-stage pipeline, tested end to end.
 
 ## Run in CI
 
@@ -610,6 +610,8 @@ class MyClientTest {
     }
 }
 ```
+
+For a whole pipeline, see `TicketPipelineTest` in [examples/](examples/). `TicketPipeline` makes three calls, each to a different vendor's API: it classifies a support ticket (Anthropic), extracts its details with a forced tool call (OpenAI Chat Completions), and streams a summary (Gemini). Each test's scenario file scripts every call in order, including a rate limit, tool-call arguments that are not valid JSON, a summary cut off at `max_tokens`, and a call after the last step.
 
 ### Scenario schema and `validate`
 
