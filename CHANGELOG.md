@@ -13,6 +13,11 @@ change the public API.
   checks and messages of an inline load, so Java code can build a scenario from a text block.
 - From Java, `FakeLlm.startFakeLlmServer(port, engine)` without the control token argument, which
   reads `FAKE_LLM_CONTROL_TOKEN` as the Kotlin default does.
+- `com.davidjonesgriz:fake-llm-testcontainers`: `FakeLlmContainer`, a Testcontainers
+  `GenericContainer` for the Docker image. By default it runs the image tagged with the library's
+  version, and it starts once `GET /health` answers. It has the base URLs for the Anthropic, OpenAI
+  and Gemini SDKs, copies a host scenario directory into the container, and returns a
+  `FakeLlmClient` for its control API.
 
 ### Changed
 
