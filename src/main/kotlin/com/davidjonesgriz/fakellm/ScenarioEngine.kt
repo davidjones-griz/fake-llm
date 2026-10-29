@@ -194,6 +194,19 @@ public class ScenarioEngine(
     /** The loaded scenario's name, or null when none is loaded. */
     public fun currentScenarioName(): String? = synchronized(lock) { scenario?.name }
 
+    /**
+     * The 1-based numbers of the loaded scenario's steps that no call has used since the last load
+     * or reset, in order: a snapshot, read under the same lock as [calls]. Steps are used in order,
+     * so these are always the last ones. Empty when no scenario is loaded or every step has served
+     * a call. From Java, `getUnusedSteps()`.
+     */
+    public val unusedSteps: List<Int>
+        get() =
+            synchronized(lock) {
+                val steps = scenario?.steps?.size ?: 0
+                (minOf(callCount, steps.toLong()).toInt() + 1..steps).toList()
+            }
+
     /** A snapshot of the call log, in call order. */
     public fun calls(): List<CallRecord> = synchronized(lock) { log.toList() }
 

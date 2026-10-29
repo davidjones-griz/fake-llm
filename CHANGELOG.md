@@ -26,6 +26,10 @@ change the public API.
   `--fake-llm-url` or `FAKE_LLM_URL`; a `fake_llm` fixture that unloads the server before each test;
   a `fake_llm_scenario` marker that loads a scenario; and `FakeLlmClient`, a Python client for the
   control API with typed call records.
+- `ScenarioEngine.unusedSteps`: the steps of the loaded scenario that no call has used since the
+  last load or reset.
+- `@FakeLlmAllowUnusedSteps`, which turns off the JUnit extension's unused-steps check for a test
+  or class.
 
 ### Changed
 
@@ -33,6 +37,8 @@ change the public API.
   `main` is in `FakeLlmMain`, now the fat jar's `Main-Class`. Kotlin source needs no change, but
   code compiled against an earlier version must be recompiled, and `fake-llm-junit-jupiter` must
   be the same version as `fake-llm`.
+- The JUnit extension fails a test that passed if its scenario has steps no call used, naming
+  them. Annotate a test that leaves steps unused on purpose with `@FakeLlmAllowUnusedSteps`.
 
 ## [0.5.0] - 2026-10-28
 

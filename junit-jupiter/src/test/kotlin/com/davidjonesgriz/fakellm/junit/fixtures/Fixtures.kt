@@ -3,6 +3,7 @@ package com.davidjonesgriz.fakellm.junit.fixtures
 import com.davidjonesgriz.fakellm.FakeLlmServer
 import com.davidjonesgriz.fakellm.ScenarioEngine
 import com.davidjonesgriz.fakellm.junit.FakeLlmAllowUnservedCalls
+import com.davidjonesgriz.fakellm.junit.FakeLlmAllowUnusedSteps
 import com.davidjonesgriz.fakellm.junit.FakeLlmExtension
 import com.davidjonesgriz.fakellm.junit.FakeLlmScenario
 import com.davidjonesgriz.fakellm.junit.FakeLlmTest
@@ -106,6 +107,7 @@ class PerClassInjectionFixture(
 @Fixture
 @FakeLlmTest
 @FakeLlmScenario("hello")
+@FakeLlmAllowUnusedSteps
 class PrecedenceFixture {
     @BeforeEach
     fun beforeEach(
@@ -183,6 +185,7 @@ class NoScenarioFixture {
 @FakeLlmTest
 @FakeLlmScenario("fail-then-retry")
 @TestMethodOrder(MethodOrderer.MethodName::class)
+@FakeLlmAllowUnusedSteps
 class IsolationFixture {
     @Test
     fun a(server: FakeLlmServer) = record(server)
@@ -256,6 +259,7 @@ class StaticRegisteredFixture {
 @Fixture
 @FakeLlmScenario("fail-then-retry")
 @TestMethodOrder(MethodOrderer.MethodName::class)
+@FakeLlmAllowUnusedSteps
 class InstanceRegisteredFixture {
     @JvmField
     @RegisterExtension
@@ -280,6 +284,7 @@ class InstanceRegisteredFixture {
 /** An outer instance field, no outer tests, and the server injected into the nested class's constructor. */
 @Fixture
 @FakeLlmScenario("fail-then-retry")
+@FakeLlmAllowUnusedSteps
 class NestedInstanceRegisteredFixture {
     @JvmField
     @RegisterExtension
@@ -311,6 +316,7 @@ class NestedInstanceRegisteredFixture {
 @Fixture
 @FakeLlmTest
 @FakeLlmScenario("hello")
+@FakeLlmAllowUnusedSteps
 class DoubleRegisteredFixture {
     @Test
     fun a() = Unit
@@ -329,9 +335,10 @@ abstract class FakeLlmBase
 
 @FakeLlmTest
 @FakeLlmScenario("hello")
+@FakeLlmAllowUnusedSteps
 abstract class AnnotatedBase : FakeLlmBase()
 
-/** Inherits @FakeLlmTest and @FakeLlmScenario from its superclass. */
+/** Inherits @FakeLlmTest, @FakeLlmScenario and @FakeLlmAllowUnusedSteps from its superclass. */
 @Fixture
 class InheritedFixture : AnnotatedBase() {
     @Test
@@ -345,6 +352,7 @@ class InheritedFixture : AnnotatedBase() {
 @Retention(AnnotationRetention.RUNTIME)
 @FakeLlmTest(lenient = true)
 @FakeLlmScenario("hello")
+@FakeLlmAllowUnusedSteps
 annotation class ComposedLlmTest
 
 @Target(AnnotationTarget.FUNCTION)
@@ -352,7 +360,10 @@ annotation class ComposedLlmTest
 @FakeLlmScenario("refusal")
 annotation class RefusalScenario
 
-/** The configuration and scenarios come from composed annotations on the class and a method. */
+/**
+ * The configuration and scenarios come from composed annotations on the class and a method, and the
+ * unused-steps opt-out from the class's.
+ */
 @Fixture
 @ComposedLlmTest
 class ComposedFixture {
@@ -371,9 +382,10 @@ class ComposedFixture {
 
 @FakeLlmTest(lenient = true)
 @FakeLlmScenario("hello")
+@FakeLlmAllowUnusedSteps
 interface FakeLlmInterface
 
-/** The configuration and scenario come from an interface the class implements. */
+/** The configuration, scenario and the unused-steps opt-out come from an interface the class implements. */
 @Fixture
 class InterfaceFixture : FakeLlmInterface {
     @Test
@@ -431,6 +443,7 @@ private fun meetAndRecord(
 @Fixture
 @FakeLlmTest
 @FakeLlmScenario("hello")
+@FakeLlmAllowUnusedSteps
 class ConcurrentMethodsFixture {
     @Test
     fun first() = waitForTheOther()
@@ -460,6 +473,7 @@ class FailingBeforeEach : BeforeEachCallback {
 @ExtendWith(FailingBeforeEach::class, FakeLlmExtension::class)
 @FakeLlmScenario("hello")
 @TestMethodOrder(MethodOrderer.MethodName::class)
+@FakeLlmAllowUnusedSteps
 class CounterBalanceFixture {
     @Test
     fun a() = Unit
@@ -475,6 +489,7 @@ class CounterBalanceFixture {
 @Fixture
 @FakeLlmTest
 @FakeLlmScenario("fail-then-retry")
+@FakeLlmAllowUnusedSteps
 class ParameterizedFixture {
     @ParameterizedTest
     @ValueSource(ints = [1, 2, 3])

@@ -47,7 +47,9 @@ private const val CONCURRENT_TESTS =
  * `@BeforeEach` or the test got no step: a call after the scenario's last step, or a call with no
  * scenario loaded in strict mode. An app that catches those 400s and carries on cannot pass that
  * way. [FakeLlmAllowUnservedCalls] turns the check off for a test that makes such a call on purpose.
- * An aborted test (a failed assumption) is not checked.
+ * A test that passed also fails if its scenario has steps no call used, such as a retry the app
+ * never made; [FakeLlmAllowUnusedSteps] turns that check off. An aborted test (a failed assumption)
+ * is not checked.
  *
  * Test classes may run in parallel; each has its own server and port. The tests of one class share
  * one engine, so they must not run concurrently: a second concurrent test fails at once with an
@@ -97,10 +99,18 @@ public class FakeLlmExtension
             // remove is atomic, so with two registrations only one instance checks. The log is read
             // here, while this test still holds the in-flight guard that afterEach releases.
             if (context.getStore(NAMESPACE).remove(CHECK + context.uniqueId) == null) return
-            if (context.executionException.orElse(null).isAbort() || allowsUnservedCalls(context)) return
+            val failure = context.executionException.orElse(null)
+            if (failure.isAbort()) return
             val engine = serverFor(context).server.engine
-            val unserved = engine.calls().filter { it.outcome in UNSERVED }
-            if (unserved.isNotEmpty()) throw AssertionError(unservedMessage(engine.currentScenarioName(), unserved))
+            if (!allowsUnservedCalls(context)) {
+                val unserved = engine.calls().filter { it.outcome in UNSERVED }
+                if (unserved.isNotEmpty()) throw AssertionError(unservedMessage(engine.currentScenarioName(), unserved))
+            }
+            // A test that already failed often stopped before its last calls, so its unused steps add nothing.
+            if (failure == null && !allowsUnusedSteps(context)) {
+                val unused = engine.unusedSteps
+                if (unused.isNotEmpty()) throw AssertionError(unusedMessage(engine.currentScenarioName(), unused))
+            }
         }
 
         override fun afterEach(context: ExtensionContext) {
@@ -170,6 +180,21 @@ private const val JUNIT4_ASSUMPTION = "org.junit.internal.AssumptionViolatedExce
 private fun allowsUnservedCalls(context: ExtensionContext): Boolean =
     context.testMethod.orElse(null)?.find<FakeLlmAllowUnservedCalls>() != null ||
         findOnClassOrEnclosing(context.requiredTestClass) { it.find<FakeLlmAllowUnservedCalls>() } != null
+
+/** [FakeLlmAllowUnusedSteps] on the method, then the class, then each enclosing class. */
+private fun allowsUnusedSteps(context: ExtensionContext): Boolean =
+    context.testMethod.orElse(null)?.find<FakeLlmAllowUnusedSteps>() != null ||
+        findOnClassOrEnclosing(context.requiredTestClass) { it.find<FakeLlmAllowUnusedSteps>() } != null
+
+private fun unusedMessage(
+    scenario: String?,
+    steps: List<Int>,
+): String {
+    val which = if (steps.size == 1) "step ${steps.single()}" else "steps ${steps.first()}-${steps.last()}"
+    return "${steps.size} step(s) of fake-llm scenario '$scenario' got no call: $which. " +
+        "The app made fewer calls than the scenario scripts. Remove the steps the test does not need, " +
+        "or annotate a test that leaves steps unused on purpose with @FakeLlmAllowUnusedSteps."
+}
 
 private fun unservedMessage(
     scenario: String?,
