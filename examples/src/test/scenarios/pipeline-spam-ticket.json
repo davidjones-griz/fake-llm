@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
+  "name": "pipeline-spam-ticket",
+  "description": "One step: the classification. A spam ticket makes no further calls.",
+  "steps": [
+    { "text": "spam" }
+  ]
+}

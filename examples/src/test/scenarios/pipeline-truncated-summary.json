@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
+  "name": "pipeline-truncated-summary",
+  "description": "The summary stops at max_tokens partway through the sentence.",
+  "steps": [
+    { "text": "billing" },
+    { "toolCalls": [{ "name": "record_ticket", "arguments": { "orderId": "A-1001", "problem": "charged twice" } }] },
+    { "text": "Refund the duplicate charge", "stopReason": "max_tokens", "streamChunkChars": 8 }
+  ]
+}

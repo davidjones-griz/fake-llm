@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
+  "name": "pipeline-missing-summary-step",
+  "description": "No step for the summary call, so it gets the no-more-steps 400.",
+  "steps": [
+    { "text": "billing" },
+    { "toolCalls": [{ "name": "record_ticket", "arguments": { "orderId": "A-1001", "problem": "charged twice" } }] }
+  ]
+}
