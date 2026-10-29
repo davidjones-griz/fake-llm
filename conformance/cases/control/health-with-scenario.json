@@ -9,7 +9,7 @@
       "response": {
         "status": 200,
         "headers": { "content-type": "application/json" },
-        "body": { "status": "ok", "scenario": "hello", "lenient": false }
+        "body": { "status": "ok", "scenario": "hello", "lenient": false, "steps": 1, "unusedSteps": [1] }
       }
     }
   ]

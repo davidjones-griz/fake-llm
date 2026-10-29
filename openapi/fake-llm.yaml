@@ -68,7 +68,7 @@ paths:
     get:
       tags: [health]
       operationId: getHealth
-      summary: Report liveness, the loaded scenario and lenient mode
+      summary: Report liveness, the loaded scenario, its unused steps and lenient mode
       security: []
       responses:
         "200":
@@ -537,7 +537,7 @@ components:
   schemas:
     Health:
       type: object
-      required: [status, scenario, lenient]
+      required: [status, scenario, lenient, steps, unusedSteps]
       properties:
         status:
           type: string
@@ -550,6 +550,22 @@ components:
           description: |
             Whether a call made while no scenario is loaded gets the canned reply instead of
             `NoScenarioError`. It does not change what a call after the last step gets.
+        steps:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 2147483647
+          description: The loaded scenario's step count, or null when none is loaded.
+        unusedSteps:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+          description: |
+            The 1-based numbers of the loaded scenario's steps that no call has used since the last
+            load, reset or unload, in order: always the last ones. Empty when none is loaded or every
+            step has served a call. A test can assert it is empty to check the app made every
+            scripted call.
     LoadRequest:
       description: Exactly one of `name` or `scenario`.
       oneOf:

@@ -86,7 +86,9 @@
         "body": {
           "status": "ok",
           "scenario": "two-steps",
-          "lenient": false
+          "lenient": false,
+          "steps": 2,
+          "unusedSteps": [1, 2]
         }
       }
     },

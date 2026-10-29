@@ -19,7 +19,7 @@ docker build -t fake-llm .
 docker run -p 8080:8080 fake-llm --scenario hello
 ```
 
-`GET /health` then returns `{"status":"ok","scenario":"hello","lenient":false}`. Building the image needs BuildKit, `docker build`'s default since Docker 23.
+`GET /health` then returns `{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1]}`. Building the image needs BuildKit, `docker build`'s default since Docker 23.
 
 The same process from a checkout:
 
@@ -190,7 +190,7 @@ try (FakeLlmServer server = FakeLlm.startFakeLlmServer(0, engine, null)) {
 }
 ```
 
-`engine.exchanges()` returns each call's full request and response; see [`GET /control/exchanges`](#control-api). `engine.unusedSteps` lists the steps no call has used since the last load or reset.
+`engine.exchanges()` returns each call's full request and response; see [`GET /control/exchanges`](#control-api). `engine.unusedSteps` lists the steps no call has used since the last load, reset or unload.
 
 `engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, call log, exchange log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. For scenario files kept elsewhere, point the engine's scenario directory at them, so they get the same checks and messages as any load by name.
 
@@ -227,7 +227,7 @@ FakeLlmClient("http://localhost:8080", controlToken = System.getenv("FAKE_LLM_CO
 }
 ```
 
-From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's name and whether the server is lenient, and `scenarioNames()` lists what the server can load by name. `unload()` returns the server to the state it has when started without a scenario: no scenario loaded and empty logs. Against a server older than 0.5.0 it fails with status 404. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
+From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's name, whether the server is lenient, and `steps` and `unusedSteps` (null against a server older than this release), and `scenarioNames()` lists what the server can load by name. `unload()` returns the server to the state it has when started without a scenario: no scenario loaded and empty logs. Against a server older than 0.5.0 it fails with status 404. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
 
 Every failed call throws `FakeLlmClientException`. `statusCode` is the HTTP status, or null when no response arrived (a refused connection, a timeout or an interrupt, kept as the `cause`). For an error status, `serverMessage` is the server's explanation, verbatim, such as `unknown scenario 'x' — ...`. A 401 says whether the token was missing or rejected.
 
@@ -613,7 +613,7 @@ With that scenario, an `openai` client created with `timeout=1.0` and `max_retri
 ### Writing scenarios for tests
 
 - Each test owns its scenario, even when that means repeating steps another scenario also has. Changing a scenario then affects only the test that owns it. Name a scenario file after its test, or build it inline with `loadInline`.
-- Script one step per call, in the order the app makes its calls, including every retry and error. A call the scenario has no step for fails with `no more steps`, and with the JUnit extension a step no call used fails the test, so a missing or extra call shows up in the test. Without the extension, check `engine.unusedSteps` is empty at the end of the test.
+- Script one step per call, in the order the app makes its calls, including every retry and error. A call the scenario has no step for fails with `no more steps`, and with the JUnit extension a step no call used fails the test, so a missing or extra call shows up in the test. Without the extension, check `engine.unusedSteps` is empty at the end of the test. Over HTTP, check that `GET /health`'s `unusedSteps` is empty.
 - Load the scenario, or reset it, at the start of each test, so its first call gets step 1 and the call log holds only its calls. The JUnit extension does this before each test.
 
 For example, a test whose app retries once after a rate limit scripts both calls, then checks the app's reply and that the app made exactly those two calls:
@@ -722,11 +722,13 @@ A call after the scenario's last step, or a call with no scenario loaded in stri
 
 ### `GET /health`
 
-Always open, including when a control token is set. Reports liveness, the loaded scenario name or `null` when none is loaded, and whether lenient mode is on.
+Always open, including when a control token is set. Reports liveness, the loaded scenario name or `null` when none is loaded, whether lenient mode is on, and the scenario's step count and unused steps.
 
 ```json
-{"status":"ok","scenario":"hello","lenient":false}
+{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1]}
 ```
+
+`steps` is the loaded scenario's step count, and `unusedSteps` lists the steps no call has used since the last load, reset or unload (both `null` / `[]` with no scenario). A test can assert `unusedSteps` is empty to check its app made every scripted call. The JUnit extension makes the same check in process after each test.
 
 ### `POST /anthropic/v1/messages`
 

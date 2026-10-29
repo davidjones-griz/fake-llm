@@ -38,8 +38,8 @@ import kotlin.system.exitProcess
  *  - The vendor routes share the scenario's steps: call N, on whichever route, gets step N.
  *    A step's `firstByteDelayMs` holds back the whole response, and its `streamInterChunkDelayMs`
  *    spaces out streamed deltas.
- *  - `GET /health` — liveness, the loaded scenario name, and whether lenient mode is on. Always
- *    open, including when a control token is configured.
+ *  - `GET /health` — liveness, the loaded scenario name, its step count and unused steps, and
+ *    whether lenient mode is on. Always open, including when a control token is configured.
  *  - `POST /control/scenario` with exactly one of `{"name": "..."}` or `{"scenario": { ... }}` —
  *    load that scenario and start it over (empty call and exchange logs, next call is call 1). A name is resolved from the scenario
  *    directory (`--scenario-dir` or `FAKE_LLM_SCENARIO_DIR`), then the classpath `/scenarios/`, then
