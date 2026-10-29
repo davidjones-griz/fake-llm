@@ -1,6 +1,7 @@
 package com.davidjonesgriz.fakellm.junit
 
 import com.davidjonesgriz.fakellm.junit.fixtures.AbortedFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.AllStepsUsedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.AlreadyFailingFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ComposedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ComposedOptOutFixture
@@ -12,9 +13,11 @@ import com.davidjonesgriz.fakellm.junit.fixtures.DoubleRegisteredFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.DoubleRegisteredUnservedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ExtraCallFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.FIXTURES_PARAMETER
+import com.davidjonesgriz.fakellm.junit.fixtures.FailingWithUnusedStepsFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InheritedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InheritedOptOutFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InjectionFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.InlineUnusedStepsFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InstanceRegisteredFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InstanceRegisteredUnservedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.InterfaceFixture
@@ -22,9 +25,11 @@ import com.davidjonesgriz.fakellm.junit.fixtures.IsolationFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.JavaFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.LenientNoScenarioFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.MethodOptOutFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.MissingCallFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.NestedInstanceRegisteredFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.NestedOptOutFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.NoScenarioFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.OptOutsAreIndependentFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ParallelFixtureA
 import com.davidjonesgriz.fakellm.junit.fixtures.ParallelFixtureB
 import com.davidjonesgriz.fakellm.junit.fixtures.ParameterizedFixture
@@ -36,6 +41,7 @@ import com.davidjonesgriz.fakellm.junit.fixtures.StaticRegisteredFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.StrictNoScenarioFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.UnknownAfterUnservedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.UnknownScenarioFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.UnusedStepsOptOutFixture
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.extension.ExtensionContext
@@ -332,6 +338,50 @@ class FakeLlmExtensionTest {
     @Test
     fun `an aborted test stays aborted, with a JUnit 4 assumption too`() {
         run(AbortedFixture::class.java).testEvents().assertStatistics { it.started(3).aborted(3).failed(0) }
+    }
+
+    @Test
+    fun `a step no call used fails a test that otherwise passed, naming the step`() {
+        val results = run(MissingCallFixture::class.java)
+        results.testEvents().assertStatistics { it.started(1).failed(1) }
+        assertEquals(listOf(500), Sink.get("missing:status"))
+        val failure = results.failures().getValue("missing(FakeLlmServer)")
+        assertIs<AssertionError>(failure)
+        assertContains(failure.message.orEmpty(), "1 step(s) of fake-llm scenario 'fail-then-retry' got no call: step 2.")
+        assertContains(failure.message.orEmpty(), "@FakeLlmAllowUnusedSteps")
+    }
+
+    @Test
+    fun `a test that uses every step passes, and a test with no scenario has no steps to use`() {
+        run(AllStepsUsedFixture::class.java).assertAllPassed(tests = 2)
+    }
+
+    @Test
+    fun `the unused-steps opt-out covers its method and a nested class that carries it`() {
+        val results = run(UnusedStepsOptOutFixture::class.java)
+        results.testEvents().assertStatistics { it.started(3).succeeded(2).failed(1) }
+        assertEquals(setOf("checked(FakeLlmServer)"), results.failures().keys)
+    }
+
+    @Test
+    fun `a test that already failed reports only its own failure, not its unused steps`() {
+        val failure = run(FailingWithUnusedStepsFixture::class.java).failures().values.single()
+        assertEquals("the test's own failure", failure.message)
+        assertEquals(0, failure.suppressed.size)
+    }
+
+    @Test
+    fun `a scenario loaded during the test is the one checked`() {
+        val failure = run(InlineUnusedStepsFixture::class.java).failures().values.single()
+        assertContains(failure.message.orEmpty(), "2 step(s) of fake-llm scenario 'three-steps' got no call: steps 2-3.")
+    }
+
+    @Test
+    fun `each opt-out turns off its own check only`() {
+        val failures = run(OptOutsAreIndependentFixture::class.java).failures()
+        assertEquals(setOf("unservedAllowed(FakeLlmServer)", "unusedAllowed(FakeLlmServer)"), failures.keys)
+        assertContains(failures.getValue("unservedAllowed(FakeLlmServer)").message.orEmpty(), "got no call: step 2.")
+        assertContains(failures.getValue("unusedAllowed(FakeLlmServer)").message.orEmpty(), "got no step")
     }
 
     private fun run(

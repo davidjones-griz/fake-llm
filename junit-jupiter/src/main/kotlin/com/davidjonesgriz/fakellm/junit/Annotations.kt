@@ -51,3 +51,16 @@ public annotation class FakeLlmScenario(
 @MustBeDocumented
 @Inherited
 public annotation class FakeLlmAllowUnservedCalls
+
+/**
+ * Turns off [FakeLlmExtension]'s check that every step of the scenario served a call, for a test
+ * that leaves steps unused on purpose (for example a test that stops after the first call of a
+ * scenario shared with a longer test). On a method it applies to that test; on a class, to every
+ * test in it and in its `@Nested` classes and subclasses. It is also found inside a composed
+ * annotation.
+ */
+@Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+@MustBeDocumented
+@Inherited
+public annotation class FakeLlmAllowUnusedSteps
