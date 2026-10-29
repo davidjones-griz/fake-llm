@@ -101,7 +101,7 @@ The image is on GHCR, for linux/amd64 and linux/arm64:
 docker run -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario hello
 ```
 
-To run it beside an app's tests in CI, see [Run in CI](#run-in-ci).
+To run it beside an app's tests in CI, see [Run in CI](#run-in-ci). For Python tests, the [pytest plugin](#pytest-plugin) starts it for each test session.
 
 The libraries are on Maven Central. With Gradle:
 
@@ -398,6 +398,35 @@ def test_greets_by_name(fake_llm):
 ```
 
 `load` posts the body to `POST /control/scenario` and checks for HTTP 200, and `calls` returns `GET /control/calls`. The same requests work from any language with an HTTP client; from Kotlin or Java, [`FakeLlmClient`](#control-api-client) makes them. One server has one scenario and one call log, so tests that run in parallel against it interleave their calls: run them one at a time, or give each parallel worker its own server.
+
+### pytest plugin
+
+`pytest-fake-llm`, in [pytest-fake-llm/](pytest-fake-llm/), gives a Python project's pytest tests a fake-llm server: it starts the Docker image for the test session, or uses a server that is already running, and unloads it before each test. It needs Python 3.11 or newer and pytest 8 or newer, and has no other dependencies. It is not on PyPI; install it from this repository at a release tag, 0.6.0 or later:
+
+```bash
+pip install "pytest-fake-llm @ git+https://github.com/davidjones-griz/fake-llm@v0.6.0#subdirectory=pytest-fake-llm"
+```
+
+```python
+import anthropic
+import pytest
+
+
+@pytest.mark.fake_llm_scenario("rate-limit-429")
+def test_retries_after_a_rate_limit(fake_llm):
+    client = anthropic.Anthropic(api_key="not-used", base_url=fake_llm.anthropic_base_url)
+    # ... exercise the code under test ...
+    assert [call.outcome for call in fake_llm.client.calls()] == ["error:429", "text"]
+```
+
+- **The server.** The session-scoped `fake_llm_server` fixture starts `ghcr.io/davidjones-griz/fake-llm`, tagged with the plugin's own version, on a free port of 127.0.0.1, waits until `GET /health` answers, and removes the container when the session ends. `--fake-llm-image` (or `FAKE_LLM_IMAGE`) starts another image or tag instead. The plugin runs the `docker` command, so Docker must be installed where the tests run.
+- **A running server.** With `--fake-llm-url` (or `FAKE_LLM_URL`), no container is started, and the tests use the server at that base URL, such as a service container (see [GitHub Actions](#github-actions)). If it doesn't answer `GET /health`, every test that uses it errors, naming the URL.
+- **A clean server for each test.** The `fake_llm` fixture unloads the server before each test (`POST /control/unload`), so every test starts with no scenario loaded and empty logs, as under [A scenario per test](#a-scenario-per-test). `@pytest.mark.fake_llm_scenario("name")` on the test, its class or its module then loads that scenario; the nearest one wins. The marker takes effect through the fixture, so the test must request `fake_llm`. The server must be fake-llm 0.5.0 or later.
+- **Base URLs.** `fake_llm.base_url` is the server's root. `anthropic_base_url` (`…/anthropic`), `openai_base_url` (`…/openai/v1`) and `gemini_base_url` (`…/gemini/`) are the base URLs the official SDKs take; see [Quickstart](#quickstart).
+- **A scenario directory.** `fake_llm_scenario_dir = tests/scenarios` in the pytest configuration (relative to that file), or `--fake-llm-scenario-dir tests/scenarios`, mounts that directory into the started container, read-only, as its scenario directory, so its scenarios load by name. The files must be readable by the image's user, UID 10001. A running server keeps its own scenario directory. A test can also send its scenario inline, with `fake_llm.client.load_inline({...})`.
+- **The control token.** When `FAKE_LLM_CONTROL_TOKEN` is set, the started container requires it, and the client sends it, to a started or a running server.
+- **The client.** `fake_llm.client` is a `FakeLlmClient`, which also works on its own: `FakeLlmClient(base_url, control_token=None, timeout=10.0)` from `pytest_fake_llm`. Its methods are those of the Kotlin [`FakeLlmClient`](#control-api-client), in snake_case: `health()`, `scenario_names()`, `load(name)`, `load_inline(scenario)`, `reset()`, `unload()`, `calls()` and `exchanges()`. `calls()` returns `CallRecord`s, with the fields of `GET /control/calls` in snake_case, and `exchanges()` the decoded JSON. A failed call raises `FakeLlmClientError`, whose `status_code` is the HTTP status, or None when no complete response arrived, and whose `server_message` is the server's explanation, such as `unknown scenario 'x' — ...`. A 401 says whether the token was missing or rejected. The client uses only the standard library, and ignores the proxy environment variables.
+- **One server for the session.** Its tests share it, so they run one at a time. With pytest-xdist, each worker starts a container of its own; with `--fake-llm-url`, the workers would share one server, so run those tests without `-n`.
 
 ### Other CI systems
 
@@ -932,13 +961,14 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 - **The conformance suite** in [conformance/](conformance/README.md) defines the server's HTTP behaviour as JSON cases, for this server and for any other implementation. CI's `conformance` job runs it against the fat jar and the Docker image built from the same commit; locally, `./gradlew shadowJar :fake-llm-conformance:test -Pfakellm.command="java -jar build/libs/fake-llm-all.jar"`. A change to HTTP behaviour comes with a case. CI's `conformance` job also runs the official Python SDKs against the same jar and image (see [conformance/README.md](conformance/README.md#sdk-suite)), and the `SDK latest` workflow runs them daily against their newest releases.
 - **The CI recipe** in [examples/github-actions/fake-llm-tests.yml](examples/github-actions/fake-llm-tests.yml) (see [Run in CI](#run-in-ci)) is run by CI's `recipe` job against the image built from the same commit. A service container's image is pulled when the job starts, before any step could build it, so the job starts the image with `docker run`, with the example's service `env`, `ports` and `options`, and waits for its health check as the runner does. It then runs the example's `Copy the scenarios into fake-llm` and `Run the tests` steps with the example job's `env`. It checks that the example pins an `X.Y.Z` tag, and it installs the SDK suite's pinned lock instead of running the example's unpinned install step. CI's `lint` job runs actionlint on the example too.
 - **The Testcontainers module** in `testcontainers/` has two kinds of test. Its `test` task, part of `./gradlew build`, checks the container's configuration without Docker. The tests tagged `docker` start containers, so they run only in the `dockerTest` task, against the image named by `-Pfakellm.image`. CI's `docker` job runs them against the image built from the same commit; locally, `docker build -t fake-llm:dev . && ./gradlew :fake-llm-testcontainers:dockerTest -Pfakellm.image=fake-llm:dev`.
+- **The pytest plugin** in [pytest-fake-llm/](pytest-fake-llm/) is tested with itself: CI's `python` job builds the image from the same commit and runs the plugin's tests on Python 3.11, 3.12, 3.13, 3.14 and 3.15, with the session's server started from that image. Tests marked `docker` start containers of their own. Each version installs the hash-pinned `pytest-fake-llm/requirements-test.txt`, then the plugin. A test checks that the plugin's `version` in `pytest-fake-llm/pyproject.toml` is the one in `gradle.properties`, since the plugin starts the image with that tag. Locally, with Docker: `docker build -t fake-llm:dev .`, `python -m pip install --require-hashes -r pytest-fake-llm/requirements-test.txt`, `python -m pip install --no-build-isolation --no-deps ./pytest-fake-llm`, then `python -m pytest pytest-fake-llm/tests --fake-llm-image=fake-llm:dev`. Without Docker, `--fake-llm-url=http://localhost:8080` against `java -jar build/libs/fake-llm-all.jar` runs all but the `docker` tests.
 - Commits that only reformat code are listed in `.git-blame-ignore-revs`, which GitHub's blame view honours; locally, run `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 
 ### Dependency updates
 
-[Dependabot](.github/dependabot.yml) opens version-update pull requests every Monday for the Gradle builds (the root build and `examples/`, including the Gradle wrapper), the GitHub Actions in `.github/workflows/`, the Dockerfile base images, and the linter images in `.github/linters/`. Minor and patch updates are grouped into one pull request per ecosystem, and the two base-image digests are updated together. Kotlin, its Gradle plugins and the kotlinx-serialization runtime move together in one group across both builds, majors included, and the detekt and ktlint plugins have a group of their own, because a new rule release can bring new findings. Every other major update arrives on its own, except the linter images and the SDK conformance suite's Python packages, which are grouped whatever the update type. Each update must pass the same required checks as any other pull request.
+[Dependabot](.github/dependabot.yml) opens version-update pull requests every Monday for the Gradle builds (the root build and `examples/`, including the Gradle wrapper), the GitHub Actions in `.github/workflows/`, the Dockerfile base images, and the linter images in `.github/linters/`. Minor and patch updates are grouped into one pull request per ecosystem, and the two base-image digests are updated together. Kotlin, its Gradle plugins and the kotlinx-serialization runtime move together in one group across both builds, majors included, and the detekt and ktlint plugins have a group of their own, because a new rule release can bring new findings. Every other major update arrives on its own, except the linter images, the SDK conformance suite's Python packages and the pytest plugin's test dependencies, which are grouped whatever the update type. Each update must pass the same required checks as any other pull request.
 
-- Dependabot also updates the SDK conformance suite's lock (`conformance/sdk/python/requirements.txt`) weekly, all packages in one pull request, majors included.
+- Dependabot also updates the SDK conformance suite's lock (`conformance/sdk/python/requirements.txt`) and the pytest plugin's test lock (`pytest-fake-llm/requirements-test.txt`) weekly, each in one pull request for all its packages, majors included.
 - A Kotlin or kotlinx-serialization bump can change the generated members in `api/fake-llm.api`; see [Public API](#public-api) for the `apiDump` step. A bump that adds a compiler warning or lowers coverage is fixed on its pull request; the [quality gates](#quality-gates) are not lowered to let it through.
 - `main` only accepts branches that are up to date with it, so merge Dependabot pull requests one at a time. After each merge, comment `@dependabot rebase` on the next one; otherwise Dependabot only rebases it on its next weekly run. Once anyone pushes a commit to a Dependabot branch, such as an `apiDump`, Dependabot stops rebasing it: bring it up to date with "Update branch" instead. `@dependabot recreate` rebuilds the pull request from scratch and discards pushed commits.
 - Actions are pinned to a full commit SHA with the release in a trailing comment (`uses: actions/checkout@<sha> # v4.4.0`), and base images to a digest (`eclipse-temurin:21-jdk@sha256:...`). Keep that form when editing by hand; Dependabot updates both. Java major versions of the base images are ignored on purpose: the images stay on Java 21, the supported minimum ([#39](https://github.com/davidjones-griz/fake-llm/issues/39)), and newer Java versions are tested by CI's `java25` job instead. When a newer LTS becomes the one to test, rename that job and its required check.
@@ -955,7 +985,7 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 
 A release is published from a `vX.Y.Z` tag on `main` by the [Release](.github/workflows/release.yml) workflow.
 
-1. In a pull request, set `version` in `gradle.properties` and `info.version` in `openapi/fake-llm.yaml` to `X.Y.Z` (a test checks that the two match), change the CHANGELOG heading from `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, and move every `ghcr.io/davidjones-griz/fake-llm:` tag in `README.md` and the service image in `examples/github-actions/fake-llm-tests.yml` to `X.Y.Z`.
+1. In a pull request, set `version` in `gradle.properties`, `info.version` in `openapi/fake-llm.yaml` and `version` in `pytest-fake-llm/pyproject.toml` to `X.Y.Z` (tests check that they match), change the CHANGELOG heading from `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, and move every `ghcr.io/davidjones-griz/fake-llm:` tag in `README.md`, the service image in `examples/github-actions/fake-llm-tests.yml` and the `@vX.Y.Z` in the pytest plugin's install line to `X.Y.Z`.
 2. After it merges, tag the merge commit and push the tag: `git tag vX.Y.Z <merge commit> && git push origin vX.Y.Z`.
 
 The workflow then runs four jobs:

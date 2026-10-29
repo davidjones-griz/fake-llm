@@ -18,6 +18,11 @@ change the public API.
   version, and it starts once `GET /health` answers. It has the base URLs for the Anthropic, OpenAI
   and Gemini SDKs, copies a host scenario directory into the container, and returns a
   `FakeLlmClient` for its control API.
+- `pytest-fake-llm`, a pytest plugin in `pytest-fake-llm/`, installed from this repository: a
+  session fixture that starts the Docker image tagged with its version, or uses the server at
+  `--fake-llm-url` or `FAKE_LLM_URL`; a `fake_llm` fixture that unloads the server before each test;
+  a `fake_llm_scenario` marker that loads a scenario; and `FakeLlmClient`, a Python client for the
+  control API with typed call records.
 
 ### Changed
 
