@@ -46,7 +46,9 @@
         "body": {
           "status": "ok",
           "scenario": null,
-          "lenient": true
+          "lenient": true,
+          "steps": null,
+          "unusedSteps": []
         }
       }
     },

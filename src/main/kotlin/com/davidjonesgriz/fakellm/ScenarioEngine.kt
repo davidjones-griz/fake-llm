@@ -95,6 +95,13 @@ public data class ToolResultRecord internal constructor(
     val isError: Boolean,
 )
 
+/** The loaded scenario's [name], its step count, and the steps no call has used, read together. */
+internal data class ScenarioProgress(
+    val name: String?,
+    val steps: Int?,
+    val unusedSteps: List<Int>,
+)
+
 /** One logged call and the [Step] that answers it. See [ScenarioEngine.resolve]. */
 internal data class Resolution(
     val seq: Long,
@@ -195,16 +202,20 @@ public class ScenarioEngine(
     public fun currentScenarioName(): String? = synchronized(lock) { scenario?.name }
 
     /**
-     * The 1-based numbers of the loaded scenario's steps that no call has used since the last load
-     * or reset, in order: a snapshot, read under the same lock as [calls]. Steps are used in order,
-     * so these are always the last ones. Empty when no scenario is loaded or every step has served
-     * a call. From Java, `getUnusedSteps()`.
+     * The 1-based numbers of the loaded scenario's steps that no call has used since the last load,
+     * reset or unload, in order: a snapshot, read under the same lock as [calls]. Steps are used in
+     * order, so these are always the last ones. Empty when no scenario is loaded or every step has
+     * served a call. From Java, `getUnusedSteps()`.
      */
     public val unusedSteps: List<Int>
+        get() = progress.unusedSteps
+
+    /** [currentScenarioName], the step count and [unusedSteps], read under one lock. */
+    internal val progress: ScenarioProgress
         get() =
             synchronized(lock) {
-                val steps = scenario?.steps?.size ?: 0
-                (minOf(callCount, steps.toLong()).toInt() + 1..steps).toList()
+                val steps = scenario?.steps?.size
+                ScenarioProgress(scenario?.name, steps, unusedTail(callCount, steps ?: 0))
             }
 
     /** A snapshot of the call log, in call order. */
@@ -332,6 +343,12 @@ private fun rawArgumentsProblem(
         }
     }
 }
+
+/** Steps `min(calls, steps) + 1..steps`: the ones no call has used. */
+private fun unusedTail(
+    calls: Long,
+    steps: Int,
+): List<Int> = (minOf(calls, steps.toLong()).toInt() + 1..steps).toList()
 
 private fun errorStep(body: String): Step = Step(error = ErrorStep(status = HTTP_BAD_REQUEST, body = body))
 

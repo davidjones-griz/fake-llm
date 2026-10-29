@@ -197,9 +197,13 @@ public final class com/davidjonesgriz/fakellm/FakeLlmHealth {
 	public static final field Companion Lcom/davidjonesgriz/fakellm/FakeLlmHealth$Companion;
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Z
+	public final fun component3 ()Ljava/lang/Integer;
+	public final fun component4 ()Ljava/util/List;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getLenient ()Z
 	public final fun getScenario ()Ljava/lang/String;
+	public final fun getSteps ()Ljava/lang/Integer;
+	public final fun getUnusedSteps ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

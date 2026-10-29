@@ -39,7 +39,9 @@
         "body": {
           "status": "ok",
           "scenario": "fail-then-retry",
-          "lenient": false
+          "lenient": false,
+          "steps": 2,
+          "unusedSteps": [1, 2]
         }
       }
     }

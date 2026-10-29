@@ -73,13 +73,16 @@ private fun controlRoute(
     val key = "${ex.requestMethod} ${ex.requestURI.path}"
     when (key) {
         "GET /health" -> {
+            val progress = engine.progress
             respond(
                 ex,
                 HTTP_OK,
                 buildJsonObject {
                     put("status", "ok")
-                    put("scenario", engine.currentScenarioName())
+                    put("scenario", progress.name)
                     put("lenient", engine.lenient)
+                    put("steps", progress.steps)
+                    put("unusedSteps", buildJsonArray { progress.unusedSteps.forEach { add(JsonPrimitive(it)) } })
                 }.toString(),
             )
         }

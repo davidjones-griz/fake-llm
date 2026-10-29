@@ -267,6 +267,32 @@ class ScenarioEngineTest {
     }
 
     @Test
+    fun `progress reads name, steps and unused steps together`() {
+        val engine = ScenarioEngine()
+        assertEquals(ScenarioProgress(null, null, emptyList()), engine.progress)
+
+        engine.loadInline(textScenario("one", "two", "three", name = "three"))
+        assertEquals(ScenarioProgress("three", 3, listOf(1, 2, 3)), engine.progress)
+        engine.text()
+        assertEquals(ScenarioProgress("three", 3, listOf(2, 3)), engine.progress)
+        engine.text()
+        engine.text()
+        engine.handle("anthropic", req())
+        assertEquals(ScenarioProgress("three", 3, emptyList()), engine.progress, "a call after the last step uses no step")
+
+        engine.reset()
+        assertEquals(ScenarioProgress("three", 3, listOf(1, 2, 3)), engine.progress)
+        engine.unload()
+        assertEquals(ScenarioProgress(null, null, emptyList()), engine.progress)
+
+        engine.loadInline(
+            Scenario(name = "raw", steps = listOf(Step(toolCalls = listOf(ToolCall(name = "f", rawArguments = "{"))), Step(text = "two"))),
+        )
+        assertFailsWith<IllegalArgumentException> { engine.handle("gemini", req()) }
+        assertEquals(ScenarioProgress("raw", 2, listOf(1, 2)), engine.progress, "a rejected rawArguments request uses no step")
+    }
+
+    @Test
     fun `lenient mode does not cover a call after the last step`() {
         val engine = engineWith(textScenario("only"), lenient = true)
         engine.text()

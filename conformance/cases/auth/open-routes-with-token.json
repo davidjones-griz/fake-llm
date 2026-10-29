@@ -20,7 +20,9 @@
         "body": {
           "status": "ok",
           "scenario": "hello",
-          "lenient": false
+          "lenient": false,
+          "steps": 1,
+          "unusedSteps": [1]
         }
       }
     },

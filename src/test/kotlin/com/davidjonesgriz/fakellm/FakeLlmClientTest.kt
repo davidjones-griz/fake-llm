@@ -24,7 +24,7 @@ class FakeLlmClientTest {
     @Test
     fun `loads, reads typed calls and resets over HTTP`() {
         withClient { client, server ->
-            assertEquals(FakeLlmHealth(scenario = null, lenient = false), client.health())
+            assertEquals(FakeLlmHealth(scenario = null, lenient = false, steps = null, unusedSteps = emptyList()), client.health())
 
             client.load("hello")
             assertEquals("hello", client.health().scenario)
@@ -287,6 +287,29 @@ class FakeLlmClientTest {
                 """"outcome":"text","timestampMs":5,"promptSample":"p","addedLater":true}]"""
         withStub({ ex -> respondRaw(ex, 200, record) }) { url ->
             FakeLlmClient(url).use { client -> assertEquals("openai", client.calls().single().vendor) }
+        }
+    }
+
+    @Test
+    fun `health reports unused steps`() {
+        withClient { client, server ->
+            client.load("fail-then-retry")
+            TestClient(server.port).post("/anthropic/v1/messages", anthropicBody("hi"))
+
+            val health = client.health()
+            assertEquals(2, health.steps)
+            assertEquals(listOf(2), health.unusedSteps)
+        }
+    }
+
+    @Test
+    fun `health from an older server leaves the new fields null`() {
+        withStub({ ex -> respondRaw(ex, 200, """{"status":"ok","scenario":null,"lenient":false}""") }) { url ->
+            FakeLlmClient(url).use { client ->
+                val health = client.health()
+                assertNull(health.steps)
+                assertNull(health.unusedSteps)
+            }
         }
     }
 

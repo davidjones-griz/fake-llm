@@ -57,7 +57,10 @@ public class FakeLlmClient
                 .connectTimeout(timeout)
                 .build()
 
-        /** `GET /health`: the loaded scenario's name, if any, and whether the server is lenient. */
+        /**
+         * `GET /health`: the loaded scenario's name and step count, the steps no call has used, and
+         * whether the server is lenient.
+         */
         public fun health(): FakeLlmHealth = get("/health", FakeLlmHealth.serializer())
 
         /** `GET /control/scenarios`: the scenario names the server can load by name, sorted. */
@@ -166,15 +169,23 @@ public class FakeLlmClientException internal constructor(
 ) : RuntimeException(message, cause)
 
 /**
- * The server's `GET /health` response: the loaded scenario's name, or null when none is loaded, and
- * whether a call with no scenario loaded gets the canned reply. Read-only: the constructor and `copy` are
- * internal, so fields added with default values do not break callers.
+ * The server's `GET /health` response: the loaded scenario's name, or null when none is loaded,
+ * whether a call with no scenario loaded gets the canned reply, and the scenario's step count and
+ * the steps no call has used. Read-only: the constructor and `copy` are internal, so fields added
+ * with default values do not break callers.
  */
 @ConsistentCopyVisibility
 @Serializable
 public data class FakeLlmHealth internal constructor(
     val scenario: String?,
     val lenient: Boolean,
+    /** The loaded scenario's step count; null with none loaded, or from a server older than this release. */
+    val steps: Int? = null,
+    /**
+     * The 1-based numbers of the steps no call has used since the last load, reset or unload; empty
+     * with no scenario loaded. Null from a server older than this release.
+     */
+    val unusedSteps: List<Int>? = null,
 )
 
 @Serializable
