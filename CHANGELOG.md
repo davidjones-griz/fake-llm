@@ -18,6 +18,9 @@ change the public API.
   version, and it starts once `GET /health` answers. It has the base URLs for the Anthropic, OpenAI
   and Gemini SDKs, copies a host scenario directory into the container, and returns a
   `FakeLlmClient` for its control API.
+- `examples/` has a three-stage pipeline, `TicketPipeline`, tested end to end in
+  `TicketPipelineTest`: one call each to the Anthropic, OpenAI Chat Completions and Gemini
+  formats, with a tool call and a streamed reply, and a test for each failure its scenarios script.
 
 ### Changed
 

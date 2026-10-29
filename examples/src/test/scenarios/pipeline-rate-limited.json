@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
+  "name": "pipeline-rate-limited",
+  "description": "A 429 on the classification call, then the happy path's three steps.",
+  "steps": [
+    { "error": { "status": 429, "headers": { "retry-after": "0" } } },
+    { "text": "billing" },
+    { "toolCalls": [{ "name": "record_ticket", "arguments": { "orderId": "A-1001", "problem": "charged twice" } }] },
+    { "text": "Refund the duplicate charge on order A-1001.", "streamChunkChars": 8 }
+  ]
+}
