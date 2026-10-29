@@ -1,0 +1,62 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "usage-anthropic",
+  "description": "A step with usage reports its input and output tokens in a buffered Anthropic message; the cache figures stay 0.",
+  "scenario": {
+    "name": "text",
+    "steps": [
+      {
+        "text": "Billing questions go to the billing team.",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 340
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Billing questions go to the billing team."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 1200,
+            "output_tokens": 340,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}

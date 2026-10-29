@@ -277,3 +277,9 @@ def test_timeout_retried_takes_next_step(fake, server):
     with short_timeout_client(server, max_retries=1) as client:
         assert create(client).choices[0].message.content == "fast"
     assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]
+
+
+def test_scripted_usage(fake, openai_client):
+    fake.load([{"text": "Counted.", "usage": {"inputTokens": 1200, "outputTokens": 340}}])
+    usage = create(openai_client).usage
+    assert (usage.prompt_tokens, usage.completion_tokens, usage.total_tokens) == (1200, 340, 1540)

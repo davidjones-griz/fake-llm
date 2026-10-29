@@ -1,0 +1,44 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "usage-on-error-step-rejected",
+  "description": "Loading an inline scenario with usage on an error step is a 400: usage needs a reply.",
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenario": {
+            "name": "usage-on-error",
+            "steps": [
+              {
+                "error": {
+                  "status": 500
+                },
+                "usage": {
+                  "inputTokens": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

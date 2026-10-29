@@ -33,7 +33,7 @@
   "$defs": {
     "Step": {
       "type": "object",
-      "description": "One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking`), or a\nscripted `error`. A step sets exactly one of a reply and `error`.\n",
+      "description": "One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking` and\n`usage`), or a scripted `error`. A step sets exactly one of a reply and `error`.\n",
       "additionalProperties": false,
       "oneOf": [
         {
@@ -80,6 +80,42 @@
             "properties": {
               "thinking": {
                 "type": "string"
+              }
+            }
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "toolCalls"
+                ],
+                "properties": {
+                  "toolCalls": {
+                    "type": "array"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "usage"
+            ],
+            "properties": {
+              "usage": {
+                "type": "object"
               }
             }
           },
@@ -222,6 +258,17 @@
             "$ref": "#/$defs/ToolCall"
           },
           "description": "Tool calls the reply makes, in order, after any `text`."
+        },
+        "usage": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TokenUsage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The token counts this reply reports. Only on a reply step. Unset counts keep the\ndefaults (100 input, 50 output); totals are the sum; the Anthropic cache figures don't\nchange.\n"
         }
       }
     },
@@ -300,6 +347,27 @@
           ],
           "minLength": 1,
           "description": "The call's id. Default: `toolu_fake_<seq>_<n>` (Anthropic) and `call_fake_<seq>_<n>`\n(OpenAI; the `call_id` on Responses), where `n` is the call's 1-based position in the step. Gemini sends an id only when\none is set.\n"
+        }
+      }
+    },
+    "TokenUsage": {
+      "type": "object",
+      "description": "Token counts a reply step reports in every vendor's usage fields.",
+      "additionalProperties": false,
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647,
+          "default": 100,
+          "description": "Anthropic and Responses `input_tokens`, OpenAI `prompt_tokens`, Gemini `promptTokenCount`."
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647,
+          "default": 50,
+          "description": "Anthropic and Responses `output_tokens`, OpenAI `completion_tokens`, Gemini `candidatesTokenCount`."
         }
       }
     }

@@ -93,7 +93,7 @@ class OpenApiConformanceTest {
     fun `the Scenario schema and the server's decoder both accept explicit nulls`() {
         val withNulls =
             """{"name":"nulls","steps":[
-              {"text":null,"thinking":null,"error":{"status":500}},
+              {"text":null,"thinking":null,"usage":null,"error":{"status":500}},
               {"text":"t","error":null,"streamErrorAfterChunks":null},
               {"text":"t","toolCalls":null},
               {"toolCalls":[{"name":"f","arguments":null,"rawArguments":null,"id":null}]}
@@ -505,7 +505,7 @@ class OpenApiConformanceTest {
         const val SCENARIO = "#/components/schemas/Scenario"
         const val TOKEN = "spec-token"
         val HTTP_METHODS = setOf("get", "put", "post", "delete", "options", "head", "patch", "trace")
-        val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Step", "ErrorStep")
+        val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Step", "ErrorStep", "TokenUsage")
 
         const val HTTP_OK = 200
         const val HTTP_BAD_REQUEST = 400

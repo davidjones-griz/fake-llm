@@ -1,0 +1,63 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "usage-openai",
+  "description": "A buffered chat completion reports the step's prompt, completion and total tokens.",
+  "scenario": {
+    "name": "text",
+    "steps": [
+      {
+        "text": "Billing.",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 340
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-openai-1",
+          "object": "chat.completion",
+          "model": "fake-openai",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Billing."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 1200,
+            "completion_tokens": 340,
+            "total_tokens": 1540
+          }
+        }
+      }
+    }
+  ]
+}

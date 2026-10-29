@@ -151,6 +151,7 @@ internal fun anthropicEnvelope(
     cacheable: Boolean = true,
     thinking: String? = null,
     toolCalls: List<SentToolCall> = emptyList(),
+    usage: TokenUsage = DEFAULT_USAGE,
 ): String =
     buildJsonObject {
         put("id", "fake-msg-$seq")
@@ -192,8 +193,8 @@ internal fun anthropicEnvelope(
         put(
             "usage",
             buildJsonObject {
-                put("input_tokens", FIXED_INPUT_TOKENS)
-                put("output_tokens", FIXED_OUTPUT_TOKENS)
+                put("input_tokens", usage.inputTokens)
+                put("output_tokens", usage.outputTokens)
                 put("cache_read_input_tokens", if (cacheable) FIXED_CACHE_READ_TOKENS else 0)
                 put("cache_creation_input_tokens", if (cacheable) FIXED_CACHE_CREATION_TOKENS else 0)
             },

@@ -1,0 +1,67 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "usage-gemini",
+  "description": "A buffered Gemini response reports the step's counts in usageMetadata.",
+  "scenario": {
+    "name": "text",
+    "steps": [
+      {
+        "text": "Billing.",
+        "usage": {
+          "inputTokens": 1200,
+          "outputTokens": 340
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:generateContent",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "text": "Billing."
+                  }
+                ]
+              },
+              "finishReason": "STOP"
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 1200,
+            "candidatesTokenCount": 340,
+            "totalTokenCount": 1540
+          },
+          "fake_llm_seq": 1
+        }
+      }
+    }
+  ]
+}

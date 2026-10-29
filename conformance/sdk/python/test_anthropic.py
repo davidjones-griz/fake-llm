@@ -300,3 +300,13 @@ def test_stream_error_step_first_byte_delay(fake, anthropic_client):
     assert raised.value.body == OVERLOADED
     assert fake.log() == [call(1, "error:529", 1)]
     assert fake.delays() == [(300, 0)]
+
+
+def test_scripted_usage(fake, anthropic_client):
+    usage = {"inputTokens": 1200, "outputTokens": 340}
+    fake.load([{"text": "Counted.", "usage": usage}, {"text": "Counted, streamed.", "usage": usage}])
+    message = create(anthropic_client)
+    with stream(anthropic_client) as events:
+        streamed = events.get_final_message()
+    assert (message.usage.input_tokens, message.usage.output_tokens) == (1200, 340)
+    assert (streamed.usage.input_tokens, streamed.usage.output_tokens) == (1200, 340)

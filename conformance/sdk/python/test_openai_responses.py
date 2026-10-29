@@ -278,3 +278,9 @@ def test_first_byte_delay_timeout(fake, server):
         fake.wait_for_calls(1)
         assert create(client).output_text == "fast"
     assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]
+
+
+def test_scripted_usage(fake, openai_client):
+    fake.load([{"text": "Counted.", "usage": {"inputTokens": 1200, "outputTokens": 340}}])
+    usage = create(openai_client).usage
+    assert (usage.input_tokens, usage.output_tokens, usage.total_tokens) == (1200, 340, 1540)

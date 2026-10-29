@@ -60,14 +60,15 @@ internal const val GENERIC_STREAM_ERROR_BODY =
 
 /**
  * Payload of `message_start`. Input tokens and both cache fields are reported here; `output_tokens`
- * is omitted and reported only on `message_delta`. Uses the same [FIXED_INPUT_TOKENS] and cache
- * constants as the buffered envelope in ParsedRequest.kt, so buffered and streamed usage numbers
- * stay the same.
+ * is omitted and reported only on `message_delta`. [inputTokens] comes from the step, as in the
+ * buffered envelope in ParsedRequest.kt; the cache figures come from the same constants, so buffered
+ * and streamed usage numbers stay the same.
  */
 internal fun messageStartJson(
     seq: Long,
     model: String,
     cacheable: Boolean = true,
+    inputTokens: Int = FIXED_INPUT_TOKENS,
 ): String =
     buildJsonObject {
         put("type", "message_start")
@@ -84,7 +85,7 @@ internal fun messageStartJson(
                 put(
                     "usage",
                     buildJsonObject {
-                        put("input_tokens", FIXED_INPUT_TOKENS)
+                        put("input_tokens", inputTokens)
                         put("cache_creation_input_tokens", if (cacheable) FIXED_CACHE_CREATION_TOKENS else 0)
                         put("cache_read_input_tokens", if (cacheable) FIXED_CACHE_READ_TOKENS else 0)
                     },
@@ -129,7 +130,10 @@ internal fun contentBlockStopJson(index: Int = 0): String =
     }.toString()
 
 /** `message_delta` carries only the cumulative `output_tokens`. Input and cache tokens stay on `message_start`. */
-internal fun messageDeltaJson(stopReason: String): String =
+internal fun messageDeltaJson(
+    stopReason: String,
+    outputTokens: Int = FIXED_OUTPUT_TOKENS,
+): String =
     buildJsonObject {
         put("type", "message_delta")
         put(
@@ -142,7 +146,7 @@ internal fun messageDeltaJson(stopReason: String): String =
         put(
             "usage",
             buildJsonObject {
-                put("output_tokens", FIXED_OUTPUT_TOKENS)
+                put("output_tokens", outputTokens)
             },
         )
     }.toString()

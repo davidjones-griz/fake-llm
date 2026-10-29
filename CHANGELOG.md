@@ -34,6 +34,8 @@ change the public API.
   since the last load, reset or unload, so a test that drives the server over HTTP can check that
   its app made every scripted call. `FakeLlmHealth.steps` and `unusedSteps` read them (null from an
   older server).
+- `usage` on a step: the input and output token counts a reply reports, on every format, buffered
+  and streamed (`TokenUsage` in Kotlin). Unset counts keep 100 and 50.
 
 ### Changed
 
@@ -43,6 +45,8 @@ change the public API.
   be the same version as `fake-llm`.
 - The JUnit extension fails a test that passed if its scenario has steps no call used, naming
   them. Annotate a test that leaves steps unused on purpose with `@FakeLlmAllowUnusedSteps`.
+- `Step` has a new last parameter, `usage`. Code compiled against `Step`'s constructor or `copy`
+  must be recompiled.
 
 ## [0.5.0] - 2026-10-28
 

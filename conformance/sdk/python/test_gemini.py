@@ -250,3 +250,9 @@ def test_first_byte_delay_timeout(fake, server):
         client.close()
     assert fake.log() == [call(1, "text", 1), call(2, "text", 2), call(3, "text", 3)]
     assert fake.delays() == [(2000, 0), (2000, 0), (0, 0)]
+
+
+def test_scripted_usage(fake, gemini_client):
+    fake.load([{"text": "Counted.", "usage": {"inputTokens": 1200, "outputTokens": 340}}])
+    usage = generate(gemini_client).usage_metadata
+    assert (usage.prompt_token_count, usage.candidates_token_count, usage.total_token_count) == (1200, 340, 1540)

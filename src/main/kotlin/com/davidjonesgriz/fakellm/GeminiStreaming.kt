@@ -32,6 +32,7 @@ internal fun geminiChunkJson(
     seq: Long,
     part: JsonObject,
     finishReason: String?,
+    usage: TokenUsage = DEFAULT_USAGE,
 ): String =
     buildJsonObject {
         put(
@@ -55,9 +56,9 @@ internal fun geminiChunkJson(
             put(
                 "usageMetadata",
                 buildJsonObject {
-                    put("promptTokenCount", FIXED_INPUT_TOKENS)
-                    put("candidatesTokenCount", FIXED_OUTPUT_TOKENS)
-                    put("totalTokenCount", FIXED_INPUT_TOKENS + FIXED_OUTPUT_TOKENS)
+                    put("promptTokenCount", usage.inputTokens)
+                    put("candidatesTokenCount", usage.outputTokens)
+                    put("totalTokenCount", usage.totalTokens)
                 },
             )
         }
@@ -109,7 +110,7 @@ internal fun streamGeminiGenerateContent(
     try {
         parts.forEachIndexed { i, part ->
             if (i < texts.size && step.streamInterChunkDelayMs > 0) Thread.sleep(step.streamInterChunkDelayMs)
-            writeSseData(out, geminiChunkJson(seq, part, finishReason?.takeIf { i == parts.lastIndex }))
+            writeSseData(out, geminiChunkJson(seq, part, finishReason?.takeIf { i == parts.lastIndex }, step.appliedUsage))
         }
         if (error != null) writeSseData(out, error.body.ifBlank { GENERIC_GEMINI_STREAM_ERROR_BODY })
     } finally {
