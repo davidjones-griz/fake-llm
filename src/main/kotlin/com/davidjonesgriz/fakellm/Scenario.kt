@@ -49,8 +49,8 @@ public data class Scenario(
 }
 
 /**
- * One step of a [Scenario]: a reply ([text], [toolCalls] or both, optionally with [thinking]) or a
- * scripted [error].
+ * One step of a [Scenario]: a reply ([text], [toolCalls] or both, optionally with [thinking] and
+ * [usage]) or a scripted [error].
  *
  * @throws IllegalArgumentException when a value is invalid, including when a step sets both or
  *   neither of a reply and [error]. The message text is diagnostic, not part of the API.
@@ -105,6 +105,11 @@ public data class Step(
      * arrives, before the wait. `0` waits nothing. At most [MAX_DELAY_MS].
      */
     val firstByteDelayMs: Long = 0,
+    /**
+     * The token counts this reply reports. Null, the default, reports 100 input and 50 output
+     * tokens. Only on a reply step. Totals are the sum. The Anthropic cache figures do not change.
+     */
+    val usage: TokenUsage? = null,
 ) {
     init {
         require(((text != null) || (toolCalls != null)) xor (error != null)) {
@@ -129,6 +134,9 @@ public data class Step(
         }
         require(thinking == null || text != null || toolCalls != null) {
             "thinking is only valid on a step with text or toolCalls"
+        }
+        require(usage == null || text != null || toolCalls != null) {
+            "usage is only valid on a step with text or toolCalls"
         }
     }
 }
@@ -157,6 +165,26 @@ public data class ToolCall(
         require(name.isNotEmpty()) { "a tool call's name must not be empty" }
         require(id == null || id.isNotEmpty()) { "a tool call's id must not be empty" }
         require(arguments == null || rawArguments == null) { "a tool call sets at most one of arguments and rawArguments" }
+    }
+}
+
+/**
+ * Token counts a reply step reports, in every vendor's usage fields. An unset value keeps the
+ * default: 100 input tokens and 50 output tokens. Totals are the sum.
+ *
+ * @throws IllegalArgumentException when a count is negative. The message text is diagnostic, not
+ *   part of the API.
+ */
+@Serializable
+public data class TokenUsage(
+    /** Prompt tokens: Anthropic and Responses `input_tokens`, OpenAI `prompt_tokens`, Gemini `promptTokenCount`. */
+    val inputTokens: Int = FIXED_INPUT_TOKENS,
+    /** Reply tokens: Anthropic and Responses `output_tokens`, OpenAI `completion_tokens`, Gemini `candidatesTokenCount`. */
+    val outputTokens: Int = FIXED_OUTPUT_TOKENS,
+) {
+    init {
+        require(inputTokens >= 0) { "usage.inputTokens must not be negative, got $inputTokens" }
+        require(outputTokens >= 0) { "usage.outputTokens must not be negative, got $outputTokens" }
     }
 }
 

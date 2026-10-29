@@ -203,6 +203,10 @@ internal val invalidScenarios =
         "object rawArguments" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","rawArguments":{}}]}]}""",
         "max_tokens with toolCalls" to """{"name":"x","steps":[{"toolCalls":[{"name":"f"}],"stopReason":"max_tokens"}]}""",
         "an unknown field in a tool call" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","input":{}}]}]}""",
+        "usage on an error step" to """{"name":"x","steps":[{"error":{"status":500},"usage":{"inputTokens":1}}]}""",
+        "a negative inputTokens" to """{"name":"x","steps":[{"text":"t","usage":{"inputTokens":-1}}]}""",
+        "an unknown field in usage" to """{"name":"x","steps":[{"text":"t","usage":{"cachedTokens":1}}]}""",
+        "outputTokens past Int" to """{"name":"x","steps":[{"text":"t","usage":{"outputTokens":3000000000}}]}""",
     )
 
 /** Every directory of scenario files in the repository, relative to the root project. */

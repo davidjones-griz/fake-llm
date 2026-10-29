@@ -942,8 +942,8 @@ components:
     Step:
       type: object
       description: |
-        One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking`), or a
-        scripted `error`. A step sets exactly one of a reply and `error`.
+        One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking` and
+        `usage`), or a scripted `error`. A step sets exactly one of a reply and `error`.
       additionalProperties: false
       oneOf:
         - anyOf:
@@ -965,6 +965,21 @@ components:
             properties:
               thinking:
                 type: string
+          then:
+            anyOf:
+              - required: [text]
+                properties:
+                  text:
+                    type: string
+              - required: [toolCalls]
+                properties:
+                  toolCalls:
+                    type: array
+        - if:
+            required: [usage]
+            properties:
+              usage:
+                type: object
           then:
             anyOf:
               - required: [text]
@@ -1051,6 +1066,14 @@ components:
           items:
             $ref: "#/components/schemas/ToolCall"
           description: Tool calls the reply makes, in order, after any `text`.
+        usage:
+          oneOf:
+            - $ref: "#/components/schemas/TokenUsage"
+            - type: "null"
+          description: |
+            The token counts this reply reports. Only on a reply step. Unset counts keep the
+            defaults (100 input, 50 output); totals are the sum; the Anthropic cache figures don't
+            change.
     ToolCall:
       type: object
       description: One scripted tool call.
@@ -1084,6 +1107,23 @@ components:
             The call's id. Default: `toolu_fake_<seq>_<n>` (Anthropic) and `call_fake_<seq>_<n>`
             (OpenAI; the `call_id` on Responses), where `n` is the call's 1-based position in the step. Gemini sends an id only when
             one is set.
+    TokenUsage:
+      type: object
+      description: Token counts a reply step reports in every vendor's usage fields.
+      additionalProperties: false
+      properties:
+        inputTokens:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 100
+          description: Anthropic and Responses `input_tokens`, OpenAI `prompt_tokens`, Gemini `promptTokenCount`.
+        outputTokens:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 50
+          description: Anthropic and Responses `output_tokens`, OpenAI `completion_tokens`, Gemini `candidatesTokenCount`.
     ErrorStep:
       type: object
       description: A scripted HTTP error in place of a reply.

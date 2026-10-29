@@ -79,10 +79,14 @@ class FakeLlmClientTest {
 
     @Test
     fun `loadInline sends only the fields that are set`() {
-        val scenario = Scenario(name = "inline", steps = listOf(Step(text = "from the client")))
+        val scenario =
+            Scenario(
+                name = "inline",
+                steps = listOf(Step(text = "from the client"), Step(text = "counted", usage = TokenUsage(outputTokens = 4000))),
+            )
         // No "description", "stopReason" or other defaults that a server without those fields would reject.
         assertEquals(
-            """{"scenario":{"name":"inline","steps":[{"text":"from the client"}]}}""",
+            """{"scenario":{"name":"inline","steps":[{"text":"from the client"},{"text":"counted","usage":{"outputTokens":4000}}]}}""",
             encodeLoadInline(scenario),
         )
     }
