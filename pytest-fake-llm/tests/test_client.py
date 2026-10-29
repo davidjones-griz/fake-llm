@@ -7,7 +7,22 @@ from support import ANTHROPIC_REQUEST, HELLO, OPENAI_REQUEST, post
 
 
 def test_health_with_no_scenario_loaded(fake_llm):
-    assert fake_llm.client.health() == Health(scenario=None, lenient=False)
+    assert fake_llm.client.health() == Health(scenario=None, lenient=False, steps=None, unused_steps=[])
+
+
+def test_health_reports_the_steps_no_call_has_used(fake_llm):
+    fake_llm.client.load_inline({"name": "two", "steps": [{"text": "a"}, {"text": "b"}]})
+    post(f"{fake_llm.anthropic_base_url}/v1/messages", ANTHROPIC_REQUEST)
+
+    health = fake_llm.client.health()
+
+    assert (health.steps, health.unused_steps) == (2, [2])
+
+
+def test_health_from_an_older_server_leaves_the_new_fields_none(stub):
+    health = FakeLlmClient(stub(200, '{"status":"ok","scenario":null,"lenient":false}').url).health()
+
+    assert (health.steps, health.unused_steps) == (None, None)
 
 
 def test_scenario_names_are_the_bundled_ones_sorted(fake_llm):

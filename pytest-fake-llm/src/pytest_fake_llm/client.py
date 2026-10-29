@@ -35,10 +35,17 @@ class FakeLlmClientError(Exception):
 
 @dataclass(frozen=True)
 class Health:
-    """``GET /health``: the loaded scenario's name, or None, and whether the server is lenient."""
+    """``GET /health``: the loaded scenario's name, or None, and whether the server is lenient.
+
+    ``steps`` is the scenario's step count, None with none loaded, and ``unused_steps`` the steps no call
+    has used since the last load, reset or unload, [] with none loaded. Both are None from a server older
+    than 0.6.0.
+    """
 
     scenario: str | None
     lenient: bool
+    steps: int | None = None
+    unused_steps: list[int] | None = None
 
 
 @dataclass(frozen=True)
@@ -95,7 +102,15 @@ class FakeLlmClient:
     def health(self) -> Health:
         """``GET /health``."""
         body = self._get("/health")
-        return _decode("GET /health", lambda: Health(scenario=body["scenario"], lenient=body["lenient"]))
+        return _decode(
+            "GET /health",
+            lambda: Health(
+                scenario=body["scenario"],
+                lenient=body["lenient"],
+                steps=body.get("steps"),
+                unused_steps=body.get("unusedSteps"),
+            ),
+        )
 
     def scenario_names(self) -> list[str]:
         """``GET /control/scenarios``: the names the server can load, sorted."""
