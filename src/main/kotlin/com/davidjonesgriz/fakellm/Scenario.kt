@@ -13,7 +13,7 @@ import java.nio.file.Path
 /**
  * One named behavior of the fake: an ordered list of [steps]. After [ScenarioEngine.load] or
  * [ScenarioEngine.reset], call N on any generation route gets step N, in arrival order. A call
- * after the last step gets HTTP 400 (`"no more steps"`); the last step does not repeat.
+ * after the last step gets HTTP 400 (`no-more-steps`); the last step does not repeat.
  *
  * Scenario files are JSON in this shape. [ScenarioEngine.load] reads one by name from the engine's
  * [ScenarioEngine.scenarioDirectory], the project's classpath resource `/scenarios/<name>.json`, or
@@ -334,7 +334,7 @@ internal object ScenarioLoader {
         dir?.let { File(it, "$name.json") }?.takeIf { it.isFile }?.readText()
             ?: projectLoader.getResourceAsStream("$PROJECT_SCENARIOS/$name.json")?.use { it.readBytes().decodeToString() }
             ?: ScenarioLoader::class.java.getResourceAsStream("$BUNDLED_SCENARIOS/$name.json")?.use { it.readBytes().decodeToString() }
-            ?: error(
+            ?: throw UnknownScenarioException(
                 "unknown scenario '$name' — " + (if (dir != null) "no $name.json in ${dir.path}, " else "") +
                     "no /$PROJECT_SCENARIOS/$name.json on the classpath and no bundled scenario '$name'",
             )

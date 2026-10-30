@@ -180,7 +180,8 @@ class FakeLlmClientTest {
     }
 
     @Test
-    fun `an error body's message falls back from detail to fake_llm_error to the raw text`() {
+    fun `an error body's message falls back from message to detail to fake_llm_error to the raw text`() {
+        assertEquals("why", serverMessageOf("""{"fake_llm_error":"invalid-request","message":"why"}"""))
         assertEquals("why", serverMessageOf("""{"fake_llm_error":"exception","detail":"why"}"""))
         assertEquals("exception", serverMessageOf("""{"fake_llm_error":"exception","detail":null}"""))
         assertEquals("<html>Bad Gateway</html>", serverMessageOf("<html>Bad Gateway</html>"))

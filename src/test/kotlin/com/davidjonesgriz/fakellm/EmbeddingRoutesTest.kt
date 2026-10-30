@@ -27,13 +27,19 @@ class EmbeddingRoutesTest {
         body: String,
     ): HttpResponse<String> = client.post("/openai/v1/embeddings", body)
 
-    /** The 400's `detail`, after checking it is the `exception` 400. */
-    private fun rejected(response: HttpResponse<String>): String {
+    /** The 400's `message`, after checking its code is [code]. */
+    private fun rejected(
+        response: HttpResponse<String>,
+        code: String = "invalid-request",
+    ): String {
         assertEquals(400, response.statusCode(), response.body())
         val body = json(response)
-        assertEquals("exception", body["fake_llm_error"]?.jsonPrimitive?.contentOrNull)
-        return body["detail"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        assertEquals(code, body["fake_llm_error"]?.jsonPrimitive?.contentOrNull, response.body())
+        return body["message"]?.jsonPrimitive?.contentOrNull.orEmpty()
     }
+
+    /** `invalid-json` for a body that is not a JSON object, else `invalid-request`. */
+    private fun codeFor(body: String) = if (body.startsWith("{")) "invalid-request" else "invalid-json"
 
     private fun floats(embedding: JsonObject): List<Float> = embedding["embedding"]!!.jsonArray.map { it.jsonPrimitive.double.toFloat() }
 
@@ -88,7 +94,7 @@ class EmbeddingRoutesTest {
     }
 
     @Test
-    fun `invalid OpenAI requests get the exception 400`() {
+    fun `invalid OpenAI requests get the invalid-json or invalid-request 400`() {
         withServer { client, _ ->
             for (body in listOf(
                 "[]",
@@ -107,7 +113,7 @@ class EmbeddingRoutesTest {
                 """{"input":"a","encoding_format":"hex"}""",
                 """{"input":"a","encoding_format":5}""",
             )) {
-                rejected(openAi(client, body))
+                rejected(openAi(client, body), codeFor(body))
             }
             assertContains(rejected(openAi(client, """{"input":["a",1]}""")), "must not mix")
             assertEquals("dimensions must be from 1 to 8192, got 0", rejected(openAi(client, """{"input":"a","dimensions":0}""")))
@@ -191,7 +197,7 @@ class EmbeddingRoutesTest {
     }
 
     @Test
-    fun `invalid Gemini requests get the exception 400`() {
+    fun `invalid Gemini requests get the invalid-json or invalid-request 400`() {
         withServer { client, _ ->
             val text = """{"parts":[{"text":"a"}]}"""
             for ((route, body) in listOf(
@@ -206,7 +212,7 @@ class EmbeddingRoutesTest {
                 "batchEmbedContents" to """{"requests":[{"content":{"parts":[{"text":"a"},{"text":5}]}}]}""",
                 "batchEmbedContents" to """{"requests":[{"content":{"parts":[{"text":""}]}}]}""",
             )) {
-                rejected(client.post("$GEMINI:$route", body))
+                rejected(client.post("$GEMINI:$route", body), codeFor(body))
             }
             val zero = client.post("$GEMINI:embedContent", """{"content":$text,"outputDimensionality":0}""")
             assertEquals("outputDimensionality must be from 1 to 8192, got 0", rejected(zero))

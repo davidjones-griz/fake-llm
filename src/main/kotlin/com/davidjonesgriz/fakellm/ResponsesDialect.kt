@@ -30,7 +30,7 @@ private val responsesLenientJson = Json { ignoreUnknownKeys = true }
  * that is not a JSON object throws.
  */
 internal fun parseResponsesRequest(body: String): ParsedRequest {
-    val obj = responsesLenientJson.parseToJsonElement(body).jsonObject
+    val obj = parseRequestObject(responsesLenientJson, body)
     val input = obj["input"]
     val items = (input as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
     return ParsedRequest(

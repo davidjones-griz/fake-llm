@@ -113,7 +113,10 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "no more steps",
+          "fake_llm_error": "no-more-steps",
+          "message": {
+            "$type": "string"
+          },
           "scenario": "mixed",
           "steps": 2,
           "seq": 3,

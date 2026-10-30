@@ -55,7 +55,7 @@ internal fun handleGemini(
  * [Step.streamErrorAfterChunks] is null is a plain HTTP error, and no SSE bytes are written
  * first: that is how a provider rejects before generation starts (the usual timing for rate-limit
  * and overload errors). Setting [Step.streamErrorAfterChunks] opts into the other timing — some
- * text deltas, then an in-stream `event: error`. The "no more steps" and "no scenario loaded" 400s
+ * text deltas, then an in-stream `event: error`. The no-more-steps and no-scenario 400s
  * are that same plain HTTP error: [ScenarioEngine.resolve] returns them as error steps with
  * [Step.streamErrorAfterChunks] unset, and the branch below returns before any SSE bytes.
  * [Step.firstByteDelayMs] is waited out first, before any bytes.

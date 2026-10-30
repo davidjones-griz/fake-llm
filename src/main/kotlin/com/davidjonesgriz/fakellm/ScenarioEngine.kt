@@ -3,7 +3,6 @@ package com.davidjonesgriz.fakellm
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObjectBuilder
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.nio.file.Path
 
@@ -112,8 +111,8 @@ internal data class Resolution(
  * Serves the loaded scenario's steps in call order and records each call in the call log.
  *
  * After [load], [loadInline], [reset] or [unload], the next call is call 1. Call N gets step N of
- * the loaded scenario. A call after the last step gets HTTP 400 (`"no more steps"`), in strict and
- * lenient mode. With no scenario loaded, a call gets HTTP 400 (`"no scenario loaded"`), or the
+ * the loaded scenario. A call after the last step gets HTTP 400 (`no-more-steps`), in strict and
+ * lenient mode. With no scenario loaded, a call gets HTTP 400 (`no-scenario`), or the
  * canned reply when [lenient] is true. Every call takes a number and one log entry, whatever it is
  * answered with.
  *
@@ -277,7 +276,7 @@ public class ScenarioEngine(
             synchronized(lock) {
                 val s = scenario
                 rawArgumentsProblem(vendor, req, s?.steps?.getOrNull(callCount.toInt()), callCount + 1)?.let {
-                    throw IllegalArgumentException(it)
+                    throw RequestException(ErrorCode.UNSUPPORTED_STEP, it)
                 }
                 val n = ++callCount
                 val step = s?.steps?.takeIf { n <= it.size }?.get((n - 1).toInt())
@@ -368,10 +367,11 @@ private fun noScenarioBody(
     vendor: String,
     req: ParsedRequest,
 ): String =
-    buildJsonObject {
-        put("fake_llm_error", "no scenario loaded")
-        putCallFields(n, vendor, req)
-    }.toString()
+    errorBody(
+        ErrorCode.NO_SCENARIO,
+        "no scenario loaded: call $n has no step to answer it. Load a scenario with POST /control/scenario, " +
+            "or start the server with --lenient for a canned reply.",
+    ) { putCallFields(n, vendor, req) }
 
 private fun noMoreStepsBody(
     s: Scenario,
@@ -379,12 +379,15 @@ private fun noMoreStepsBody(
     vendor: String,
     req: ParsedRequest,
 ): String =
-    buildJsonObject {
-        put("fake_llm_error", "no more steps")
+    errorBody(
+        ErrorCode.NO_MORE_STEPS,
+        "no more steps: call $n came after the last step of scenario '${s.name}', which has ${s.steps.size} " +
+            (if (s.steps.size == 1) "step" else "steps") + ". The last step does not repeat.",
+    ) {
         put("scenario", s.name)
         put("steps", s.steps.size)
         putCallFields(n, vendor, req)
-    }.toString()
+    }
 
 private fun JsonObjectBuilder.putCallFields(
     n: Long,

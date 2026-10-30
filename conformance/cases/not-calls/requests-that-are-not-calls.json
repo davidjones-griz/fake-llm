@@ -26,8 +26,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-json",
+          "message": {
             "$type": "string"
           }
         }
@@ -50,8 +50,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }

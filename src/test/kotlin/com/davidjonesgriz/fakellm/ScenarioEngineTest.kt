@@ -63,7 +63,7 @@ class ScenarioEngineTest {
             )
         assertEquals(400, fourth.status)
         val body = json(fourth.body)
-        assertEquals("no more steps", body.getValue("fake_llm_error").jsonPrimitive.content)
+        assertEquals("no-more-steps", body.getValue("fake_llm_error").jsonPrimitive.content)
         assertEquals("inline", body.getValue("scenario").jsonPrimitive.content)
         assertEquals(
             3,
@@ -199,10 +199,10 @@ class ScenarioEngineTest {
         assertEquals(400, response.status)
         val body = json(response.body)
         assertEquals(
-            setOf("fake_llm_error", "seq", "vendor", "model", "system_shape", "message_count", "prompt_preview"),
+            setOf("fake_llm_error", "message", "seq", "vendor", "model", "system_shape", "message_count", "prompt_preview"),
             body.keys,
         )
-        assertEquals("no scenario loaded", body.getValue("fake_llm_error").jsonPrimitive.content)
+        assertEquals("no-scenario", body.getValue("fake_llm_error").jsonPrimitive.content)
         assertEquals(1L, body.getValue("seq").jsonPrimitive.long)
         assertEquals("anthropic", body.getValue("vendor").jsonPrimitive.content)
         assertEquals("example-model", body.getValue("model").jsonPrimitive.content)
@@ -298,7 +298,7 @@ class ScenarioEngineTest {
         engine.text()
         val extra = engine.handle("anthropic", req())
         assertEquals(400, extra.status)
-        assertEquals("no more steps", json(extra.body).getValue("fake_llm_error").jsonPrimitive.content)
+        assertEquals("no-more-steps", json(extra.body).getValue("fake_llm_error").jsonPrimitive.content)
         assertEquals("no-more-steps", engine.calls()[1].outcome)
     }
 

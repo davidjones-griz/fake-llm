@@ -203,7 +203,15 @@ class CaseRunnerTest {
 
     @Test
     fun `a scenario load that fails stops the case before any exchange`() {
-        withStub({ if (it.path == "/control/scenario") Canned(400, """{"fake_llm_error":"exception"}""") else Canned(200, "{}") }) { url ->
+        withStub({
+            if (it.path ==
+                "/control/scenario"
+            ) {
+                Canned(400, """{"fake_llm_error":"unknown-scenario","message":"no scenario named nope"}""")
+            } else {
+                Canned(200, "{}")
+            }
+        }) { url ->
             val failure =
                 assertFailsWith<CaseFailedException> {
                     CaseRunner(

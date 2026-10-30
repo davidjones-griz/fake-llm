@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "anthropic-tool-use-raw-arguments-buffered",
-  "description": "A buffered request whose next step has rawArguments gets the exception 400 and is not a call; the step stays next, and a streamed request then gets it as call 1.",
+  "description": "A buffered request whose next step has rawArguments gets the unsupported-step 400 and is not a call; the step stays next, and a streamed request then gets it as call 1.",
   "scenario": {
     "name": "anthropic-tool-use-raw-arguments-buffered",
     "steps": [
@@ -41,8 +41,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "unsupported-step",
+          "message": {
             "$type": "string"
           }
         }

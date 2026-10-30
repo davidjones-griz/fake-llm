@@ -884,7 +884,7 @@ class OpenApiConformanceTest {
                     Target.Operation("/anthropic/v1/messages"),
                     anthropic(),
                     expectStatus = 400,
-                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-scenario\"") },
                 ),
                 Exchange(
                     "anthropic, after the last step",
@@ -897,7 +897,7 @@ class OpenApiConformanceTest {
                         server.engine.load("hello")
                         send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
                     },
-                    assertBody = { assertContains(it, "\"no more steps\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-more-steps\"") },
                 ),
                 Exchange(
                     "openai, served by a step",
@@ -915,7 +915,7 @@ class OpenApiConformanceTest {
                     Target.Operation("/openai/v1/chat/completions"),
                     OPEN_AI,
                     expectStatus = 400,
-                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-scenario\"") },
                 ),
                 Exchange(
                     "openai, after the last step",
@@ -928,7 +928,7 @@ class OpenApiConformanceTest {
                         server.engine.load("hello")
                         send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
                     },
-                    assertBody = { assertContains(it, "\"no more steps\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-more-steps\"") },
                 ),
                 Exchange(
                     "gemini, served by a step",
@@ -946,7 +946,7 @@ class OpenApiConformanceTest {
                     Target.Operation("/gemini/{version}/models/{model}:generateContent"),
                     GEMINI,
                     expectStatus = 400,
-                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-scenario\"") },
                 ),
                 Exchange(
                     "gemini, after the last step",
@@ -959,7 +959,7 @@ class OpenApiConformanceTest {
                         server.engine.load("hello")
                         send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
                     },
-                    assertBody = { assertContains(it, "\"no more steps\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-more-steps\"") },
                 ),
                 Exchange(
                     "anthropic, streamed after the last step",
@@ -972,7 +972,7 @@ class OpenApiConformanceTest {
                         server.engine.load("hello")
                         send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
                     },
-                    assertBody = { assertContains(it, "\"no more steps\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-more-steps\"") },
                 ),
                 Exchange(
                     "anthropic, lenient, after the last step",
@@ -986,7 +986,7 @@ class OpenApiConformanceTest {
                         server.engine.load("hello")
                         send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
                     },
-                    assertBody = { assertContains(it, "\"no more steps\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-more-steps\"") },
                 ),
                 Exchange(
                     "anthropic, streamed with no scenario loaded",
@@ -995,7 +995,7 @@ class OpenApiConformanceTest {
                     Target.Operation("/anthropic/v1/messages"),
                     """{"model":"example-model","max_tokens":16,"stream":true,"messages":[{"role":"user","content":"hi"}]}""",
                     expectStatus = 400,
-                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-scenario\"") },
                 ),
                 Exchange(
                     "openai, streamed after the last step",
@@ -1008,7 +1008,7 @@ class OpenApiConformanceTest {
                         server.engine.load("hello")
                         send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
                     },
-                    assertBody = { assertContains(it, "\"no more steps\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-more-steps\"") },
                 ),
                 Exchange(
                     "openai, streamed with no scenario loaded",
@@ -1017,7 +1017,7 @@ class OpenApiConformanceTest {
                     Target.Operation("/openai/v1/chat/completions"),
                     """{"model":"example-gpt","stream":true,"messages":[{"role":"user","content":"hi"}]}""",
                     expectStatus = 400,
-                    assertBody = { assertContains(it, "\"no scenario loaded\"") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-scenario\"") },
                 ),
                 Exchange(
                     "anthropic, unparseable",

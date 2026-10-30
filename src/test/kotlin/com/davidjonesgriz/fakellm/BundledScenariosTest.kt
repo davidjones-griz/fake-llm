@@ -57,7 +57,7 @@ class BundledScenariosTest {
                 }
                 val extra = client.post("/anthropic/v1/messages", anthropicBody("hi"))
                 assertEquals(400, extra.statusCode(), name)
-                assertContains(extra.body(), "\"no more steps\"", message = name)
+                assertContains(extra.body(), "\"fake_llm_error\":\"no-more-steps\"", message = name)
                 val log = client.callLog()
                 assertEquals((1..steps.size).map { it.toString() } + "null", log.map { it.getValue("step").toString() }, name)
             }

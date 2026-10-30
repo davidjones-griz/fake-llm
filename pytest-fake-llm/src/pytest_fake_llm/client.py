@@ -202,7 +202,8 @@ def _call_record(entry: dict[str, Any]) -> CallRecord:
 
 
 def _server_message(body: str) -> str | None:
-    """``detail`` when it is a string, else ``fake_llm_error``, else the raw body's start; None when empty."""
+    """``message`` when it is a string, else ``detail`` (a server older than 0.7.0), else ``fake_llm_error``
+    (the 401, 404 and 501 bodies), else the raw body's start; None when empty."""
     if not body.strip():
         return None
     try:
@@ -210,7 +211,7 @@ def _server_message(body: str) -> str | None:
     except ValueError:
         parsed = None
     if isinstance(parsed, dict):
-        for key in ("detail", "fake_llm_error"):
+        for key in ("message", "detail", "fake_llm_error"):
             if isinstance(parsed.get(key), str):
                 return parsed[key]
     return body[:_RAW_BODY_LIMIT]

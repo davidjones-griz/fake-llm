@@ -16,7 +16,7 @@ private val openAiLenientJson = Json { ignoreUnknownKeys = true }
 private val OPENAI_SYSTEM_ROLES = setOf("system", "developer")
 
 internal fun parseOpenAiRequest(body: String): ParsedRequest {
-    val obj = openAiLenientJson.parseToJsonElement(body).jsonObject
+    val obj = parseRequestObject(openAiLenientJson, body)
     val model = obj.stringField("model").orEmpty()
     val messages = obj["messages"] as? JsonArray ?: error("request has no messages array")
     val systemShape =

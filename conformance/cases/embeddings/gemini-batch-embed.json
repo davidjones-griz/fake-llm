@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "gemini-batch-embed",
-  "description": "Gemini batchEmbedContents gets one embedding per request, in order; an invalid batch gets the exception 400; none is a call.",
+  "description": "Gemini batchEmbedContents gets one embedding per request, in order; an invalid batch gets the invalid-request 400; none is a call.",
   "scenario": {
     "name": "one-step",
     "steps": [
@@ -97,8 +97,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -133,8 +133,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -169,8 +169,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -205,8 +205,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -234,8 +234,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }

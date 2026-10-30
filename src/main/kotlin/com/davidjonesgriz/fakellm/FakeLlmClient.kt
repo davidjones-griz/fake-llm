@@ -214,14 +214,17 @@ internal fun encodeLoadInline(scenario: Scenario): String =
     buildJsonObject { put("scenario", requestJson.encodeToJsonElement(Scenario.serializer(), scenario)) }.toString()
 
 /**
- * The server's explanation in an error [body]: `detail` when it is a string, else `fake_llm_error`,
- * else the raw body (first [RAW_BODY_LIMIT] characters), which covers a non-JSON page from a proxy.
- * Null for an empty body.
+ * The server's explanation in an error [body]: `message` when it is a string, else `detail` (a server
+ * older than 0.7.0), else `fake_llm_error` (the 401, 404 and 501 bodies), else the raw body (first
+ * [RAW_BODY_LIMIT] characters), which covers a non-JSON page from a proxy. Null for an empty body.
  */
 internal fun serverMessageOf(body: String): String? {
     if (body.isBlank()) return null
     val json = parseObjectOrNull(body)
-    return json?.stringField("detail") ?: json?.stringField("fake_llm_error") ?: body.take(RAW_BODY_LIMIT)
+    return json?.stringField("message")
+        ?: json?.stringField("detail")
+        ?: json?.stringField("fake_llm_error")
+        ?: body.take(RAW_BODY_LIMIT)
 }
 
 // A body that is not JSON is expected here (for example a proxy's error page); the caller uses the raw text.

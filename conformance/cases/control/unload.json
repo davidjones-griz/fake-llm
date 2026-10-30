@@ -147,7 +147,10 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "no scenario loaded",
+          "fake_llm_error": "no-scenario",
+          "message": {
+            "$type": "string"
+          },
           "seq": 1,
           "vendor": "anthropic",
           "model": "example-model",

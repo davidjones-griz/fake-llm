@@ -108,7 +108,7 @@ def test_call_after_last_step(fake, gemini_client):
     with pytest.raises(errors.ClientError) as raised:
         generate(gemini_client)
     assert raised.value.code == 400
-    assert raised.value.details["fake_llm_error"] == "no more steps"
+    assert raised.value.details["fake_llm_error"] == "no-more-steps" and raised.value.details["message"].startswith("no more steps:")
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
 
 
@@ -120,7 +120,7 @@ def test_call_after_unload(fake, gemini_client):
     with pytest.raises(errors.ClientError) as raised:
         generate(gemini_client)
     assert raised.value.code == 400
-    assert raised.value.details["fake_llm_error"] == "no scenario loaded"
+    assert raised.value.details["fake_llm_error"] == "no-scenario" and raised.value.details["message"].startswith("no scenario loaded:")
     assert fake.log() == [call(1, "no-scenario", None)]
 
 
@@ -154,7 +154,7 @@ def test_raw_arguments_not_a_call(fake, gemini_client):
     with pytest.raises(errors.ClientError) as raised:
         generate(gemini_client)
     assert raised.value.code == 400
-    assert raised.value.details["fake_llm_error"] == "exception"
+    assert raised.value.details["fake_llm_error"] == "unsupported-step"
     assert fake.log() == []
 
 
@@ -231,7 +231,7 @@ def test_stream_call_after_last_step(fake, gemini_client):
     with pytest.raises(errors.ClientError) as raised:
         list(stream(gemini_client))
     assert raised.value.code == 400
-    assert raised.value.details["fake_llm_error"] == "no more steps"
+    assert raised.value.details["fake_llm_error"] == "no-more-steps" and raised.value.details["message"].startswith("no more steps:")
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
 
 
@@ -240,7 +240,7 @@ def test_stream_raw_arguments_not_a_call(fake, gemini_client):
     with pytest.raises(errors.ClientError) as raised:
         list(stream(gemini_client))
     assert raised.value.code == 400
-    assert raised.value.details["fake_llm_error"] == "exception"
+    assert raised.value.details["fake_llm_error"] == "unsupported-step"
     assert fake.log() == []
 
 

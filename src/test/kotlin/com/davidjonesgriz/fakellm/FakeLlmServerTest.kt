@@ -83,7 +83,7 @@ class FakeLlmServerTest {
             val bufferedBody =
                 assertCallError(
                     buffered,
-                    error = "no scenario loaded",
+                    error = "no-scenario",
                     seq = 1,
                     vendor = "anthropic",
                     model = "example-model",
@@ -92,12 +92,12 @@ class FakeLlmServerTest {
                     promptPreview = "sys\nHello \"there\"\n",
                 )
             assertEquals(
-                setOf("fake_llm_error", "seq", "vendor", "model", "system_shape", "message_count", "prompt_preview"),
+                setOf("fake_llm_error", "message", "seq", "vendor", "model", "system_shape", "message_count", "prompt_preview"),
                 bufferedBody.keys,
             )
 
             val streamed = client.post("/anthropic/v1/messages", anthropicBody("stream me", stream = true))
-            assertCallError(streamed, "no scenario loaded", 2, "anthropic", "example-model", "absent", 1, "stream me\n")
+            assertCallError(streamed, "no-scenario", 2, "anthropic", "example-model", "absent", 1, "stream me\n")
             assertFalse(streamed.body().contains("message_start"))
 
             val openai =
@@ -105,25 +105,25 @@ class FakeLlmServerTest {
                     "/openai/v1/chat/completions",
                     """{"model":"example-gpt","stream":true,"messages":[{"role":"system","content":"sys"},{"role":"user","content":"hi"}]}""",
                 )
-            assertCallError(openai, "no scenario loaded", 3, "openai", "example-gpt", "blocks", 2, "sys\nhi\n")
+            assertCallError(openai, "no-scenario", 3, "openai", "example-gpt", "blocks", 2, "sys\nhi\n")
             assertFalse(openai.body().contains("data:"))
 
             val gemini =
                 client.post("/gemini/v1beta/models/gemini-2.0-flash:generateContent", """{"contents":[{"parts":[{"text":"Hello"}]}]}""")
-            assertCallError(gemini, "no scenario loaded", 4, "gemini", "gemini-2.0-flash", "absent", 1, "Hello\n")
+            assertCallError(gemini, "no-scenario", 4, "gemini", "gemini-2.0-flash", "absent", 1, "Hello\n")
 
             val geminiStream =
                 client.post(
                     "/gemini/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse",
                     """{"contents":[{"parts":[{"text":"Hello"}]}]}""",
                 )
-            assertCallError(geminiStream, "no scenario loaded", 5, "gemini", "gemini-2.0-flash", "absent", 1, "Hello\n")
+            assertCallError(geminiStream, "no-scenario", 5, "gemini", "gemini-2.0-flash", "absent", 1, "Hello\n")
             assertFalse(geminiStream.body().contains("data:"))
 
             val responses = client.post("/openai/v1/responses", responsesBody())
-            assertCallError(responses, "no scenario loaded", 6, "openai-responses", "example-gpt", "absent", 1, "Hello\n")
+            assertCallError(responses, "no-scenario", 6, "openai-responses", "example-gpt", "absent", 1, "Hello\n")
             val responsesStream = client.post("/openai/v1/responses", responsesBody(stream = true))
-            assertCallError(responsesStream, "no scenario loaded", 7, "openai-responses", "example-gpt", "absent", 1, "Hello\n")
+            assertCallError(responsesStream, "no-scenario", 7, "openai-responses", "example-gpt", "absent", 1, "Hello\n")
             assertFalse(responsesStream.body().contains("event:"))
 
             val log = calls(client)
@@ -245,7 +245,7 @@ class FakeLlmServerTest {
                     """.trimIndent(),
                 )
             assertEquals(400, resp.statusCode())
-            assertContains(errorDetail(resp.body()), "cache_control")
+            assertContains(errorMessage(resp.body(), "invalid-request"), "cache_control")
         }
     }
 
@@ -254,23 +254,15 @@ class FakeLlmServerTest {
         withServer { client, _ ->
             val malformed = client.post("/anthropic/v1/messages", "{")
             assertEquals(400, malformed.statusCode())
-            assertEquals(
-                "exception",
-                Json
-                    .parseToJsonElement(malformed.body())
-                    .jsonObject
-                    .getValue("fake_llm_error")
-                    .jsonPrimitive.content,
-            )
-            assertTrue(errorDetail(malformed.body()).isNotBlank())
+            assertTrue(errorMessage(malformed.body(), "invalid-json").isNotBlank())
 
             val missingMessages = client.post("/anthropic/v1/messages", """{"model":"example-model"}""")
             assertEquals(400, missingMessages.statusCode())
-            assertContains(errorDetail(missingMessages.body()), "messages")
+            assertContains(errorMessage(missingMessages.body(), "invalid-request"), "messages")
 
             val control = client.post("/control/scenario", "{")
             assertEquals(400, control.statusCode())
-            assertTrue(errorDetail(control.body()).isNotBlank())
+            assertTrue(errorMessage(control.body(), "invalid-json").isNotBlank())
         }
     }
 
@@ -280,27 +272,27 @@ class FakeLlmServerTest {
         withServer { client, engine ->
             val both = client.post("/control/scenario", """{"name":"hello","scenario":$inline}""")
             assertEquals(400, both.statusCode())
-            assertContains(errorDetail(both.body()), "exactly one")
+            assertContains(errorMessage(both.body(), "invalid-request"), "exactly one")
 
             val neither = client.post("/control/scenario", "{}")
             assertEquals(400, neither.statusCode())
-            assertContains(errorDetail(neither.body()), "exactly one")
+            assertContains(errorMessage(neither.body(), "invalid-request"), "exactly one")
 
             val notObject = client.post("/control/scenario", "[1]")
             assertEquals(400, notObject.statusCode())
-            assertContains(errorDetail(notObject.body()), "JSON object")
+            assertContains(errorMessage(notObject.body(), "invalid-json"), "JSON object")
 
             val blankName = client.post("/control/scenario", """{"name":" "}""")
             assertEquals(400, blankName.statusCode())
-            assertContains(errorDetail(blankName.body()), "non-blank")
+            assertContains(errorMessage(blankName.body(), "invalid-request"), "non-blank")
 
             val scenarioNotObject = client.post("/control/scenario", """{"scenario":"hello"}""")
             assertEquals(400, scenarioNotObject.statusCode())
-            assertContains(errorDetail(scenarioNotObject.body()), "JSON object")
+            assertContains(errorMessage(scenarioNotObject.body(), "invalid-request"), "JSON object")
 
             val extraField = client.post("/control/scenario", """{"name":"hello","extra":1}""")
             assertEquals(400, extraField.statusCode())
-            assertContains(errorDetail(extraField.body()), "unknown field(s) [extra]")
+            assertContains(errorMessage(extraField.body()), "unknown field(s) [extra]")
             assertEquals(null, engine.currentScenarioName(), "a rejected body loads nothing")
         }
     }
@@ -321,20 +313,20 @@ class FakeLlmServerTest {
             val badStatus = """{"scenario":{"name":"s","steps":[{"text":"ok"},{"error":{"status":42}}]}}"""
             val status = client.post("/control/scenario", badStatus)
             assertEquals(400, status.statusCode(), status.body())
-            assertContains(errorDetail(status.body()), "step 2: ")
-            assertContains(errorDetail(status.body()), "HTTP status")
+            assertContains(errorMessage(status.body()), "step 2: ")
+            assertContains(errorMessage(status.body()), "HTTP status")
 
             val misspelt = """{"scenario":{"name":"s","steps":[{"text":"ok"},{"text":"x","stopReasn":"max_tokens"}]}}"""
             val field = client.post("/control/scenario", misspelt)
             assertEquals(400, field.statusCode(), field.body())
-            assertEquals("step 2: \$.steps[1]: unknown field 'stopReasn'", errorDetail(field.body()))
+            assertEquals("step 2: \$.steps[1]: unknown field 'stopReasn'", errorMessage(field.body()))
 
             val noSteps = client.post("/control/scenario", """{"scenario":{"name":"s","steps":[]}}""")
             assertEquals(400, noSteps.statusCode(), noSteps.body())
 
             val rules = client.post("/control/scenario", """{"scenario":{"name":"s","rules":[{"role":"r","respond":[{"text":"t"}]}]}}""")
             assertEquals(400, rules.statusCode(), rules.body())
-            assertContains(errorDetail(rules.body()), "rules")
+            assertContains(errorMessage(rules.body()), "rules")
             assertEquals(null, engine.currentScenarioName())
         }
     }

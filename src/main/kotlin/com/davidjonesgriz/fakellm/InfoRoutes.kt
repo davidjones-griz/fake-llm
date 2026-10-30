@@ -16,7 +16,7 @@ internal const val FAKE_MODEL_ID = "fake-llm"
 /**
  * Answers `POST /anthropic/v1/messages/count_tokens` and the model list and lookup routes.
  * Returns false when the request is none of them. A count_tokens body the Messages parser rejects
- * throws, which `route` answers with the `exception` 400.
+ * throws, which `route` answers with the `invalid-json` or `invalid-request` 400.
  */
 internal fun infoRoute(ex: HttpExchange): Boolean {
     val path = ex.requestURI.path

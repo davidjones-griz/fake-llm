@@ -314,7 +314,7 @@ class ResponsesRouteTest {
             assertEquals(400, resp.statusCode())
             assertTrue(contentType(resp).startsWith("application/json"))
             val body = json(resp.body())
-            assertEquals("no more steps", body.getValue("fake_llm_error").jsonPrimitive.content)
+            assertEquals("no-more-steps", body.getValue("fake_llm_error").jsonPrimitive.content)
             assertEquals("openai-responses", body.getValue("vendor").jsonPrimitive.content)
             assertFalse(resp.body().contains("event:"))
         }

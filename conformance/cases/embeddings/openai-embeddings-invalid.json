@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "openai-embeddings-invalid",
-  "description": "An invalid input, size or encoding gets the exception 400 and is not a call.",
+  "description": "An invalid input, size or encoding gets the invalid-request 400 and is not a call.",
   "scenario": {
     "name": "one-step",
     "steps": [
@@ -29,8 +29,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -54,8 +54,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -82,8 +82,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -109,8 +109,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -139,8 +139,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -166,8 +166,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -191,8 +191,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -217,8 +217,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -243,8 +243,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -269,8 +269,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -295,8 +295,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
@@ -321,8 +321,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }
