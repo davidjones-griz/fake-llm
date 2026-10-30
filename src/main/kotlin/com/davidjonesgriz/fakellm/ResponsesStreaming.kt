@@ -34,11 +34,12 @@ internal fun handleOpenAiResponses(
  *
  * An error step without `streamErrorAfterChunks`, and the no-more-steps and no-scenario 400s, are
  * sent as the plain JSON response, with no SSE bytes. Otherwise the stream starts with
- * `response.created` and `response.in_progress`. A reply step then sends the message item (its
+ * `response.created` and `response.in_progress`. A reply step's `thinking` is streamed first as a
+ * reasoning item (see [writeReasoning]). The step then sends the message item (its
  * opening events, one `response.output_text.delta` per `streamChunkChars` code points, each after
  * `streamInterChunkDelayMs`, and its done events), then each tool call as a `function_call` item
  * with its argument text as delta events, and ends with `response.completed`, or
- * `response.incomplete` for `max_tokens`. `thinking` is ignored. An error step with
+ * `response.incomplete` for `max_tokens`. An error step with
  * `streamErrorAfterChunks` opens the message, sends that many filler deltas, then `event: error`
  * with the error body (or the API's own error event when it is blank), and closes the stream.
  * [Step.firstByteDelayMs] is waited out first, before any bytes.
@@ -76,9 +77,11 @@ internal fun streamOpenAiResponse(
             writer.writeError(error.body)
         } else {
             val toolCalls = sentToolCalls(RESPONSES_VENDOR, step, seq)
-            // The message, when there is text, is output 0, and the tool calls follow it.
-            val firstCallIndex = if (step.text != null) 1 else 0
-            step.text?.let { writeMessage(writer, seq, step, it) }
+            // The reasoning item (thinking) comes first, then the message (text), then the tool calls.
+            step.thinking?.let { writeReasoning(writer, seq, step, it) }
+            val messageIndex = if (step.thinking != null) 1 else 0
+            val firstCallIndex = messageIndex + (if (step.text != null) 1 else 0)
+            step.text?.let { writeMessage(writer, seq, step, it, messageIndex) }
             toolCalls.forEachIndexed { i, call ->
                 writeFunctionCall(writer, firstCallIndex + i, "fc_fake_${seq}_${i + 1}", call, step)
             }
@@ -88,7 +91,7 @@ internal fun streamOpenAiResponse(
                     seq,
                     req.model,
                     status,
-                    responsesOutput(step.text, step.stopReason, seq, toolCalls),
+                    responsesOutput(step.text, step.stopReason, seq, toolCalls, step.thinking),
                     usage = step.appliedUsage,
                 )
             writer.write("response.$status", buildJsonObject { put("response", final) })
@@ -101,11 +104,12 @@ internal fun streamOpenAiResponse(
 private fun writeMessageOpening(
     writer: ResponsesEventWriter,
     seq: Long,
+    outputIndex: Int = 0,
 ) {
     writer.write(
         "response.output_item.added",
         buildJsonObject {
-            put("output_index", 0)
+            put("output_index", outputIndex)
             put("item", responsesMessageItem(seq, "in_progress", null))
         },
     )
@@ -113,7 +117,7 @@ private fun writeMessageOpening(
         "response.content_part.added",
         buildJsonObject {
             put("item_id", "msg_fake_$seq")
-            put("output_index", 0)
+            put("output_index", outputIndex)
             put("content_index", 0)
             put(
                 "part",
@@ -132,6 +136,7 @@ private fun writeTextDeltas(
     seq: Long,
     pieces: List<String>,
     delayMs: Long,
+    outputIndex: Int = 0,
 ) {
     pieces.forEach { piece ->
         if (delayMs > 0) Thread.sleep(delayMs)
@@ -139,7 +144,7 @@ private fun writeTextDeltas(
             "response.output_text.delta",
             buildJsonObject {
                 put("item_id", "msg_fake_$seq")
-                put("output_index", 0)
+                put("output_index", outputIndex)
                 put("content_index", 0)
                 put("delta", piece)
                 put("logprobs", buildJsonArray {})
@@ -153,14 +158,15 @@ private fun writeMessage(
     seq: Long,
     step: Step,
     text: String,
+    outputIndex: Int,
 ) {
-    writeMessageOpening(writer, seq)
-    writeTextDeltas(writer, seq, chunkText(text, step.streamChunkChars), step.streamInterChunkDelayMs)
+    writeMessageOpening(writer, seq, outputIndex)
+    writeTextDeltas(writer, seq, chunkText(text, step.streamChunkChars), step.streamInterChunkDelayMs, outputIndex)
     writer.write(
         "response.output_text.done",
         buildJsonObject {
             put("item_id", "msg_fake_$seq")
-            put("output_index", 0)
+            put("output_index", outputIndex)
             put("content_index", 0)
             put("text", text)
             put("logprobs", buildJsonArray {})
@@ -170,7 +176,7 @@ private fun writeMessage(
         "response.content_part.done",
         buildJsonObject {
             put("item_id", "msg_fake_$seq")
-            put("output_index", 0)
+            put("output_index", outputIndex)
             put("content_index", 0)
             put(
                 "part",
@@ -186,7 +192,7 @@ private fun writeMessage(
     writer.write(
         "response.output_item.done",
         buildJsonObject {
-            put("output_index", 0)
+            put("output_index", outputIndex)
             put("item", responsesMessageItem(seq, status, text))
         },
     )

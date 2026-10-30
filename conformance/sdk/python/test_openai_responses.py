@@ -199,6 +199,19 @@ def test_stream_helper_final_response(fake, openai_client):
     assert fake.log() == [call(1, "text", 1)]
 
 
+def test_stream_reasoning_summary(fake, openai_client):
+    fake.load([{"text": "Billing.", "thinking": "The user asks about an invoice.", "streamChunkChars": 8}])
+    with openai_client.responses.stream(model="example-gpt", input="Hello") as s:
+        events = list(s)
+        final = s.get_final_response()
+    deltas = [e.delta for e in events if e.type == "response.reasoning_summary_text.delta"]
+    assert "".join(deltas) == "The user asks about an invoice." and len(deltas) > 1
+    assert [item.type for item in final.output] == ["reasoning", "message"]
+    assert [s.text for s in final.output[0].summary] == ["The user asks about an invoice."]
+    assert final.output_text == "Billing."
+    assert fake.log() == [call(1, "text", 1)]
+
+
 def test_stream_max_tokens(fake, openai_client):
     fake.load([{"text": "cut off", "stopReason": "max_tokens"}] * 2)
     events = list(stream(openai_client))

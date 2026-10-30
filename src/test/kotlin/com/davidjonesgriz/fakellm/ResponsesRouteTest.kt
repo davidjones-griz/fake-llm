@@ -120,6 +120,74 @@ class ResponsesRouteTest {
     }
 
     @Test
+    fun `a streamed responses step with thinking sends the reasoning item first and moves the message to output_index 1`() {
+        val thinking = "The user asks about billing."
+        val text = "Billing."
+        withServer(engineWith(Step(text = text, thinking = thinking, streamChunkChars = 12))) { client, _ ->
+            val rs = """"item_id":"rs_fake_1","output_index":0,"summary_index":0"""
+            val summary = { t: String -> """{"type":"summary_text","text":${JsonPrimitive(t)}}""" }
+            val reasoning = { t: String? -> """{"id":"rs_fake_1","type":"reasoning","summary":[${t?.let(summary) ?: ""}]}""" }
+            val msg = """"item_id":"msg_fake_1","output_index":1,"content_index":0"""
+            val final = response("completed", reasoning(thinking) + "," + message(text))
+            assertEquals(
+                opening().take(2) +
+                    listOf(
+                        event("response.output_item.added", """"output_index":0,"item":${reasoning(null)}""", 2),
+                        event("response.reasoning_summary_part.added", """$rs,"part":${summary("")}""", 3),
+                        event("response.reasoning_summary_text.delta", """$rs,"delta":"The user ask"""", 4),
+                        event("response.reasoning_summary_text.delta", """$rs,"delta":"s about bill"""", 5),
+                        event("response.reasoning_summary_text.delta", """$rs,"delta":"ing."""", 6),
+                        event("response.reasoning_summary_text.done", """$rs,"text":"$thinking"""", 7),
+                        event("response.reasoning_summary_part.done", """$rs,"part":${summary(thinking)}""", 8),
+                        event("response.output_item.done", """"output_index":0,"item":${reasoning(thinking)}""", 9),
+                        event("response.output_item.added", """"output_index":1,"item":${message(null, "in_progress")}""", 10),
+                        event("response.content_part.added", """$msg,"part":${part("")}""", 11),
+                        event("response.output_text.delta", """$msg,"delta":"$text","logprobs":[]""", 12),
+                        event("response.output_text.done", """$msg,"text":"$text","logprobs":[]""", 13),
+                        event("response.content_part.done", """$msg,"part":${part(text)}""", 14),
+                        event("response.output_item.done", """"output_index":1,"item":${message(text)}""", 15),
+                        event("response.completed", """"response":$final""", 16),
+                    ),
+                frames(client.post(path, responsesBody(stream = true))),
+            )
+        }
+    }
+
+    @Test
+    fun `a streamed responses step with thinking and tool calls but no text starts the calls at output_index 1`() {
+        val step = Step(thinking = "Need the time.", toolCalls = listOf(ToolCall(name = "get_time")))
+        withServer(engineWith(step)) { client, _ ->
+            val frames = frames(client.post(path, responsesBody(stream = true)))
+            val indices =
+                frames
+                    .filter { it.first == "response.output_item.added" || it.first == "response.function_call_arguments.done" }
+                    .map { (name, data) -> name to json(data).getValue("output_index").jsonPrimitive.int }
+            assertEquals(
+                listOf(
+                    "response.output_item.added" to 0,
+                    "response.output_item.added" to 1,
+                    "response.function_call_arguments.done" to 1,
+                ),
+                indices,
+            )
+            val output =
+                json(frames.last().second)
+                    .getValue("response")
+                    .jsonObject
+                    .getValue("output")
+                    .jsonArray
+            assertEquals(
+                listOf("reasoning", "function_call"),
+                output.map {
+                    it.jsonObject
+                        .getValue("type")
+                        .jsonPrimitive.content
+                },
+            )
+        }
+    }
+
+    @Test
     fun `max_tokens ends a responses stream with response incomplete`() {
         withServer(engineWith(Step(text = "cut off", stopReason = "max_tokens"))) { client, _ ->
             val frames = frames(client.post(path, responsesBody(stream = true)))
