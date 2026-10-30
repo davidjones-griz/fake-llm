@@ -508,10 +508,10 @@ Lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) answers a call with no sce
 
 The combined prompt text, used by `promptSample` and `prompt_preview`, depends on the dialect:
 
-- Anthropic: the `system` field, when it is a string or an array of text blocks, then each message `content` that is a string or an array of text blocks. Non-text blocks contribute nothing. Each piece is followed by a newline. A `null`, number or boolean contributes nothing.
-- OpenAI: every message whose `content` is a JSON string, including a system message. Array content is skipped. A message with role `system` sets `systemShape` to `blocks`; otherwise it is `absent`. OpenAI requests never record `string`.
+- Anthropic: the `system` field, when it is a string or an array of text blocks, then each message `content` that is a string or an array of text blocks. A `tool_result` block adds its own `content` the same way: a string, or its text blocks. Other blocks contribute nothing. Each piece is followed by a newline. A `null`, number or boolean contributes nothing.
+- OpenAI: each message's `content` when it is a JSON string, or the string `text` of each of its parts when it is an array (`image_url` and other parts without `text` add nothing), whatever the role. A message with role `system` or `developer` sets `systemShape` to `blocks`; otherwise it is `absent`. OpenAI requests never record `string`.
 - OpenAI Responses: `instructions` when it is a JSON string, then `input` when it is a JSON string. When `input` is an array, for each item in order: a message item's `content` when it is a string, or the string `text` of each of its content parts (`input_text`, `output_text`); a `function_call_output`'s `output` when it is a string. Other items add nothing, and an item whose `type` is absent or not a string counts as a message. `systemShape` is `string` for string `instructions`, `unknown` for any other non-null `instructions`, and without `instructions` `blocks` when an input item has role `system` or `developer`, else `absent`. `messageCount` is 1 for a string `input`, the number of items for an array (every item counts), and 0 otherwise.
-- Gemini: each `contents[].parts[].text`. `systemInstruction` is not read, and `systemShape` is always `absent`. The model id comes from the URL, not the body.
+- Gemini: the string `text` of each part of `systemInstruction`, or of `system_instruction` (the REST API's other spelling) when `systemInstruction` is missing or `null`, then of each `contents[].parts[]`. `systemShape` is `blocks` when that system instruction is an object, `absent` when it is missing or `null`, and `unknown` otherwise. The model id comes from the URL, not the body.
 
 ### Tool calls
 
