@@ -19,7 +19,7 @@ docker build -t fake-llm .
 docker run -p 8080:8080 fake-llm --scenario hello
 ```
 
-`GET /health` then returns `{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1]}`. Building the image needs BuildKit, `docker build`'s default since Docker 23.
+`GET /health` then returns `{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.5.0"}`, with the running version. Building the image needs BuildKit, `docker build`'s default since Docker 23.
 
 The same process from a checkout:
 
@@ -227,7 +227,7 @@ FakeLlmClient("http://localhost:8080", controlToken = System.getenv("FAKE_LLM_CO
 }
 ```
 
-From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's name, whether the server is lenient, and `steps` and `unusedSteps` (null against a server older than this release), and `scenarioNames()` lists what the server can load by name. `unload()` returns the server to the state it has when started without a scenario: no scenario loaded and empty logs. Against a server older than 0.5.0 it fails with status 404. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
+From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's name, whether the server is lenient, `steps` and `unusedSteps`, and `version`, the server's version (each null against a server older than this release), and `scenarioNames()` lists what the server can load by name. `unload()` returns the server to the state it has when started without a scenario: no scenario loaded and empty logs. Against a server older than 0.5.0 it fails with status 404. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
 
 Every failed call throws `FakeLlmClientException`. `statusCode` is the HTTP status, or null when no response arrived (a refused connection, a timeout or an interrupt, kept as the `cause`). For an error status, `serverMessage` is the server's explanation, verbatim, such as `unknown scenario 'x' — ...`. A 401 says whether the token was missing or rejected.
 
@@ -725,13 +725,13 @@ A call after the scenario's last step, or a call with no scenario loaded in stri
 
 ### `GET /health`
 
-Always open, including when a control token is set. Reports liveness, the loaded scenario name or `null` when none is loaded, whether lenient mode is on, and the scenario's step count and unused steps.
+Always open, including when a control token is set. Reports liveness, the loaded scenario name or `null` when none is loaded, whether lenient mode is on, the scenario's step count and unused steps, and the server's version.
 
 ```json
-{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1]}
+{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.5.0"}
 ```
 
-`steps` is the loaded scenario's step count, and `unusedSteps` lists the steps no call has used since the last load, reset or unload (both `null` / `[]` with no scenario). A test can assert `unusedSteps` is empty to check its app made every scripted call. The JUnit extension makes the same check in process after each test.
+The version varies with the release. `steps` is the loaded scenario's step count, and `unusedSteps` lists the steps no call has used since the last load, reset or unload (both `null` / `[]` with no scenario). A test can assert `unusedSteps` is empty to check its app made every scripted call. The JUnit extension makes the same check in process after each test.
 
 ### `POST /anthropic/v1/messages`
 
@@ -924,6 +924,8 @@ The process binds the IPv6 wildcard `::` when the host can, and otherwise the IP
 | `--scenario-dir <path>` | `FAKE_LLM_SCENARIO_DIR` | bundled scenarios only | Directory searched before the bundled scenarios. |
 | `--lenient` | `FAKE_LLM_LENIENT` | off (`false`) | Calls made while no scenario is loaded. Off returns HTTP 400. On returns the canned assistant reply. A call after the last step is HTTP 400 either way. The flag takes no value and turns lenient mode on. The environment variable accepts `true` or `false`, case-insensitively. |
 | none | `FAKE_LLM_CONTROL_TOKEN` | unset, control routes open | Bearer token for `/control/*`. A JVM system property of the same name is the fallback when the environment variable is absent. |
+
+`fake-llm --version` (or `docker run --rm ghcr.io/davidjones-griz/fake-llm:0.5.0 --version`) prints `fake-llm <version>` and exits 0. It works only as the sole argument: after server flags, `--version` is an unknown flag.
 
 ## Limits
 
