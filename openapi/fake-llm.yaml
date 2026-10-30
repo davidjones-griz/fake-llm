@@ -28,17 +28,21 @@ info:
     without quotes, a fraction or an exponent: `"24"`, `24.0` and `2e1` are rejected where an
     integer is expected.
 
-    **Scenarios and calls.** A scenario is an ordered list of steps. Every request to a vendor
-    route that does not get `ExceptionError` is a call: it takes the next call number (`seq`,
-    from 1) and one call-log entry, and one exchange-log entry (`GET /control/exchanges`) with its
-    request and response, and call N after a load or reset gets step N, on any vendor route. Calls
+    **Scenarios and calls.** A scenario is an ordered list of steps. Every request to a
+    generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini
+    `generateContent` and `streamGenerateContent`) that does not get `ExceptionError` is a call:
+    it takes the next call number (`seq`, from 1) and one call-log entry, and one exchange-log
+    entry (`GET /control/exchanges`) with its request and response, and call N after a load or
+    reset gets step N, on any generation route. Calls
     are numbered in arrival order. A call is numbered and logged before any wait its step sets
     (`firstByteDelayMs`), so a delayed call can finish after a later one. A call after the
     last step gets `NoMoreStepsError`; the last step does not repeat. A request that gets
     `ExceptionError`, a 404 and the Batches 501 are not calls. That includes a request whose next
     step has a tool call with `rawArguments` that its format can't carry (a buffered Anthropic
     request, or a Gemini request). That step is not used, and the next call gets it. A Gemini
-    `streamGenerateContent` request without `alt=sse` is not a call either. On the OpenAI Responses
+    `streamGenerateContent` request without `alt=sse` is not a call either. The embeddings routes
+    are not calls either: they answer from the request alone, whether or not a scenario is loaded,
+    in strict and lenient mode, and take no step and no log entry. On the OpenAI Responses
     route, `previous_response_id`, `store` and `conversation` are accepted and ignored: fake-llm
     stores nothing, each call gets the next step, and only the request's own `instructions` and
     `input` are read.
@@ -47,9 +51,10 @@ info:
     provider's API, and this document does not describe them field by field. The conformance
     cases in `conformance/cases` define them exactly, including the values fake-llm fixes: the
     token counts (unless the step sets `usage`), the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`,
-    `resp_fake_<n>`, `msg_fake_<n>`, `fc_fake_<n>_<i>`), OpenAI's `model` (both routes), the
-    thinking signature, the streamed-error filler text and generic error body, the OpenAI, OpenAI
-    Responses and Gemini generic stream error bodies, and the lenient canned reply.
+    `resp_fake_<n>`, `msg_fake_<n>`, `fc_fake_<n>_<i>`), OpenAI's `model` (Chat Completions and
+    Responses), the thinking signature, the streamed-error filler text and generic error body, the
+    OpenAI, OpenAI Responses and Gemini generic stream error bodies, the lenient canned reply, and
+    the embeddings vectors and their usage estimate.
 
     **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
     cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.
@@ -62,7 +67,9 @@ tags:
   - name: control
     description: Load and unload scenarios, reset state, and read the call log and the exchange log.
   - name: vendor
-    description: Stand-ins for the providers' HTTP APIs, driven by the loaded scenario.
+    description: |
+      Stand-ins for the providers' HTTP APIs. The generation routes are driven by the loaded
+      scenario; the embeddings routes answer from the request alone.
 paths:
   /health:
     get:
@@ -379,6 +386,39 @@ paths:
           $ref: "#/components/responses/VendorBadRequest"
         default:
           $ref: "#/components/responses/ScriptedError"
+  /openai/v1/embeddings:
+    post:
+      tags: [vendor]
+      operationId: createOpenAiEmbeddings
+      summary: OpenAI Embeddings API stand-in
+      description: |
+        Request and success response follow the OpenAI Embeddings API
+        (https://platform.openai.com/docs/api-reference/embeddings). Each vector is derived from
+        SHA-256 of the input's text (a token array is hashed as its JSON text, such as `[1,2,3]`):
+        deterministic, unit length, with `dimensions` values (an integer from 1 to 8192, default
+        1536). `input` is a string, an array of strings, a token array or an array of token arrays,
+        with at most 2048 inputs, and the response holds at most 3145728 values in all.
+        `encoding_format` is `float` (the default; each value is written as the shortest decimal
+        that reads back as the float32's exact value, so it equals the base64 form's value) or
+        `base64` (little-endian float32). `model` is echoed, and `usage` is an estimate: a quarter
+        of each string's code points, rounded up and at least 1, or a token array's length. Not a
+        call: no step, not logged, the same with or without a scenario and in lenient mode.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A list of embeddings in the OpenAI format.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /gemini/{version}/models/{model}:generateContent:
     parameters:
       - name: version
@@ -466,6 +506,90 @@ paths:
           $ref: "#/components/responses/VendorBadRequest"
         default:
           $ref: "#/components/responses/ScriptedError"
+  /gemini/{version}/models/{model}:embedContent:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The API version segment, such as `v1beta`.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        description: Ignored; any model gets the same vectors.
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: embedGeminiContent
+      summary: Gemini embedContent API stand-in
+      description: |
+        Request and success response follow the Gemini `embedContent` API
+        (https://ai.google.dev/api/embeddings). Each vector is derived from SHA-256 of the
+        text (the content's parts' `text` joined with a newline): deterministic, unit length, with
+        `outputDimensionality` values (an integer from 1 to 8192, default 1536). `taskType`, `title` and the path's model are
+        ignored. Not a call: no step, not logged, the same with or without a scenario and in lenient
+        mode.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: An embedding in the Gemini format.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /gemini/{version}/models/{model}:batchEmbedContents:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The API version segment, such as `v1beta`.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        description: Ignored; any model gets the same vectors.
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: batchEmbedGeminiContents
+      summary: Gemini batchEmbedContents API stand-in
+      description: |
+        Request and success response follow the Gemini `batchEmbedContents` API
+        (https://ai.google.dev/api/embeddings), which `google-genai` calls for one input or many:
+        one embedding per item of `requests`, in order, read as on `embedContent`. Each vector is
+        derived from SHA-256 of the text (the content's parts' `text` joined with a newline):
+        deterministic, unit length, with `outputDimensionality` values (an integer from 1 to 8192,
+        default 1536). The response holds at most 3145728 values in all, each request's size
+        counted. Each request's `model`, `taskType` and `title` and the path's model are ignored.
+        Not a call: no step, not logged, the same with or without a scenario and in lenient mode.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: The embeddings in the Gemini format, in request order.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
 components:
   securitySchemes:
     controlToken:
@@ -484,7 +608,8 @@ components:
     BadRequest:
       description: |
         The request could not be handled: a body that is not valid JSON or does not match the
-        request schema, or a scenario that cannot be found or decoded.
+        request schema, a scenario that cannot be found or decoded, or an embeddings request outside
+        the documented rules.
       content:
         application/json:
           schema:
@@ -1062,9 +1187,9 @@ components:
           maximum: 600000
           default: 0
           description: |
-            Milliseconds to wait before any response bytes, status and headers included (every vendor
-            route; buffered and streamed replies and error steps). The call is numbered and logged when
-            it arrives, before the wait. At most 600000 (10 minutes).
+            Milliseconds to wait before any response bytes, status and headers included (every
+            generation route; buffered and streamed replies and error steps). The call is numbered
+            and logged when it arrives, before the wait. At most 600000 (10 minutes).
         toolCalls:
           type: [array, "null"]
           minItems: 1

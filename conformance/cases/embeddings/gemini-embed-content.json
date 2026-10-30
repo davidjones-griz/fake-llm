@@ -1,0 +1,65 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-embed-content",
+  "description": "Gemini embedContent gets the same vector as the OpenAI route for the same text and size, and is not a call.",
+  "scenario": {
+    "name": "one-step",
+    "steps": [
+      {
+        "text": "only"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:embedContent",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Hello"
+              }
+            ]
+          },
+          "outputDimensionality": 4,
+          "taskType": "RETRIEVAL_QUERY"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "embedding": {
+            "values": [
+              -0.14939652383327484,
+              -0.9198163151741028,
+              0.3256172835826874,
+              -0.15997493267059326
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

@@ -264,3 +264,17 @@ def test_scripted_usage(fake, gemini_client):
     fake.load([{"text": "Counted.", "usage": {"inputTokens": 1200, "outputTokens": 340}}])
     usage = generate(gemini_client).usage_metadata
     assert (usage.prompt_token_count, usage.candidates_token_count, usage.total_token_count) == (1200, 340, 1540)
+
+
+def test_embed_content_matches_openai(fake, gemini_client, openai_client):
+    fake.load([{"text": "unused"}])
+    config = types.EmbedContentConfig(output_dimensionality=8)
+    r = gemini_client.models.embed_content(model="example-gemini", contents=["a", "b"], config=config)
+    vectors = [e.values for e in r.embeddings]
+    assert [len(v) for v in vectors] == [8, 8]
+    # The same function on both vendors: the OpenAI default (base64) call gives the same values.
+    openai = openai_client.embeddings.create(model="example-embedding", input=["a", "b"], dimensions=8)
+    assert vectors == [d.embedding for d in openai.data]
+    (default,) = gemini_client.models.embed_content(model="example-gemini", contents="a").embeddings
+    assert len(default.values) == 1536
+    assert fake.log() == []

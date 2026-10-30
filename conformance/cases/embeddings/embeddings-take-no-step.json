@@ -1,0 +1,164 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "embeddings-take-no-step",
+  "description": "An embeddings request takes no step and is in neither log: the next call still gets step 1.",
+  "scenario": {
+    "name": "one-step",
+    "steps": [
+      {
+        "text": "only"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": "Hello",
+          "dimensions": 4
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "object": "embedding",
+              "index": 0,
+              "embedding": [
+                -0.14939652383327484,
+                -0.9198163151741028,
+                0.3256172835826874,
+                -0.15997493267059326
+              ]
+            }
+          ],
+          "model": "example-embedding",
+          "usage": {
+            "prompt_tokens": 2,
+            "total_tokens": 2
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "only"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/exchanges"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "request": {
+              "method": "POST",
+              "path": "/anthropic/v1/messages",
+              "headers": {
+                "$type": "object"
+              },
+              "body": "{\"model\":\"example-model\",\"max_tokens\":64,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
+            },
+            "response": {
+              "status": 200,
+              "headers": {
+                "content-type": [
+                  "application/json"
+                ]
+              },
+              "body": "{\"id\":\"fake-msg-1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"only\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":100,\"output_tokens\":50,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}",
+              "state": "complete"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

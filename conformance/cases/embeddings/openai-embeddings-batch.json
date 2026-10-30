@@ -1,0 +1,221 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-embeddings-batch",
+  "description": "Several inputs get one item each, in order; equal texts get equal vectors; a token array is hashed as its JSON text and counts its length; usage is summed.",
+  "scenario": {
+    "name": "one-step",
+    "steps": [
+      {
+        "text": "only"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": [
+            "alpha",
+            "alpha",
+            "Hello"
+          ],
+          "dimensions": 8
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "object": "embedding",
+              "index": 0,
+              "embedding": [
+                0.2643521726131439,
+                -0.3982682526111603,
+                0.2962993383407593,
+                0.5035404562950134,
+                -0.4892035722732544,
+                -0.26818573474884033,
+                0.19183258712291718,
+                0.28654947876930237
+              ]
+            },
+            {
+              "object": "embedding",
+              "index": 1,
+              "embedding": [
+                0.2643521726131439,
+                -0.3982682526111603,
+                0.2962993383407593,
+                0.5035404562950134,
+                -0.4892035722732544,
+                -0.26818573474884033,
+                0.19183258712291718,
+                0.28654947876930237
+              ]
+            },
+            {
+              "object": "embedding",
+              "index": 2,
+              "embedding": [
+                -0.0903143510222435,
+                -0.5560545921325684,
+                0.19684471189975739,
+                -0.09670930355787277,
+                0.18581439554691315,
+                0.3377452790737152,
+                0.5604599714279175,
+                -0.4145260751247406
+              ]
+            }
+          ],
+          "model": "example-embedding",
+          "usage": {
+            "prompt_tokens": 6,
+            "total_tokens": 6
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": [
+            1,
+            2,
+            3
+          ],
+          "dimensions": 8
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "object": "embedding",
+              "index": 0,
+              "embedding": [
+                -0.40775999426841736,
+                0.2643207013607025,
+                -0.492467999458313,
+                -0.44466152787208557,
+                -0.5494486093521118,
+                0.13627086579799652,
+                -0.0149275166913867,
+                -0.054142460227012634
+              ]
+            }
+          ],
+          "model": "example-embedding",
+          "usage": {
+            "prompt_tokens": 3,
+            "total_tokens": 3
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": [
+            [
+              1,
+              2,
+              3
+            ],
+            [
+              1,
+              2,
+              3
+            ]
+          ],
+          "dimensions": 8
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "object": "embedding",
+              "index": 0,
+              "embedding": [
+                -0.40775999426841736,
+                0.2643207013607025,
+                -0.492467999458313,
+                -0.44466152787208557,
+                -0.5494486093521118,
+                0.13627086579799652,
+                -0.0149275166913867,
+                -0.054142460227012634
+              ]
+            },
+            {
+              "object": "embedding",
+              "index": 1,
+              "embedding": [
+                -0.40775999426841736,
+                0.2643207013607025,
+                -0.492467999458313,
+                -0.44466152787208557,
+                -0.5494486093521118,
+                0.13627086579799652,
+                -0.0149275166913867,
+                -0.054142460227012634
+              ]
+            }
+          ],
+          "model": "example-embedding",
+          "usage": {
+            "prompt_tokens": 6,
+            "total_tokens": 6
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

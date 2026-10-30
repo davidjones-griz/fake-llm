@@ -1,0 +1,345 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-embeddings-invalid",
+  "description": "An invalid input, size or encoding gets the exception 400 and is not a call.",
+  "scenario": {
+    "name": "one-step",
+    "steps": [
+      {
+        "text": "only"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": ""
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": []
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": [
+            "a",
+            ""
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": [
+            []
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": [
+            "a",
+            [
+              1
+            ]
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": [
+            1.5
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": 7
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": "Hello",
+          "dimensions": 0
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": "Hello",
+          "dimensions": 8193
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": "Hello",
+          "dimensions": "8"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": "Hello",
+          "dimensions": 8.0
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": "Hello",
+          "encoding_format": "hex"
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

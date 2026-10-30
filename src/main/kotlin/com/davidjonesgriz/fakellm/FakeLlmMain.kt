@@ -35,7 +35,10 @@ import kotlin.system.exitProcess
  *    `POST /gemini/…:streamGenerateContent?alt=sse` — the same reply as an SSE stream of
  *    `GenerateContentResponse` data frames; without `alt=sse` it is the exception 400. The model
  *    id is the path segment between `/models/` and `:`.
- *  - The vendor routes share the scenario's steps: call N, on whichever route, gets step N.
+ *  - `POST /openai/v1/embeddings`, `POST /gemini/…:embedContent` and `…:batchEmbedContents` —
+ *    deterministic fake embeddings derived from SHA-256 of the text. They are not calls: they
+ *    answer from the request alone, with or without a scenario.
+ *  - The generation routes share the scenario's steps: call N, on whichever route, gets step N.
  *    A step's `firstByteDelayMs` holds back the whole response, and its `streamInterChunkDelayMs`
  *    spaces out streamed deltas.
  *  - `GET /health` — liveness, the loaded scenario name, its step count and unused steps, and

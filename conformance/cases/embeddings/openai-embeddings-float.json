@@ -1,0 +1,65 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-embeddings-float",
+  "description": "With no scenario loaded, an OpenAI embeddings request gets a deterministic unit-length vector of the requested size as JSON numbers, and is not a call.",
+  "server": {
+    "fresh": true
+  },
+  "scenario": null,
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": "Hello",
+          "dimensions": 4,
+          "encoding_format": "float"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "object": "embedding",
+              "index": 0,
+              "embedding": [
+                -0.14939652383327484,
+                -0.9198163151741028,
+                0.3256172835826874,
+                -0.15997493267059326
+              ]
+            }
+          ],
+          "model": "example-embedding",
+          "usage": {
+            "prompt_tokens": 2,
+            "total_tokens": 2
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

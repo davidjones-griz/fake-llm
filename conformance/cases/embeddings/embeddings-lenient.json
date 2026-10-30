@@ -1,0 +1,88 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "embeddings-lenient",
+  "description": "A lenient server with no scenario gives the same embeddings as a strict one.",
+  "server": {
+    "lenient": true
+  },
+  "scenario": {
+    "name": "one-step",
+    "steps": [
+      {
+        "text": "only"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/unload",
+        "headers": {}
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "unloaded": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": "Hello",
+          "dimensions": 4,
+          "encoding_format": "float"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "object": "embedding",
+              "index": 0,
+              "embedding": [
+                -0.14939652383327484,
+                -0.9198163151741028,
+                0.3256172835826874,
+                -0.15997493267059326
+              ]
+            }
+          ],
+          "model": "example-embedding",
+          "usage": {
+            "prompt_tokens": 2,
+            "total_tokens": 2
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

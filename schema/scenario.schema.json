@@ -246,7 +246,7 @@
           "minimum": 0,
           "maximum": 600000,
           "default": 0,
-          "description": "Milliseconds to wait before any response bytes, status and headers included (every vendor\nroute; buffered and streamed replies and error steps). The call is numbered and logged when\nit arrives, before the wait. At most 600000 (10 minutes).\n"
+          "description": "Milliseconds to wait before any response bytes, status and headers included (every\ngeneration route; buffered and streamed replies and error steps). The call is numbered\nand logged when it arrives, before the wait. At most 600000 (10 minutes).\n"
         },
         "toolCalls": {
           "type": [
