@@ -1,0 +1,48 @@
+# The documentation site, built by Zensical (see docs/requirements.in) and deployed to GitHub Pages
+# by .github/workflows/docs.yml. mkdocs-material 9.x builds the same configuration.
+site_name: fake-llm
+site_url: https://davidjones-griz.github.io/fake-llm/
+site_description: A scenario-driven mock server for the Anthropic, OpenAI and Gemini HTTP APIs.
+repo_url: https://github.com/davidjones-griz/fake-llm
+repo_name: davidjones-griz/fake-llm
+edit_uri: edit/main/docs/
+copyright: Apache-2.0
+
+# The site's own build inputs live beside the pages; they are not pages.
+exclude_docs: |
+  requirements.*
+  .python-version
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      # Paths in --8<-- lines are relative to the repository root, so pages embed the bundled
+      # scenario files and the quickstart script as they are.
+      base_path: ["."]
+      check_paths: true
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Scenario reference: scenarios.md
+  - Control API: control-api.md
+  - Recipes:
+      - recipes/index.md
+      - Retries after an error: recipes/retries.md
+      - Truncated output (max_tokens): recipes/max-tokens.md
+      - Malformed JSON output: recipes/malformed-json.md
+      - Mid-stream failures: recipes/mid-stream-failure.md
+      - Diagnosing "no scenario loaded" and "no more steps": recipes/diagnosing-errors.md
