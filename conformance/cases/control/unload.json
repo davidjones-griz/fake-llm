@@ -89,7 +89,10 @@
           "scenario": null,
           "lenient": false,
           "steps": null,
-          "unusedSteps": []
+          "unusedSteps": [],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     },

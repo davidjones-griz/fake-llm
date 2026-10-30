@@ -159,7 +159,10 @@
           "scenario": "new",
           "lenient": false,
           "steps": 1,
-          "unusedSteps": []
+          "unusedSteps": [],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     }

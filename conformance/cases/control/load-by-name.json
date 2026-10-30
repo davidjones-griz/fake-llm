@@ -41,7 +41,10 @@
           "scenario": "fail-then-retry",
           "lenient": false,
           "steps": 2,
-          "unusedSteps": [1, 2]
+          "unusedSteps": [1, 2],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     }

@@ -181,6 +181,15 @@ jobs:
           cat "$RUNNER_TEMP/validate.err"
           [ "$rc" -eq 1 ]
           grep -q "misspelt.json: step 2: \$.steps\[1\]: unknown field 'stopReasn'" "$RUNNER_TEMP/validate.err"
+      - name: The image reports the build's version
+        run: |
+          set -eu
+          expected="fake-llm $(sed -n 's/^version=//p' gradle.properties)"
+          actual=$(docker run --rm fake-llm:ci --version)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::--version printed '$actual', expected '$expected'"
+            exit 1
+          fi
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin

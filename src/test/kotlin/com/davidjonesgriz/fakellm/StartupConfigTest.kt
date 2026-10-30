@@ -92,6 +92,13 @@ class StartupConfigTest {
     }
 
     @Test
+    fun `--version with other arguments is an unknown flag`() {
+        val e = assertFailsWith<StartupUsageException> { parseStartupConfig(arrayOf("--port", "8080", "--version"), env = emptyMap()) }
+        assertTrue(e.message!!.contains("unknown flag '--version'"))
+        assertTrue(e.message!!.contains("fake-llm --version"))
+    }
+
+    @Test
     fun `an unknown flag is rejected`() {
         val failure =
             assertFailsWith<StartupUsageException> {

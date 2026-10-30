@@ -24,7 +24,10 @@ class FakeLlmClientTest {
     @Test
     fun `loads, reads typed calls and resets over HTTP`() {
         withClient { client, server ->
-            assertEquals(FakeLlmHealth(scenario = null, lenient = false, steps = null, unusedSteps = emptyList()), client.health())
+            assertEquals(
+                FakeLlmHealth(scenario = null, lenient = false, steps = null, unusedSteps = emptyList(), version = fakeLlmVersion),
+                client.health(),
+            )
 
             client.load("hello")
             assertEquals("hello", client.health().scenario)
@@ -313,6 +316,7 @@ class FakeLlmClientTest {
                 val health = client.health()
                 assertNull(health.steps)
                 assertNull(health.unusedSteps)
+                assertNull(health.version)
             }
         }
     }

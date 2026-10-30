@@ -80,9 +80,13 @@ tasks.register<JavaExec>("updateScenarioSchema") {
 
 // The OpenAPI document is the language-neutral contract, kept at the repository root; the server
 // serves the copy bundled here at GET /openapi. It goes under fake-llm's own resource path, so a
-// project's own resources cannot replace it.
+// project's own resources cannot replace it. fake-llm.version gets the build's version, which
+// /health and --version report.
 tasks.processResources {
     from("openapi") { into("com/davidjonesgriz/fakellm/openapi") }
+    val version = project.version.toString()
+    inputs.property("version", version)
+    filesMatching("com/davidjonesgriz/fakellm/fake-llm.version") { expand("version" to version) }
 }
 
 apiValidation {

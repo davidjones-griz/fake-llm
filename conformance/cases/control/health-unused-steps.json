@@ -36,7 +36,10 @@
             1,
             2,
             3
-          ]
+          ],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     },
@@ -102,7 +105,10 @@
           "unusedSteps": [
             2,
             3
-          ]
+          ],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     },
@@ -209,7 +215,10 @@
           "scenario": "three-steps",
           "lenient": false,
           "steps": 3,
-          "unusedSteps": []
+          "unusedSteps": [],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     },
@@ -263,7 +272,10 @@
           "scenario": "three-steps",
           "lenient": false,
           "steps": 3,
-          "unusedSteps": []
+          "unusedSteps": [],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     },
@@ -302,7 +314,10 @@
             1,
             2,
             3
-          ]
+          ],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     },
@@ -337,7 +352,10 @@
           "scenario": null,
           "lenient": false,
           "steps": null,
-          "unusedSteps": []
+          "unusedSteps": [],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     }

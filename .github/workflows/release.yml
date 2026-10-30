@@ -139,7 +139,7 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
-          expected='{"status":"ok","scenario":null,"lenient":false,"steps":null,"unusedSteps":[]}'
+          expected="{\"status\":\"ok\",\"scenario\":null,\"lenient\":false,\"steps\":null,\"unusedSteps\":[],\"version\":\"$VERSION\"}"
           for platform in linux/amd64 linux/arm64; do
             docker pull --quiet --platform "$platform" "$IMAGE@$DIGEST"
             container=$(docker run -d --platform "$platform" -p 8080:8080 "$IMAGE@$DIGEST")
