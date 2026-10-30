@@ -320,7 +320,7 @@ The public API is exactly what [api/fake-llm.api](api/fake-llm.api), [junit-jupi
 
 ## Run in CI
 
-In CI, fake-llm runs as a separate server beside an app's tests. The app can be in any language: point its LLM base URL at fake-llm, and have its tests load scenarios and read the call log over the [control API](#control-api).
+In CI, fake-llm runs as a separate server beside an app's tests. The app can be in any language: point its LLM base URL at fake-llm, and have its tests load scenarios and read the call log over the [control API](#control-api). The server prints one line per call to its log, so a failed job's service log shows which calls reached fake-llm and what each got.
 
 ### GitHub Actions
 
@@ -842,7 +842,7 @@ With a scenario directory set, `*.json` names from that directory are merged in,
 {"unloaded":true}
 ```
 
-`GET /control/calls` returns the call log as a JSON array, in call order. `vendor` is `anthropic`, `openai`, `openai-responses` or `gemini`. `seq` is the call's number since the last load, reset or unload, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call arrived, before any wait. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](#tool-calls) describes them. `firstByteDelayMs` and `streamInterChunkDelayMs` are the delays the call's step applied: `streamInterChunkDelayMs` only when the response was an event stream, and both 0 when no step served the call.
+`GET /control/calls` returns the call log as a JSON array, in call order. `vendor` is `anthropic`, `openai`, `openai-responses` or `gemini`. `seq` is the call's number since the last load, reset or unload, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call arrived, before any wait. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](#tool-calls) describes them. `firstByteDelayMs` and `streamInterChunkDelayMs` are the delays the call's step applied: `streamInterChunkDelayMs` only when the response was an event stream, and both 0 when no step served the call. The CLI and the image also print each call's `seq`, vendor, model, outcome and step as a line on stdout (see [Configuration](#configuration)).
 
 ```json
 [
@@ -913,7 +913,7 @@ curl -s http://localhost:8080/control/exchanges \
 
 ## Configuration
 
-For the port, the scenario, and the scenario directory, a flag overrides the environment variable, and a blank environment variable is ignored. `--lenient` takes no value and turns lenient mode on regardless of `FAKE_LLM_LENIENT`. An unknown flag or argument, a port outside 0–65535, a scenario directory that is not a valid path, or a `FAKE_LLM_LENIENT` value other than `true` or `false` (any case), prints a usage line to stderr and exits 1.
+For the port, the scenario, and the scenario directory, a flag overrides the environment variable, and a blank environment variable is ignored. `--lenient` takes no value and turns lenient mode on regardless of `FAKE_LLM_LENIENT`, and `--no-call-log` takes no value and turns the call log line off regardless of `FAKE_LLM_CALL_LOG`. An unknown flag or argument, a port outside 0–65535, a scenario directory that is not a valid path, or a `FAKE_LLM_LENIENT` or `FAKE_LLM_CALL_LOG` value other than `true` or `false` (any case), prints a usage line to stderr and exits 1.
 
 The process binds the IPv6 wildcard `::` when the host can, and otherwise the IPv4 wildcard `0.0.0.0`.
 
@@ -923,6 +923,7 @@ The process binds the IPv6 wildcard `::` when the host can, and otherwise the IP
 | `--scenario <name>` | `FAKE_LLM_SCENARIO` | none | Scenario loaded at startup. |
 | `--scenario-dir <path>` | `FAKE_LLM_SCENARIO_DIR` | bundled scenarios only | Directory searched before the bundled scenarios. |
 | `--lenient` | `FAKE_LLM_LENIENT` | off (`false`) | Calls made while no scenario is loaded. Off returns HTTP 400. On returns the canned assistant reply. A call after the last step is HTTP 400 either way. The flag takes no value and turns lenient mode on. The environment variable accepts `true` or `false`, case-insensitively. |
+| `--no-call-log` | `FAKE_LLM_CALL_LOG` | on (`true`) | One line per call on stdout: seq, vendor route, model, outcome and step, such as `fake-llm: call 2 openai model="example-gpt" outcome=error:429 step=2`. Prompts, arguments, headers and bodies are not printed. The flag takes no value and turns it off. The environment variable accepts `true` or `false`, case-insensitively. |
 | none | `FAKE_LLM_CONTROL_TOKEN` | unset, control routes open | Bearer token for `/control/*`. A JVM system property of the same name is the fallback when the environment variable is absent. |
 
 `fake-llm --version` (or `docker run --rm ghcr.io/davidjones-griz/fake-llm:0.5.0 --version`) prints `fake-llm <version>` and exits 0. It works only as the sole argument: after server flags, `--version` is an unknown flag.
