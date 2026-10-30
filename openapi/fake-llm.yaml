@@ -506,6 +506,90 @@ paths:
           $ref: "#/components/responses/VendorBadRequest"
         default:
           $ref: "#/components/responses/ScriptedError"
+  /gemini/{version}/models/{model}:embedContent:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The API version segment, such as `v1beta`.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        description: Ignored; any model gets the same vectors.
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: embedGeminiContent
+      summary: Gemini embedContent API stand-in
+      description: |
+        Request and success response follow the Gemini `embedContent` API
+        (https://ai.google.dev/api/embeddings). Each vector is derived from SHA-256 of the
+        text (the content's parts' `text` joined with a newline): deterministic, unit length, with
+        `outputDimensionality` values (an integer from 1 to 8192, default 1536). `taskType`, `title` and the path's model are
+        ignored. Not a call: no step, not logged, the same with or without a scenario and in lenient
+        mode.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: An embedding in the Gemini format.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /gemini/{version}/models/{model}:batchEmbedContents:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The API version segment, such as `v1beta`.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        description: Ignored; any model gets the same vectors.
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: batchEmbedGeminiContents
+      summary: Gemini batchEmbedContents API stand-in
+      description: |
+        Request and success response follow the Gemini `batchEmbedContents` API
+        (https://ai.google.dev/api/embeddings), which `google-genai` calls for one input or many:
+        one embedding per item of `requests`, in order, read as on `embedContent`. Each vector is
+        derived from SHA-256 of the text (the content's parts' `text` joined with a newline):
+        deterministic, unit length, with `outputDimensionality` values (an integer from 1 to 8192,
+        default 1536). The response holds at most 3145728 values in all, each request's size
+        counted. Each request's `model`, `taskType` and `title` and the path's model are ignored.
+        Not a call: no step, not logged, the same with or without a scenario and in lenient mode.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: The embeddings in the Gemini format, in request order.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
 components:
   securitySchemes:
     controlToken:

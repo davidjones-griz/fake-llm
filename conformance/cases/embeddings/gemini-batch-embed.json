@@ -1,0 +1,258 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-batch-embed",
+  "description": "Gemini batchEmbedContents gets one embedding per request, in order; an invalid batch gets the exception 400; none is a call.",
+  "scenario": {
+    "name": "one-step",
+    "steps": [
+      {
+        "text": "only"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:batchEmbedContents",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "requests": [
+            {
+              "model": "models/example-gemini",
+              "content": {
+                "parts": [
+                  {
+                    "text": "a"
+                  }
+                ]
+              },
+              "outputDimensionality": 8
+            },
+            {
+              "model": "models/example-gemini",
+              "content": {
+                "parts": [
+                  {
+                    "text": "b"
+                  }
+                ]
+              },
+              "outputDimensionality": 8
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "embeddings": [
+            {
+              "values": [
+                -0.5080565214157104,
+                0.5412368178367615,
+                -0.08755313605070114,
+                0.424265056848526,
+                -0.38702523708343506,
+                -0.2368239313364029,
+                -0.22292612493038177,
+                -0.07552984356880188
+              ]
+            },
+            {
+              "values": [
+                0.37889039516448975,
+                -0.5219860076904297,
+                -0.35455647110939026,
+                0.011650617234408855,
+                0.09159822016954422,
+                -0.06462127715349197,
+                0.529455840587616,
+                -0.40649357438087463
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:batchEmbedContents",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "requests": []
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:batchEmbedContents",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "requests": [
+            {
+              "model": "models/example-gemini",
+              "content": {
+                "parts": [
+                  {
+                    "text": "a"
+                  }
+                ]
+              },
+              "outputDimensionality": 0
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:batchEmbedContents",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "requests": [
+            {
+              "model": "models/example-gemini",
+              "content": {
+                "parts": [
+                  {
+                    "text": "a"
+                  }
+                ]
+              },
+              "outputDimensionality": "8"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:batchEmbedContents",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "requests": [
+            {
+              "model": "models/example-gemini",
+              "content": {
+                "parts": [
+                  {
+                    "inlineData": {}
+                  }
+                ]
+              },
+              "outputDimensionality": 8
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:batchEmbedContents",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "requests": [
+            {
+              "model": "models/example-gemini",
+              "outputDimensionality": 8
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "exception",
+          "detail": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

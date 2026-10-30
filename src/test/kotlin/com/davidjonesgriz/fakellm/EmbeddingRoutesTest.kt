@@ -164,8 +164,83 @@ class EmbeddingRoutesTest {
     }
 
     @Test
-    fun `a GET on an embeddings route is the 404`() {
-        withServer { client, _ -> assertEquals(404, client.get("/openai/v1/embeddings").statusCode()) }
+    fun `Gemini embedContent and batchEmbedContents give the same vectors as OpenAI, in order`() {
+        withServer { client, _ ->
+            val one =
+                json(
+                    client.post(
+                        "$GEMINI:embedContent",
+                        """{"content":{"role":"user","parts":[{"text":"Hel"},{"text":"lo"}]},"outputDimensionality":4}""",
+                    ),
+                )
+            val values = { o: JsonObject -> o["values"]!!.jsonArray.map { it.jsonPrimitive.double.toFloat() } }
+            assertEquals(fakeEmbedding("Hel\nlo", 4).toList(), values(one["embedding"]!!.jsonObject))
+            val batch =
+                json(
+                    client.post(
+                        "$GEMINI:batchEmbedContents",
+                        """{"requests":[{"model":"models/x","content":{"parts":[{"text":"a"}]},""" +
+                            """"outputDimensionality":8,"taskType":"t"},{"content":{"parts":[{"text":"b"}]}}]}""",
+                    ),
+                )
+            val embeddings = batch["embeddings"]!!.jsonArray.map { values(it.jsonObject) }
+            assertEquals(listOf(fakeEmbedding("a", 8).toList(), fakeEmbedding("b", 1536).toList()), embeddings)
+            assertEquals(JsonArray(emptyList()), calls(client))
+            assertEquals(JsonArray(emptyList()), exchanges(client))
+        }
+    }
+
+    @Test
+    fun `invalid Gemini requests get the exception 400`() {
+        withServer { client, _ ->
+            val text = """{"parts":[{"text":"a"}]}"""
+            for ((route, body) in listOf(
+                "embedContent" to "[]",
+                "embedContent" to """{"content":{"parts":[]}}""",
+                "embedContent" to """{"content":$text,"outputDimensionality":0}""",
+                "embedContent" to """{"content":$text,"outputDimensionality":"8"}""",
+                "batchEmbedContents" to """{"requests":[]}""",
+                "batchEmbedContents" to """{"requests":{}}""",
+                "batchEmbedContents" to """{"requests":[{"outputDimensionality":8}]}""",
+                "batchEmbedContents" to """{"requests":[{"content":{"parts":[{"inlineData":{}}]}}]}""",
+                "batchEmbedContents" to """{"requests":[{"content":{"parts":[{"text":"a"},{"text":5}]}}]}""",
+                "batchEmbedContents" to """{"requests":[{"content":{"parts":[{"text":""}]}}]}""",
+            )) {
+                rejected(client.post("$GEMINI:$route", body))
+            }
+            val zero = client.post("$GEMINI:embedContent", """{"content":$text,"outputDimensionality":0}""")
+            assertEquals("outputDimensionality must be from 1 to 8192, got 0", rejected(zero))
+            assertEquals(JsonArray(emptyList()), calls(client))
+            assertEquals(JsonArray(emptyList()), exchanges(client))
+        }
+    }
+
+    @Test
+    fun `Gemini has no request count limit, but each request's size counts toward the value cap`() {
+        withServer { client, _ ->
+            val request = { size: Int -> """{"content":{"parts":[{"text":"t"}]},"outputDimensionality":$size}""" }
+            val batch = { sizes: List<Int> -> """{"requests":${sizes.joinToString(",", "[", "]") { request(it) }}}""" }
+            val many = client.post("$GEMINI:batchEmbedContents", batch(List(2049) { 1 }))
+            assertEquals(2049, json(many)["embeddings"]!!.jsonArray.size)
+            val mixed = client.post("$GEMINI:batchEmbedContents", batch(List(384) { MAX_EMBEDDING_DIMENSIONS } + 1))
+            assertContains(rejected(mixed), "more than 3145728 values")
+            // Every size is range-checked, by position, before the total and before any vector.
+            val negative = client.post("$GEMINI:batchEmbedContents", batch(List(1000) { MAX_EMBEDDING_DIMENSIONS } + -5))
+            assertEquals("requests[1000].outputDimensionality must be from 1 to 8192, got -5", rejected(negative))
+        }
+    }
+
+    @Test
+    fun `a GET on any embeddings route is the 404`() {
+        withServer { client, _ ->
+            for (path in listOf("/openai/v1/embeddings", "$GEMINI:embedContent", "$GEMINI:batchEmbedContents")) {
+                assertEquals(404, client.get(path).statusCode(), path)
+            }
+        }
+    }
+
+    private companion object {
+        const val GEMINI = "/gemini/v1beta/models/example-gemini"
     }
 
     private fun withServerBody(

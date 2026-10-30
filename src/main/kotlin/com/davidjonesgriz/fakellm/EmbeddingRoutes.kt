@@ -1,5 +1,6 @@
-// The embeddings routes: OpenAI `POST /openai/v1/embeddings`. They are not calls: no step, not
-// logged, the same with or without a scenario and in lenient mode.
+// The embeddings routes: OpenAI `POST /openai/v1/embeddings` and Gemini `:embedContent` and
+// `:batchEmbedContents`. They are not calls: no step, not logged, the same with or without a
+// scenario and in lenient mode.
 package com.davidjonesgriz.fakellm
 
 import com.sun.net.httpserver.HttpExchange
@@ -21,6 +22,8 @@ internal fun embeddingRoute(ex: HttpExchange): Boolean {
         when {
             ex.requestMethod != "POST" -> null
             path == OPENAI_EMBEDDINGS -> openAiEmbeddings(readJsonObject(ex))
+            GEMINI_EMBED.matches(path) -> geminiEmbedContent(readJsonObject(ex))
+            GEMINI_BATCH_EMBED.matches(path) -> geminiBatchEmbed(readJsonObject(ex))
             else -> null
         }
     body?.let { respond(ex, HTTP_OK, it.toString()) }
@@ -89,6 +92,48 @@ private fun openAiInputs(input: JsonElement?): List<Pair<String, Int>> {
     }
 }
 
+/** Gemini `embedContent`: `{"embedding":{"values":[...]}}` for the body's own `content`. */
+private fun geminiEmbedContent(obj: JsonObject): JsonObject {
+    val (text, size) = geminiValues(obj, "request")
+    requireDimensions(size, "outputDimensionality")
+    val values = fakeEmbedding(text, size)
+    return buildJsonObject { putJsonObject("embedding") { put("values", floatsJson(values)) } }
+}
+
+/** Gemini `batchEmbedContents`: one `{"values":[...]}` per request, in order. Every request is read and checked first. */
+private fun geminiBatchEmbed(obj: JsonObject): JsonObject {
+    val requests = obj.valueOrNull("requests") as? JsonArray ?: error("requests must be an array")
+    require(requests.isNotEmpty()) { "requests must not be empty" }
+    val read = requests.mapIndexed { i, request -> geminiValues(request, "requests[$i]") }
+    requireValueTotal(read.map { it.second }, "requests", "outputDimensionality")
+    return buildJsonObject {
+        putJsonArray("embeddings") {
+            read.forEach { (text, size) -> addJsonObject { put("values", floatsJson(fakeEmbedding(text, size))) } }
+        }
+    }
+}
+
+/**
+ * One Gemini request's (text, size): the `text` of its `content`'s parts joined with a newline, and
+ * `outputDimensionality`. A part's `text` must be a non-empty string; parts without `text` and other
+ * keys (`model`, `taskType`, `title`, `role`) are ignored.
+ */
+private fun geminiValues(
+    request: JsonElement,
+    at: String,
+): Pair<String, Int> {
+    val content = ((request as? JsonObject)?.valueOrNull("content") as? JsonObject) ?: error("$at: content must be an object")
+    val texts =
+        (content["parts"] as? JsonArray).orEmpty().mapNotNull { part ->
+            (part as? JsonObject)?.get("text")?.let { text ->
+                (text as? JsonPrimitive)?.takeIf { it.isString && it.content.isNotEmpty() }?.content
+                    ?: error("$at: a part's text must be a non-empty string, got $text")
+            }
+        }
+    require(texts.isNotEmpty()) { "$at: content has no text part" }
+    return texts.joinToString("\n") to dimensionsOf(request.valueOrNull("outputDimensionality"), "$at: outputDimensionality")
+}
+
 /** A size field: absent or null gives the default; otherwise it must be an integer. The range is checked by [requireDimensions]. */
 private fun dimensionsOf(
     value: JsonElement?,
@@ -105,3 +150,5 @@ private fun intOf(value: JsonElement): Int? = (value as? JsonPrimitive)?.takeIf 
 private fun floatsJson(values: FloatArray): JsonArray = JsonArray(values.map { JsonPrimitive(it.toDouble()) })
 
 private const val OPENAI_EMBEDDINGS = "/openai/v1/embeddings"
+private val GEMINI_EMBED = Regex("/gemini/[^/]+/models/[^/:]+:embedContent")
+private val GEMINI_BATCH_EMBED = Regex("/gemini/[^/]+/models/[^/:]+:batchEmbedContents")
