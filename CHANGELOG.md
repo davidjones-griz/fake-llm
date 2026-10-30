@@ -9,6 +9,9 @@ change the public API.
 
 ### Added
 
+- The image declares a `HEALTHCHECK` on `GET /health`, so `docker ps`, Compose and service
+  containers see `healthy` once the server listens. It follows `PORT`; a server started with
+  `--port` needs its own check.
 - `GET /health` reports the server's `version`, and `FakeLlmHealth.version` reads it (null for an
   older server).
 - `fake-llm --version` prints the version and exits.

@@ -30,6 +30,7 @@ jobs:
           # Optional. When set, every /control/ request must send it as a bearer token.
           FAKE_LLM_CONTROL_TOKEN: fake-llm-ci-token
         # The runner starts the steps once this check passes. curl is in the image.
+        # Images from 0.6.0 declare this check themselves; it stays here for 0.5.0.
         options: >-
           --health-cmd "curl -fsS http://127.0.0.1:8080/health"
           --health-interval 2s

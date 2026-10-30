@@ -140,6 +140,7 @@ jobs:
         run: |
           set -euo pipefail
           expected="{\"status\":\"ok\",\"scenario\":null,\"lenient\":false,\"steps\":null,\"unusedSteps\":[],\"version\":\"$VERSION\"}"
+          health() { docker inspect -f '{{.State.Health.Status}}' "$1" 2>/dev/null || echo none; }
           for platform in linux/amd64 linux/arm64; do
             docker pull --quiet --platform "$platform" "$IMAGE@$DIGEST"
             container=$(docker run -d --platform "$platform" -p 8080:8080 "$IMAGE@$DIGEST")
@@ -156,6 +157,18 @@ jobs:
               docker logs "$container"
               docker rm -f "$container" > /dev/null
               echo "::error::the $platform image did not answer GET /health with $expected within 90 s"
+              exit 1
+            fi
+            # The pushed image kept its health check. .State.Health is absent (inspect fails) without one.
+            for _ in $(seq 1 30); do
+              [ "$(health "$container")" = healthy ] && break
+              sleep 2
+            done
+            if [ "$(health "$container")" != healthy ]; then
+              docker inspect -f '{{json .State.Health}}' "$container" || true
+              docker logs "$container"
+              docker rm -f "$container" > /dev/null
+              echo "::error::the $platform image did not report healthy"
               exit 1
             fi
             docker rm -f "$container" > /dev/null
