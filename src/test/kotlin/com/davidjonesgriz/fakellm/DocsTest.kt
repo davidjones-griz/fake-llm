@@ -24,8 +24,8 @@ class DocsTest {
         return page.substring(start, next)
     }
 
-    /** An image tag, or a `"version"` field in an example response such as `GET /health`'s. */
-    private val versionPattern = Regex("""ghcr\.io/davidjones-griz/fake-llm:([0-9][0-9.]*[0-9])|"version":"([^"]*)"""")
+    /** An image tag, or a numeric `"version"` field in an example response such as `GET /health`'s. */
+    private val versionPattern = Regex("""ghcr\.io/davidjones-griz/fake-llm:([0-9][0-9.]*[0-9])|"version":"([0-9][^"]*)"""")
 
     private fun fields(obj: JsonObject): Set<String> = obj.getValue("properties").jsonObject.keys - "\$schema"
 
@@ -54,6 +54,27 @@ class DocsTest {
                     .map { "${it.uppercase()} $path" }
             }
         assertTrue(operations.size >= 7, "found only $operations")
+        assertEquals(emptyList(), operations.filter { "\n### `$it`\n" !in page })
+    }
+
+    @Test
+    fun `every vendor operation has a heading in the endpoints page`() {
+        val page = File("docs/endpoints.md").readText()
+        val paths = YAMLMapper().readTree(File("openapi/fake-llm.yaml")).path("paths")
+        val operations =
+            paths.propertyNames().flatMap { path ->
+                paths
+                    .path(path)
+                    .propertyNames()
+                    .filter {
+                        paths
+                            .path(path)
+                            .path(it)
+                            .path("tags")
+                            .any { tag -> tag.asString() == "vendor" }
+                    }.map { "${it.uppercase()} $path" }
+            }
+        assertTrue(operations.size >= 18, "found only $operations")
         assertEquals(emptyList(), operations.filter { "\n### `$it`\n" !in page })
     }
 

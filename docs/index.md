@@ -12,5 +12,8 @@ A call the scenario has no step for fails: a call after the last step returns HT
 - [Scenario reference](scenarios.md): the scenario format, how calls map to steps, failure injection, latency, tool calls and every field.
 - [Control API](control-api.md): loading scenarios, starting them over, and reading the call and exchange logs over HTTP.
 - [Recipes](recipes/index.md): tests for retries, truncated output, malformed JSON, mid-stream failures, and the errors fake-llm itself returns.
+- [Endpoints](endpoints.md): what each vendor route sends, buffered and streamed, and the routes that are not calls.
+- [Use as a library](library.md): an in-process server for Kotlin and Java tests, the control API client, the JUnit Jupiter extension and the Testcontainers module.
+- [Run in CI](ci.md) and the [pytest plugin](pytest.md): fake-llm as a service container, and in Python test sessions.
 
-fake-llm is also a Kotlin library, with a JUnit Jupiter extension and a Testcontainers module, and has a pytest plugin for Python tests; the [README](https://github.com/davidjones-griz/fake-llm#readme) describes them.
+The repository's [examples/](https://github.com/davidjones-griz/fake-llm/tree/main/examples) has a small app tested end to end against fake-llm: `TicketPipeline` makes one call each to the Anthropic, OpenAI and Gemini APIs, and `TicketPipelineTest` scripts every call, including a rate limit, invalid tool-call arguments and a cutoff at `max_tokens`.

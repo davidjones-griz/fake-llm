@@ -39,6 +39,10 @@ nav:
   - Quickstart: quickstart.md
   - Scenario reference: scenarios.md
   - Control API: control-api.md
+  - Use as a library: library.md
+  - Run in CI: ci.md
+  - pytest plugin: pytest.md
+  - Endpoints: endpoints.md
   - Recipes:
       - recipes/index.md
       - Retries after an error: recipes/retries.md

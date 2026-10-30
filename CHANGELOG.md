@@ -65,6 +65,9 @@ change the public API.
 
 ### Changed
 
+- The README is now an introduction: quick start, install, a short library and CI section, the
+  endpoint list, configuration and limits. The scenario, endpoint, library and CI reference moved to
+  the documentation site.
 - The buffered Anthropic message now includes `stop_sequence` (null unless the step sets
   `stopSequence`), as the Messages API and fake-llm's own stream do. `Step` gains a trailing
   constructor parameter, `stopSequence`.

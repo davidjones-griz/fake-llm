@@ -59,6 +59,8 @@ tasks.test {
     inputs.file("schema/scenario.schema.json").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("scenarioSchema")
     // DocsTest reads the documentation pages. The OpenAPI document is already an input, as a resource.
     inputs.dir("docs").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("docs")
+    // ReadmeTest reads the README.
+    inputs.file("README.md").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("readme")
     listOf(
         "examples/src/test/resources/scenarios",
         "examples/src/test/scenarios",

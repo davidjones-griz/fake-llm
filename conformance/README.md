@@ -163,8 +163,8 @@ them, exactly. That includes the values fake-llm fixes:
 
 1. Add `conformance/cases/<area>/<name>.json`, with `"$schema": "../../schema/case.schema.json"` so
    an editor can check it as you type.
-2. Write the expected responses from the spec and the README, not by copying what the server
-   happens to send.
+2. Write the expected responses from the spec and the reference in `docs/`, not by copying what
+   the server happens to send.
 3. Run the suite against the fat jar (above) and `./gradlew :test --tests '*OpenApiConformanceTest*'`,
    which checks the case against the spec. A vendor 400 must list its body: one with
    `fake_llm_error` is fake-llm's own and is checked against the spec; any other is a scripted

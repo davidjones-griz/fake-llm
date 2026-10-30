@@ -40,6 +40,29 @@ To keep the server in the foreground and load a scenario at startup instead:
 docker run --rm -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario hello
 ```
 
+## From a checkout
+
+To build the image from a checkout instead, which needs BuildKit, `docker build`'s default since Docker 23:
+
+```bash
+docker build -t fake-llm .
+docker run -p 8080:8080 fake-llm --scenario hello
+```
+
+The same process without Docker, on Java 21 or newer:
+
+```bash
+./gradlew run --args='--scenario hello'
+```
+
+or, after `./gradlew shadowJar` (also produced by `./gradlew build`):
+
+```bash
+java -jar build/libs/fake-llm-all.jar --scenario hello
+```
+
+The listen port is 8080 unless you set `--port` or `PORT`; [Configuration](https://github.com/davidjones-griz/fake-llm#configuration) lists every flag and environment variable.
+
 ## Point an SDK at it
 
 The Anthropic Python SDK appends `/v1/messages`, so the base URL stops at `/anthropic`:
