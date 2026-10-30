@@ -9,6 +9,9 @@ change the public API.
 
 ### Added
 
+- A documentation site, <https://davidjones-griz.github.io/fake-llm/>: a quickstart with the
+  released image, the scenario reference, the control API, and recipes for retries, truncated and
+  malformed output, mid-stream failures, and the no-scenario and no-more-steps errors.
 - `POST /anthropic/v1/messages/count_tokens` (always `input_tokens` 100) and the model list and
   lookup routes for Anthropic, OpenAI and Gemini (one model, `fake-llm`; a lookup echoes the id).
   They are not calls: they take no step and are not logged.
