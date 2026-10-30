@@ -14,86 +14,47 @@ A call the scenario has no step for fails: a call after the last step returns HT
 
 ## Quickstart
 
-Build the image and start it. The entrypoint is `java -jar`, in exec form, so arguments after the image name are passed through to the process:
+Start the image with the bundled scenario `hello`. Arguments after the image name are passed to fake-llm:
 
 ```bash
-docker build -t fake-llm .
-docker run -p 8080:8080 fake-llm --scenario hello
+docker run --rm -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario hello
 ```
 
-`GET /health` then returns `{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.5.0"}`, with the running version. Building the image needs BuildKit, `docker build`'s default since Docker 23.
-
-The same process from a checkout:
+Check that it is up:
 
 ```bash
-./gradlew run --args='--scenario hello'
+curl -s http://localhost:8080/health
 ```
 
-or, after `./gradlew shadowJar` (also produced by `./gradlew build`):
-
-```bash
-java -jar build/libs/fake-llm-all.jar --scenario hello
+```json
+{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.5.0"}
 ```
 
-The listen port is 8080 unless you set `--port` or `PORT`. The server does not check API keys. Any value satisfies a client that insists on sending one.
-
-Point the Anthropic Python SDK at the server. The SDK appends `/v1/messages`, so the base URL stops at `/anthropic`:
+Point an SDK at the server; the server does not check API keys:
 
 ```python
 import anthropic
 
-client = anthropic.Anthropic(
-    api_key="not-used",
-    base_url="http://localhost:8080/anthropic",
-)
+client = anthropic.Anthropic(api_key="not-used", base_url="http://localhost:8080/anthropic")
 message = client.messages.create(
     model="example-model",
     max_tokens=256,
     messages=[{"role": "user", "content": "Hello"}],
 )
+print(message.content[0].text)  # the scenario's one step
 ```
 
-Point the OpenAI Python SDK at `/openai/v1`. The SDK appends `/chat/completions`:
+`curl -s http://localhost:8080/control/calls` then lists that call: its vendor route, model, prompt and the step that answered it. `hello` has one step, so a second call gets HTTP 400 (`no more steps`) until `POST /control/reset` starts the scenario over.
 
-```python
-from openai import OpenAI
+The SDKs' base URLs:
 
-client = OpenAI(
-    api_key="not-used",
-    base_url="http://localhost:8080/openai/v1",
-)
-completion = client.chat.completions.create(
-    model="example-gpt",
-    messages=[{"role": "user", "content": "Hello"}],
-)
-```
+| SDK | Base URL |
+| --- | --- |
+| Anthropic | `http://localhost:8080/anthropic` |
+| OpenAI (Chat Completions and Responses) | `http://localhost:8080/openai/v1` |
+| Gemini (`google-genai`) | `http://localhost:8080/gemini/` |
 
-Gemini is served on `POST /gemini/<version>/models/<model>:generateContent`, and streamed on `:streamGenerateContent?alt=sse`. The model id is the path segment between `/models/` and `:`, so both `/gemini/v1beta/models/gemini-2.0-flash:generateContent` and `/gemini/v1/models/example-gemini:generateContent` work. The `google-genai` client appends `/v1beta/models/<model>:generateContent` to `base_url`:
-
-```python
-from google import genai
-
-client = genai.Client(
-    api_key="not-used",
-    http_options={"base_url": "http://localhost:8080/gemini/"},
-)
-response = client.models.generate_content(
-    model="gemini-2.0-flash",
-    contents="Hello",
-)
-```
-
-The same call with curl. `hello` has one step, so the first call after it loads gets the greeting and the next gets HTTP 400 (`no more steps`). Each example above is one call: reset the scenario between them, which starts it over at step 1:
-
-```bash
-curl -s http://localhost:8080/health
-
-curl -s http://localhost:8080/anthropic/v1/messages \
-  -H 'content-type: application/json' \
-  -d '{"model":"example-model","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
-
-curl -s -X POST http://localhost:8080/control/reset
-```
+The [Quickstart](docs/quickstart.md) page has the full walk-through, with the response to each step.
 
 ## Install
 
@@ -105,7 +66,7 @@ docker run -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario hello
 
 From 0.6.0 the image reports `healthy` once `GET /health` answers. Set the port with `-e PORT=<n>`, not `--port`, or the health check probes 8080. Compose can wait for it with `depends_on: {fake-llm: {condition: service_healthy}}`.
 
-To run it beside an app's tests in CI, see [Run in CI](#run-in-ci). For Python tests, the [pytest plugin](#pytest-plugin) starts it for each test session.
+To run it beside an app's tests in CI, see [Run in CI](#run-in-ci). For Python tests, the [pytest plugin](docs/pytest.md) starts it for each test session.
 
 The libraries are on Maven Central. With Gradle:
 
@@ -153,25 +114,7 @@ java -jar fake-llm-all.jar --scenario hello
 
 ## Use as a library
 
-Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `com.davidjonesgriz:fake-llm:0.5.0`. Classes are in the `com.davidjonesgriz.fakellm` package. To build from a checkout instead, publish it to your local Maven repository:
-
-```bash
-./gradlew publishToMavenLocal
-```
-
-```kotlin
-repositories { mavenLocal() }
-dependencies { testImplementation("com.davidjonesgriz:fake-llm:0.5.0") }
-```
-
-or include it as a composite build. Gradle then substitutes the dependency with the checkout's source, with no publishing step. The included build runs on your project's Gradle, which must be 9.2 or newer (and so run on JDK 17 or newer); it compiles with a JDK 21 toolchain, and your tests must run on Java 21 or newer:
-
-```kotlin
-// settings.gradle.kts
-includeBuild("../fake-llm")
-```
-
-`startFakeLlmServer` returns a `FakeLlmServer`. Pass port `0` for an ephemeral port. `baseUrl` is `http://127.0.0.1:<port>`, `engine` loads scenarios and reads the call log without going through HTTP, and `close()` stops the server and its threads:
+Kotlin and Java tests can start the server in the same JVM. `startFakeLlmServer` returns a `FakeLlmServer` with a `baseUrl` and the `ScenarioEngine` behind it; `FakeLlmClient` drives a server in another process, such as a container, over the control API:
 
 ```kotlin
 startFakeLlmServer(port = 0, engine = ScenarioEngine(), controlToken = null).use { server ->
@@ -180,66 +123,16 @@ startFakeLlmServer(port = 0, engine = ScenarioEngine(), controlToken = null).use
     // ... exercise the code under test ...
     assertEquals("text", server.engine.calls().single().outcome)
 }
-```
 
-From Java, `startFakeLlmServer` is a static method of the class `FakeLlm`. Pass `null` as the token for open control routes, or leave the argument out to read `FAKE_LLM_CONTROL_TOKEN`, as the Kotlin default does:
-
-```java
-ScenarioEngine engine = new ScenarioEngine();
-try (FakeLlmServer server = FakeLlm.startFakeLlmServer(0, engine, null)) {
-    engine.load("hello");
-    MyClient client = new MyClient(server.getBaseUrl() + "/anthropic");
-    // ... exercise the code under test ...
-    assertEquals("text", engine.calls().get(0).getOutcome());
-}
-```
-
-`engine.exchanges()` returns each call's full request and response; see [`GET /control/exchanges`](#control-api). `engine.unusedSteps` lists the steps no call has used since the last load, reset or unload.
-
-`engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, call log, exchange log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. For scenario files kept elsewhere, point the engine's scenario directory at them, so they get the same checks and messages as any load by name.
-
-`Scenario.fromJson(text)` decodes a scenario written in the scenario file format, with the checks and messages of an inline load: a `"$schema"` key is ignored, and the name need not match a file. From Java, it builds a scenario in code with a text block:
-
-```java
-engine.loadInline(Scenario.fromJson("""
-        {
-          "name": "rate-limited-once",
-          "steps": [
-            {"error": {"status": 429, "headers": {"retry-after": "0"}}},
-            {"text": "Recovered."}
-          ]
-        }
-        """));
-```
-
-A name is looked up in this order, and the first match wins: the engine's scenario directory, then your project's classpath `/scenarios/<name>.json` (the first on the classpath, if several modules have one), then the bundled scenarios, which fake-llm keeps under its own resource path, so your `index.txt` no longer hides the bundled list. So a scenario of yours with a bundled name, such as `scenarios/rate-limit-429.json`, replaces the bundled one, on purpose. `GET /control/scenarios` lists the directory's `*.json` names, the names in every `/scenarios/index.txt` on the classpath, and the bundled names. To have your classpath scenarios listed, add an `index.txt` beside them, one name per line (blank lines and whole-line `#` comments are skipped, and surrounding spaces are trimmed); without one they still load by name. A listed name is only as good as its index: a name whose file is missing still fails to load, and names that are not legal scenario names are skipped.
-
-The library is built with Kotlin 2.4. A Kotlin project that uses it needs Kotlin 2.4 (2.3 may work, on a best-effort basis), and gets `kotlin-stdlib` 2.4 and `kotlinx-serialization-json` 1.12.0 as dependencies, as does a Java project. The three libraries, `fake-llm`, `fake-llm-junit-jupiter` and `fake-llm-testcontainers`, need Java 21 or newer, and CI tests them on Java 21 and 25. A Gradle build that targets an older Java fails at dependency resolution (the library is published as compatible with Java 21). A Maven or plain-classpath build fails to compile under an older JDK (`class file has wrong version 65.0`), or, if compiled with a newer JDK, fails at run time with `UnsupportedClassVersionError`. A project on Java 17 can still use fake-llm as a separate service: the Docker image includes its own Java 21 runtime (the fat jar needs Java 21 or newer on the machine that runs it), and the vendor endpoints and the [control API](#control-api) work over HTTP from any language. Anything that runs in the project's own JVM (the in-process server and `ScenarioEngine`, `FakeLlmClient`, the JUnit extension, `FakeLlmContainer`) needs Java 21.
-
-### Control API client
-
-`FakeLlmClient` drives a running server over HTTP, for tests that reach it by URL, such as the Docker image, `java -jar`, or a server started elsewhere in the test. Where it and `ScenarioEngine` have the same operation, the method has the same name:
-
-```kotlin
-FakeLlmClient("http://localhost:8080", controlToken = System.getenv("FAKE_LLM_CONTROL_TOKEN")).use { client ->
-    client.load("rate-limit-429")          // or client.loadInline(Scenario(...))
+// The same against a server in another process, such as the Docker image:
+FakeLlmClient("http://localhost:8080").use { control ->
+    control.load("hello")
     // ... exercise the code under test against http://localhost:8080 ...
-    val calls: List<CallRecord> = client.calls()
-    val exchanges: List<ExchangeRecord> = client.exchanges()
-    client.reset()
-    client.unload()                        // no scenario: calls get the strict 400, or the lenient canned reply
+    assertEquals("text", control.calls().single().outcome)
 }
 ```
 
-From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's name, whether the server is lenient, `steps` and `unusedSteps`, and `version`, the server's version (each null against a server older than this release), and `scenarioNames()` lists what the server can load by name. `unload()` returns the server to the state it has when started without a scenario: no scenario loaded and empty logs. Against a server older than 0.5.0 it fails with status 404. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
-
-Every failed call throws `FakeLlmClientException`. `statusCode` is the HTTP status, or null when no response arrived (a refused connection, a timeout or an interrupt, kept as the `cause`). For an error status, `serverMessage` is the server's explanation, verbatim, such as `unknown scenario 'x' — ...`. A 401 says whether the token was missing or rejected.
-
-The client ignores response fields it does not know, so a server that has gained fields does not break it. It also leaves fields at their default values out of the scenarios it sends, so a scenario that does not use a newly added field is still accepted by a server that predates it.
-
-### JUnit Jupiter extension
-
-`com.davidjonesgriz:fake-llm-junit-jupiter:0.5.0` runs an in-process server for each test class, so a test needs no setup or teardown of its own. Its classes are in the `com.davidjonesgriz.fakellm.junit` package, and it brings `fake-llm` with it. It works with JUnit Jupiter 5.10.5 or newer, including 6.x. Your project supplies JUnit; the extension does not add it. Kotlin's `kotlin("test")` brings JUnit 5.10.1 on its own, so a Kotlin project should also add a newer BOM, such as `testImplementation(platform("org.junit:junit-bom:5.14.4"))`.
+The JUnit Jupiter extension (`com.davidjonesgriz:fake-llm-junit-jupiter`) runs a server for each test class, loads each test's scenario, and fails a test whose calls and steps don't match:
 
 ```kotlin
 @FakeLlmTest
@@ -251,688 +144,49 @@ class MyClientTest {
         // ... exercise the code under test ...
         assertEquals(2, server.engine.calls().size)
     }
-
-    @Test
-    @FakeLlmScenario("hello")
-    fun `answers a greeting`(server: FakeLlmServer) { /* ... */ }
 }
 ```
 
-```java
-@FakeLlmTest
-@FakeLlmScenario("hello")
-class MyClientTest {
-    @Test
-    void answers(FakeLlmServer server) { /* server.getBaseUrl(), server.getEngine().calls() */ }
-}
-```
-
-- **One server per class.** The server starts on an ephemeral port when the class first needs it, and stops when the class finishes. `@Nested` classes share it, and subclasses inherit `@FakeLlmTest`.
-- **A scenario per test.** Before each test, the nearest `@FakeLlmScenario` is loaded: the method's, then the class's (its own, then its interfaces', then its superclasses'), then each enclosing class's, the same way. Loading starts the scenario over, so every test's first call gets step 1 and the call log and the exchange log hold only that test's calls. A test with no `@FakeLlmScenario` anywhere runs with no scenario loaded (`ScenarioEngine.unload()`), so a scenario loaded by hand in `@BeforeAll` is gone again by the first test; put the scenario on each test method; a class-level `@FakeLlmScenario` is supported, but it shares one scenario between tests (see Writing scenarios for tests). The extension runs before your own `@BeforeEach` methods, so they see the scenario and can replace it.
-- **Every call must get a step.** Right after the test method, before your `@AfterEach` methods, the test fails if a call made during `@BeforeEach` or the test got no step: a call after the scenario's last step, or a call with no scenario loaded in strict mode. The failure lists those calls. An app can catch the 400 and carry on, so without this check such a test could pass. A test that makes such a call on purpose, to test how the app handles it, opts out with `@FakeLlmAllowUnservedCalls` on the method or the class (found the same way as `@FakeLlmScenario`). An aborted test (a failed assumption) is not checked. For a `@TestFactory`, the check runs once around the whole factory. A `reset()` or `load()` in the middle of a test erases the calls made before it from the log, so the check does not see those.
-- **Every step must get a call.** A test that passed also fails if its scenario has steps no call used, such as a retry the app never made. The failure names the unused steps. A test that leaves steps unused on purpose opts out with `@FakeLlmAllowUnusedSteps` on the method or the class (found the same way as `@FakeLlmScenario`). A test method that already failed is not checked for unused steps (it often stopped before its last calls), and an aborted test is not checked. For a `@TestFactory`, the check runs once around the whole factory, after its dynamic tests, whether or not they passed.
-- **Injection.** Constructors, `@BeforeAll`, `@BeforeEach` and test methods can take a `FakeLlmServer` (`baseUrl`, `port`, `engine`) or the `ScenarioEngine` itself.
-- **Configuration.** `@FakeLlmTest(scenarioDirectory = "src/test/scenarios", lenient = true)` sets the engine's scenario directory (searched first; relative to the working directory) and lenient mode. The server ignores `FAKE_LLM_CONTROL_TOKEN`. Both annotations also work inside your own composed annotation or on an interface the test class implements. When the outer class runs the extension, a `@Nested` class uses the outer class's server, so options on the nested class's own `@FakeLlmTest` have no effect.
-- **`@RegisterExtension`.** Instead of `@FakeLlmTest`, a field can hold `FakeLlmExtension(scenarioDirectory, lenient)`; from Java, `new FakeLlmExtension()` or `new FakeLlmExtension(path, lenient)`. A static field behaves like the annotation. An instance field exists only once the test instance does, so it cannot inject into its own class's constructor or a static `@BeforeAll` method, and a `@Nested` class may get a server of its own rather than the outer class's; use a static field or the annotation for those. Register the extension once per class: with both `@FakeLlmTest` and a field, JUnit rejects injected parameters because two extensions offer them.
-- **Parallel execution.** Test classes can run in parallel, each with its own server and port. The tests of one class share one engine, so they must run one at a time: a second test that starts while another is running fails immediately with an explanation. With JUnit's parallel execution enabled, run classes concurrently and methods on the same thread:
-
-  ```properties
-  # src/test/resources/junit-platform.properties
-  junit.jupiter.execution.parallel.enabled=true
-  junit.jupiter.execution.parallel.mode.default=same_thread
-  junit.jupiter.execution.parallel.mode.classes.default=concurrent
-  ```
-
-The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6 deprecates in favour of `computeIfAbsent`. JUnit 5.10 has no `computeIfAbsent`, so the extension moves to it once the minimum supported JUnit version does.
-
-[examples/](examples/) uses the extension in `SummarizerExtensionTest` and `TicketPipelineTest`.
-
-### Testcontainers
-
-`com.davidjonesgriz:fake-llm-testcontainers:0.5.0` runs fake-llm's Docker image with [Testcontainers](https://java.testcontainers.org/), for tests that want the server in its own container, as they run a database or a message broker. `FakeLlmContainer` is a `GenericContainer`, in the `com.davidjonesgriz.fakellm.testcontainers` package. It brings `fake-llm` (for `FakeLlmClient`) and Testcontainers 2 with it, and needs Docker, or another runtime Testcontainers supports, where the tests run. With Testcontainers' JUnit Jupiter extension, `org.testcontainers:testcontainers-junit-jupiter`:
-
-```java
-@Testcontainers
-class MyClientTest {
-    @Container
-    static final FakeLlmContainer FAKE_LLM = new FakeLlmContainer().withScenarioDirectory(Path.of("src/test/scenarios"));
-
-    @Test
-    void retriesAfterARateLimit() {
-        try (FakeLlmClient client = FAKE_LLM.client()) {
-            client.load("rate-limit-429");
-            MyClient app = new MyClient(FAKE_LLM.getAnthropicBaseUrl());
-            // ... exercise the code under test ...
-            assertEquals(2, client.calls().size());
-        }
-    }
-}
-```
-
-- **The image.** `new FakeLlmContainer()` runs `ghcr.io/davidjones-griz/fake-llm` tagged with the library's own version, so the server and the client always match. Any tag of that repository can be passed instead, as a string or a `DockerImageName`. Another image, such as a mirror or a local build, must be declared a substitute, as for any Testcontainers module: `new FakeLlmContainer(DockerImageName.parse("fake-llm:dev").asCompatibleSubstituteFor("ghcr.io/davidjones-griz/fake-llm"))`.
-- **Startup.** The container counts as started once `GET /health` answers 200, so the first test call finds the server listening.
-- **Base URLs.** `getBaseUrl()` is `http://<host>:<mapped port>`. `getAnthropicBaseUrl()` (`…/anthropic`), `getOpenAiBaseUrl()` (`…/openai/v1`) and `getGeminiBaseUrl()` (`…/gemini/`) are the base URLs the official SDKs take; see [Quickstart](#quickstart). Read them after the container has started.
-- **Scenarios.** `withScenarioDirectory(path)` copies a host directory into the container before it starts and sets `FAKE_LLM_SCENARIO_DIR` to it, so its scenarios load by name. The copies are readable by the server whatever their permissions on the host, so a JUnit `@TempDir` works. `withScenario(name)` loads one at startup. A test can also send its scenario inline with `client.loadInline(...)`, with no directory.
-- **Options.** `withLenient()` sets `FAKE_LLM_LENIENT=true`, and `withControlToken(token)` sets `FAKE_LLM_CONTROL_TOKEN`. `client()` returns a [`FakeLlmClient`](#control-api-client) for the container, with that token if one is set; close it after use.
-- **One container per class.** A `static` `@Container` field starts once for the class. Tests that share it should each load their scenario first, as under [A scenario per test](#a-scenario-per-test).
-
-### API stability
-
-The public API is exactly what [api/fake-llm.api](api/fake-llm.api), [junit-jupiter/api/fake-llm-junit-jupiter.api](junit-jupiter/api/fake-llm-junit-jupiter.api) and [testcontainers/api/fake-llm-testcontainers.api](testcontainers/api/fake-llm-testcontainers.api) list, and the build fails if the code drifts from it. The one exception is `main`, the command-line entry point, which is listed only because the JVM requires it to be public. From Java, the top-level functions are in two classes whose names are set with `@file:JvmName`, not taken from source file names: `FakeLlm` has `startFakeLlmServer`, and `FakeLlmMain` has `main`. Before 1.0, a minor version may change that API, and every change is listed in [CHANGELOG.md](CHANGELOG.md). The scenario model classes (`Scenario`, `Step`, `ToolCall`, `ErrorStep`, `TokenUsage`) are data classes, so a release that adds a field changes their constructors: recompile against a new version rather than swapping the jar. `CallRecord`, `ToolCallRecord`, `ToolResultRecord`, `ExchangeRecord`, `ExchangeRequest`, `ExchangeResponse`, `FakeLlmHealth` and `FakeLlmClientException` are read-only, with internal constructors. A field added to `CallRecord`, the three exchange records or `FakeLlmHealth` always gets a default value, so it does not break callers, including code that decodes `GET /control/calls` with `CallRecord.serializer()` or `GET /control/exchanges` with `ExchangeRecord.serializer()`, and so a newer `FakeLlmClient` can still read an older server's responses. Exception messages from scenario validation are diagnostics, not API.
-
-[examples/](examples/) is a complete consumer, tested against the published artifact: a small client with retry logic, tested from Kotlin and from Java, and a three-stage pipeline, tested end to end.
+[Use as a library](docs/library.md) covers Java, the control API client, the extension's options, the Testcontainers module (`com.davidjonesgriz:fake-llm-testcontainers`) and API stability. For Python, the [pytest plugin](docs/pytest.md) starts the image for a test session.
 
 ## Run in CI
 
-In CI, fake-llm runs as a separate server beside an app's tests. The app can be in any language: point its LLM base URL at fake-llm, and have its tests load scenarios and read the call log over the [control API](#control-api). The server prints one line per call to its log, so a failed job's service log shows which calls reached fake-llm and what each got.
-
-### GitHub Actions
-
-[examples/github-actions/fake-llm-tests.yml](examples/github-actions/fake-llm-tests.yml) is a complete workflow. It runs fake-llm as a service container, and runs a small Python app's tests, [examples/github-actions/test_greeting.py](examples/github-actions/test_greeting.py), against it. This repository's CI runs it against the image built from each commit. To use it, copy it to `.github/workflows/` in your repository, and change the `examples/github-actions/` paths to where your tests and scenarios are.
-
-The service:
-
-```yaml
-services:
-  fake-llm:
-    image: ghcr.io/davidjones-griz/fake-llm:0.5.0
-    ports:
-      - 8080:8080
-    env:
-      FAKE_LLM_SCENARIO_DIR: /scenarios
-      FAKE_LLM_CONTROL_TOKEN: fake-llm-ci-token
-    options: >-
-      --health-cmd "curl -fsS http://127.0.0.1:8080/health"
-      --health-interval 2s
-      --health-timeout 5s
-      --health-retries 30
-```
-
-- **Pin a release tag**, such as `0.5.0`, not `latest` or `0.5`. Those two tags move with each release, so a new release could change your tests' results with no change in your repository. The recipe needs 0.5.0 or later, for `POST /control/unload`.
-- **Configure it with environment variables.** A service container takes no command-line arguments, so use the variables under [Configuration](#configuration): `FAKE_LLM_SCENARIO` (a scenario loaded at startup), `FAKE_LLM_SCENARIO_DIR`, `FAKE_LLM_LENIENT` and `FAKE_LLM_CONTROL_TOKEN`. Keep the container's port at 8080, and choose the runner's port in `ports`.
-- **The health check** runs inside the container, so it needs a program in the image. The image has `curl`, from its eclipse-temurin base. `GET /health` needs no token. The runner starts the job's steps once the check passes, and fails the job if it never does. Without a health check, the steps can start before the server listens. From 0.6.0 the image declares its own health check on `GET /health` (every 5 s; failures in the first 30 s don't count), so a service container waits for it with no `options`. The recipe keeps its `--health-cmd` so that it also works with 0.5.0. A service's `--health-cmd` replaces the image's command, and any timing flag it leaves unset comes from the image.
-- **The control token is optional.** When it is set, every `/control/` request must send `Authorization: Bearer <token>`. The ports of a GitHub-hosted runner are not reachable from outside the job, so the token can be written in the workflow.
-
-The job's `env` points the app at the service. The steps run on the runner, so the address is `localhost` and the port from `ports`:
-
-```yaml
-env:
-  ANTHROPIC_BASE_URL: http://localhost:8080/anthropic
-  ANTHROPIC_API_KEY: not-used
-  FAKE_LLM_URL: http://localhost:8080
-  FAKE_LLM_CONTROL_TOKEN: fake-llm-ci-token
-```
-
-The official Python SDKs read their base URL from the environment, so the app needs no code change: `ANTHROPIC_BASE_URL` (`http://localhost:8080/anthropic`), `OPENAI_BASE_URL` (`http://localhost:8080/openai/v1`) and `GOOGLE_GEMINI_BASE_URL` (`http://localhost:8080/gemini/`). Each still needs its API key variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY`) set, to any value. Other clients take the same base URLs; see [Quickstart](#quickstart). When the job itself runs in a container (`jobs.<job_id>.container`), the service is at `http://fake-llm:8080` instead.
-
-A service's volumes are mounted when the job starts, before `actions/checkout` runs, so a volume can't show the repository's scenario files. Copy them into the running container after the checkout instead. `FAKE_LLM_SCENARIO_DIR` is read at each load by name, so the directory doesn't have to exist when the server starts:
-
-```yaml
-- name: Copy the scenarios into fake-llm
-  env:
-    FAKE_LLM_CONTAINER: ${{ job.services.fake-llm.id }}
-  run: docker cp examples/github-actions/scenarios/. "$FAKE_LLM_CONTAINER:/scenarios"
-```
-
-A test can also send its scenario inline in `POST /control/scenario` (see [Loading a scenario](#loading-a-scenario)). That needs no copy and no scenario directory.
-
-### A scenario per test
-
-Tests that share one server should each start from a known state. Load the test's scenario at the start of the test: a load replaces the previous scenario, empties the call log and the exchange log, and starts numbering at call 1. After the test, `POST /control/unload` returns the server to the state it has when started without a scenario, so a test that loads nothing gets the `no scenario loaded` 400, not whatever the previous test left. Unload needs fake-llm 0.5.0 or later; an older server answers it with HTTP 404. Within a test, `POST /control/reset` starts the loaded scenario over.
-
-The example's pytest fixture and one of its tests:
-
-```python
-@pytest.fixture
-def fake_llm():
-    token = os.environ.get("FAKE_LLM_CONTROL_TOKEN")
-    headers = {"authorization": f"Bearer {token}"} if token else {}
-    with httpx.Client(base_url=os.environ["FAKE_LLM_URL"], headers=headers) as control:
-        yield control
-        control.post("/control/unload").raise_for_status()
-
-
-def test_greets_by_name(fake_llm):
-    load(fake_llm, {"name": "greeting"})
-
-    assert greet("Ada") == "Hello, Ada."
-
-    [call] = calls(fake_llm)
-    assert call["outcome"] == "text"
-    assert call["promptSample"] == "Greet Ada.\n"
-```
-
-`load` posts the body to `POST /control/scenario` and checks for HTTP 200, and `calls` returns `GET /control/calls`. The same requests work from any language with an HTTP client; from Kotlin or Java, [`FakeLlmClient`](#control-api-client) makes them. One server has one scenario and one call log, so tests that run in parallel against it interleave their calls: run them one at a time, or give each parallel worker its own server.
-
-### pytest plugin
-
-`pytest-fake-llm`, in [pytest-fake-llm/](pytest-fake-llm/), gives a Python project's pytest tests a fake-llm server: it starts the Docker image for the test session, or uses a server that is already running, and unloads it before each test. It needs Python 3.11 or newer and pytest 8 or newer, and has no other dependencies. It is not on PyPI; install it from this repository at a release tag, 0.6.0 or later:
-
-```bash
-pip install "pytest-fake-llm @ git+https://github.com/davidjones-griz/fake-llm@v0.6.0#subdirectory=pytest-fake-llm"
-```
-
-```python
-import anthropic
-import pytest
-
-
-@pytest.mark.fake_llm_scenario("rate-limit-429")
-def test_retries_after_a_rate_limit(fake_llm):
-    client = anthropic.Anthropic(api_key="not-used", base_url=fake_llm.anthropic_base_url)
-    # ... exercise the code under test ...
-    assert [call.outcome for call in fake_llm.client.calls()] == ["error:429", "text"]
-```
-
-- **The server.** The session-scoped `fake_llm_server` fixture starts `ghcr.io/davidjones-griz/fake-llm`, tagged with the plugin's own version, on a free port of 127.0.0.1, waits until `GET /health` answers, and removes the container when the session ends. `--fake-llm-image` (or `FAKE_LLM_IMAGE`) starts another image or tag instead. The plugin runs the `docker` command, so Docker must be installed where the tests run.
-- **A running server.** With `--fake-llm-url` (or `FAKE_LLM_URL`), no container is started, and the tests use the server at that base URL, such as a service container (see [GitHub Actions](#github-actions)). If it doesn't answer `GET /health`, every test that uses it errors, naming the URL.
-- **A clean server for each test.** The `fake_llm` fixture unloads the server before each test (`POST /control/unload`), so every test starts with no scenario loaded and empty logs, as under [A scenario per test](#a-scenario-per-test). `@pytest.mark.fake_llm_scenario("name")` on the test, its class or its module then loads that scenario; the nearest one wins. The marker takes effect through the fixture, so the test must request `fake_llm`. The server must be fake-llm 0.5.0 or later.
-- **Base URLs.** `fake_llm.base_url` is the server's root. `anthropic_base_url` (`…/anthropic`), `openai_base_url` (`…/openai/v1`) and `gemini_base_url` (`…/gemini/`) are the base URLs the official SDKs take; see [Quickstart](#quickstart).
-- **A scenario directory.** `fake_llm_scenario_dir = tests/scenarios` in the pytest configuration (relative to that file), or `--fake-llm-scenario-dir tests/scenarios`, mounts that directory into the started container, read-only, as its scenario directory, so its scenarios load by name. The files must be readable by the image's user, UID 10001. A running server keeps its own scenario directory. A test can also send its scenario inline, with `fake_llm.client.load_inline({...})`.
-- **The control token.** When `FAKE_LLM_CONTROL_TOKEN` is set, the started container requires it, and the client sends it, to a started or a running server.
-- **The client.** `fake_llm.client` is a `FakeLlmClient`, which also works on its own: `FakeLlmClient(base_url, control_token=None, timeout=10.0)` from `pytest_fake_llm`. Its methods are those of the Kotlin [`FakeLlmClient`](#control-api-client), in snake_case: `health()`, `scenario_names()`, `load(name)`, `load_inline(scenario)`, `reset()`, `unload()`, `calls()` and `exchanges()`. `calls()` returns `CallRecord`s, with the fields of `GET /control/calls` in snake_case, and `exchanges()` the decoded JSON. `health()` also returns `steps` and `unused_steps` (`None` and `[]` with no scenario loaded), both `None` against a server older than 0.6.0. A failed call raises `FakeLlmClientError`, whose `status_code` is the HTTP status, or None when no complete response arrived, and whose `server_message` is the server's explanation, such as `unknown scenario 'x' — ...`. A 401 says whether the token was missing or rejected. The client uses only the standard library, and ignores the proxy environment variables.
-- **One server for the session.** Its tests share it, so they run one at a time. With pytest-xdist, each worker starts a container of its own; with `--fake-llm-url`, the workers would share one server, so run those tests without `-n`.
-
-### Other CI systems
-
-Where the CI system can run `docker`, start the image in a step after the checkout. Arguments and volumes then work as in any `docker run`. The files must be readable by the image's user, UID 10001:
-
-```bash
-docker run -d --name fake-llm -p 8080:8080 \
-  -v "$PWD/tests/scenarios:/scenarios:ro" \
-  ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario-dir /scenarios
-for _ in $(seq 30); do
-  curl -fsS http://127.0.0.1:8080/health > /dev/null && break
-  sleep 1
-done
-curl -fsS http://127.0.0.1:8080/health
-```
+In CI, fake-llm runs as a separate server beside an app's tests, in any language: point the app's LLM base URL at fake-llm, and have its tests load scenarios and read the call log over the [control API](docs/control-api.md). [examples/github-actions/fake-llm-tests.yml](examples/github-actions/fake-llm-tests.yml) is a complete GitHub Actions workflow that runs the image as a service container, and this repository's CI runs it against the image built from each commit. [Run in CI](docs/ci.md) explains the service definition, a scenario per test, and other CI systems.
 
 ## Scenarios
 
-A scenario file is JSON. Unknown keys are rejected. `name` is required, `description` defaults to an empty string, and `steps` must be non-empty. Integers are plain JSON integers: `"24"`, `24.0` and `2e1` are rejected. For a load by name, the file is `<dir>/<name>.json`, the classpath resource `/scenarios/<name>.json`, or a bundled scenario, in that order; the declared `name` must equal the file name, and the name must match `[A-Za-z0-9_-]+`.
+A scenario is an ordered list of steps. Each step is a reply (`text`, tool calls, or both) or a scripted error, with optional streaming, latency and token-count settings:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "name": "example",
-  "description": "A rate limit, then the answer.",
   "steps": [
-    {
-      "error": {
-        "status": 429,
-        "body": "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}",
-        "headers": { "retry-after": "1" }
-      }
-    },
-    {
-      "text": "Mild and dry.",
-      "stopReason": "end_turn"
-    }
+    { "error": { "status": 429, "headers": { "retry-after": "1" } } },
+    { "text": "Mild and dry." }
   ]
 }
 ```
 
-After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with the `exception` 400 (a body that is not JSON, has no `messages` or `contents` array, or has an invalid `cache_control`, or whose next step has a tool call with `rawArguments` that its format can't carry), a 404, the Batches 501, the [embeddings routes](#embeddings), and [token counting and the model lists](#token-counting-and-model-lists) are not calls.
-
-Each step is a reply (`text`, `toolCalls`, or both) or an `error`. When a step in a file or an inline scenario is invalid, the error names its number, from 1, and the path of the field at fault, such as `step 2: $.steps[1]: unknown field 'stopReasn'`. The path is relative to the scenario, including for an inline scenario in `POST /control/scenario`.
-
-| Field | Meaning |
-| --- | --- |
-| `text` | Assistant text copied into the vendor response. Optional on a step with `toolCalls`. |
-| `thinking` | Optional thinking trace. Legal only on a reply step. Anthropic includes it as a thinking block (buffered) or as thinking deltas (streaming), and OpenAI Responses as a `reasoning` output item `rs_fake_<seq>` with one `summary_text` part (streamed as `response.reasoning_summary_text.delta` events), before the text and tool calls. Anthropic's signature is `fake-thinking-signature`. OpenAI Chat Completions and Gemini ignore it. |
-| `stopReason` | Stop reason for a reply. Default `end_turn`. Anthropic copies it to `stop_reason`. `"max_tokens"` means the reply was truncated: OpenAI then reports `finish_reason` `length`, and Gemini reports `finishReason` `MAX_TOKENS`. `"stop_sequence"` reports a matched stop sequence; set `stopSequence` to say which. Any other value becomes OpenAI `stop` and Gemini `STOP`. With `toolCalls` it must be `end_turn` or `tool_use`, and is sent as Anthropic `tool_use`, OpenAI `tool_calls` and Gemini `STOP`. OpenAI Responses reports `max_tokens` as `status` `incomplete` with `incomplete_details.reason` `max_output_tokens`, and any other value as `completed`. A tool-call step is `completed`. |
-| `stopSequence` | The stop sequence that ended the reply. Only with `stopReason` `stop_sequence`, and not empty. Anthropic sends it as `stop_sequence` (buffered, and in the stream's `message_delta`); without it, `stop_sequence` is `null`. Other formats ignore it. The text is sent as written, so write it as it would be up to the sequence. |
-| `error` | A scripted HTTP error instead of a reply. `status` is the HTTP status, from 100 to 599. `body` is sent as given (default empty), and `headers` are added as given (for example `retry-after`). The response is `Content-Type: application/json` unless `headers` sets a `content-type`, which replaces it. |
-| `streamChunkChars` | SSE delta size in Unicode code points, not UTF-16 chars. Default 24. Must be positive. Used only for Anthropic, OpenAI Chat Completions and Responses, and Gemini streaming. A buffered request ignores it. |
-| `streamInterChunkDelayMs` | Milliseconds to wait before each streamed delta. Default 0. From 0 to 600000 (10 minutes). Anthropic, OpenAI Chat Completions and Responses, and Gemini streaming; a Gemini `functionCall` chunk has no wait. |
-| `firstByteDelayMs` | Milliseconds to wait before any response bytes, status and headers included. Default 0. From 0 to 600000 (10 minutes). Every generation route: buffered and streamed replies and error steps. The call is numbered and logged when it arrives, before the wait. Use it to test client timeouts and slow-first-token handling. See [Latency and timeouts](#latency-and-timeouts). |
-| `streamErrorAfterChunks` | Legal only on an error step, and must be positive. Anthropic, OpenAI Chat Completions and Responses, and Gemini streaming. Null, the default, means the error is a plain HTTP response and no SSE bytes are written, including when the client asked for a stream. Setting it writes HTTP 200 and an event stream. Anthropic: `message_start`, a text block start, this many filler deltas, then `event: error` whose data is `error.body` (or a generic `api_error` body when `body` is blank); `content_block_stop`, `message_delta`, and `message_stop` are skipped. OpenAI: the role chunk, this many filler chunks, then a `data:` frame whose payload is `error.body` (or a generic `server_error` body when `body` is blank); no finish chunk, usage chunk or `[DONE]` follows. Gemini: this many filler chunks, then a `data:` frame whose payload is `error.body`, or a generic `INTERNAL` body with `code` 500 when `body` is blank. No chunk with `finishReason` follows. The `google-genai` SDK raises on that frame only when the body's first key is `error`, and picks `ClientError` or `ServerError` from `error.code`, which must be an integer. OpenAI Responses: `response.created`, `response.in_progress`, the message's opening events, this many filler `response.output_text.delta` events, then `event: error` whose data is `error.body`, or the API's own `error` event (`code` `server_error`) when `body` is blank. The `openai` SDK raises `APIError` only for a body with an `error` key; it yields the generic event without raising. `error.status` and `error.headers` are not used on that path. A non-streaming client still receives `error.status` and `error.body`. The filler is fixed text, not the error body. |
-| `toolCalls` | Tool calls the reply makes, in order, after any `text`. See [Tool calls](#tool-calls). |
-| `usage` | Token counts the reply reports: `{"inputTokens": n, "outputTokens": n}`, each optional (defaults 100 and 50), from 0 to 2147483647. Legal only on a reply step. Every format, buffered and streamed, reports them where it reports usage; totals are the sum. The Anthropic cache figures don't change. |
-
-A call after the last step returns HTTP 400, in strict and lenient mode alike. The body is JSON:
-
-```json
-{
-  "fake_llm_error": "no more steps",
-  "scenario": "example",
-  "steps": 2,
-  "seq": 3,
-  "vendor": "anthropic",
-  "model": "example-model",
-  "system_shape": "absent",
-  "message_count": 1,
-  "prompt_preview": "Hello\n"
-}
-```
-
-With no scenario loaded, strict mode (the default) returns HTTP 400 with the same fields except `scenario` and `steps`, and `"fake_llm_error": "no scenario loaded"`. `seq` is the call's number, as in the call log. `prompt_preview` is the first 200 characters of the combined prompt text. The call log records outcome `no-more-steps` or `no-scenario`, with `step` null. A streamed Anthropic, OpenAI (either route) or Gemini request gets the same status and JSON body, and the server writes no SSE bytes.
-
-Lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) answers a call with no scenario loaded with one canned assistant reply, `This is a canned response from fake-llm.`, logged with outcome `default`. It is a normal text reply, so a streamed Anthropic, OpenAI (either route) or Gemini request streams it. Lenient mode changes nothing once a scenario is loaded.
-
-The combined prompt text, used by `promptSample` and `prompt_preview`, depends on the dialect:
-
-- Anthropic: the `system` field, when it is a string or an array of text blocks, then each message `content` that is a string or an array of text blocks. A `tool_result` block adds its own `content` the same way: a string, or its text blocks. Other blocks contribute nothing. Each piece is followed by a newline. A `null`, number or boolean contributes nothing.
-- OpenAI: each message's `content` when it is a JSON string, or the string `text` of each of its parts when it is an array (`image_url` and other parts without `text` add nothing), whatever the role. A message with role `system` or `developer` sets `systemShape` to `blocks`; otherwise it is `absent`. OpenAI requests never record `string`.
-- OpenAI Responses: `instructions` when it is a JSON string, then `input` when it is a JSON string. When `input` is an array, for each item in order: a message item's `content` when it is a string, or the string `text` of each of its content parts (`input_text`, `output_text`); a `function_call_output`'s `output` when it is a string. Other items add nothing, and an item whose `type` is absent or not a string counts as a message. `systemShape` is `string` for string `instructions`, `unknown` for any other non-null `instructions`, and without `instructions` `blocks` when an input item has role `system` or `developer`, else `absent`. `messageCount` is 1 for a string `input`, the number of items for an array (every item counts), and 0 otherwise.
-- Gemini: the string `text` of each part of `systemInstruction`, or of `system_instruction` (the REST API's other spelling) when `systemInstruction` is missing or `null`, then of each `contents[].parts[]`. `systemShape` is `blocks` when that system instruction is an object, `absent` when it is missing or `null`, and `unknown` otherwise. The model id comes from the URL, not the body.
-
-### Tool calls
-
-A step's `toolCalls` lists the tool calls its reply makes, after any `text`. Each one is:
-
-| Field | Meaning |
-| --- | --- |
-| `name` | Required, not empty. The tool's name, sent as given: it need not match a tool the request declared. |
-| `arguments` | The arguments as a JSON object, sent as given. With `rawArguments` also unset, `{}`. |
-| `rawArguments` | The argument text, sent verbatim, so it can be invalid JSON. Set at most one of `arguments` and `rawArguments`. |
-| `id` | The call's id, not empty. By default `toolu_fake_<seq>_<n>` for Anthropic and `call_fake_<seq>_<n>` for OpenAI (sent as `call_id` on Responses), where `seq` is the call's number and `n` the tool call's 1-based position in the step. Gemini sends an id only when one is set. |
-
-Each format renders them as its API does:
-
-- Anthropic: one `tool_use` block per call, after the thinking and text blocks, with `input` set to `arguments`, and `stop_reason` `tool_use`. Streamed, each call is a `tool_use` block start with an empty `input`, the argument text as `input_json_delta` pieces of `streamChunkChars` code points, and a block stop.
-- OpenAI: `message.tool_calls`, each with `type` `function` and the argument text as `function.arguments`, and `finish_reason` `tool_calls`. `message.content` is the text, or `null` without text. Streamed, the tool calls come after the content chunks: per call a header chunk with its `index`, `id`, `type` and `name` and empty `arguments`, then its argument text in `streamChunkChars` pieces. Without text, the role chunk's `content` is `null`.
-- OpenAI Responses: one `function_call` output item per call, after the message item, with `id` `fc_fake_<seq>_<n>`, `call_id`, `name`, the argument text as `arguments`, and `status` `completed`; the response's `status` is `completed`. Streamed, each call is an `output_item.added` with empty `arguments`, its argument text as `response.function_call_arguments.delta` events of `streamChunkChars` code points, `response.function_call_arguments.done`, and `output_item.done`.
-- Gemini: one `functionCall` part per call, after the text part, with `args` set to `arguments`, and `finishReason` `STOP`. Streamed, each call is its own chunk whose only part is that `functionCall`, after the text chunks, and the last chunk carries `finishReason` `STOP`.
-
-`rawArguments` is sent verbatim by OpenAI (both routes), buffered or streamed, and by a streamed Anthropic reply. A buffered Anthropic `tool_use.input` and a Gemini `functionCall.args` must be JSON objects, so a buffered Anthropic request or a Gemini request whose next step sets `rawArguments` gets the `exception` 400. That request is not a call: the step is not used, and the next call gets it.
-
-The request's `tools` and `tool_choice` (and Gemini `tools` and `toolConfig`) are ignored: a step's tool calls are sent whatever tools the request declares.
-
-A tool loop is two steps: the tool call, then the reply after the app sends the result back.
-
-```json
-{
-  "name": "weather-tool",
-  "steps": [
-    { "toolCalls": [{ "name": "get_weather", "arguments": { "city": "Paris" } }] },
-    { "text": "It is 18 degrees in Paris." }
-  ]
-}
-```
-
-With the OpenAI SDK, the app sends the assistant message back with the tool's result:
-
-```python
-first = client.chat.completions.create(model="example-gpt", messages=messages, tools=tools)
-message = first.choices[0].message
-messages += [message, {"role": "tool", "tool_call_id": message.tool_calls[0].id, "content": "18 degrees"}]
-second = client.chat.completions.create(model="example-gpt", messages=messages, tools=tools)
-```
-
-`GET /control/calls` then shows both calls, with the tool call the first response carried and the result the second request sent back:
-
-```json
-[
-  {
-    "seq": 1,
-    "step": 1,
-    "vendor": "openai",
-    "model": "example-gpt",
-    "systemShape": "absent",
-    "messageCount": 1,
-    "outcome": "tool-calls",
-    "timestampMs": 1710000000000,
-    "promptSample": "Hello\n",
-    "toolCalls": [{ "id": "call_fake_1_1", "name": "get_weather" }],
-    "toolResults": [],
-    "firstByteDelayMs": 0,
-    "streamInterChunkDelayMs": 0
-  },
-  {
-    "seq": 2,
-    "step": 2,
-    "vendor": "openai",
-    "model": "example-gpt",
-    "systemShape": "absent",
-    "messageCount": 3,
-    "outcome": "text",
-    "timestampMs": 1710000000100,
-    "promptSample": "Hello\n18 degrees\n",
-    "toolCalls": [],
-    "toolResults": [{ "id": "call_fake_1_1", "name": "get_weather", "content": "18 degrees", "isError": false }],
-    "firstByteDelayMs": 0,
-    "streamInterChunkDelayMs": 0
-  }
-]
-```
-
-`toolResults` lists every tool result in the request, in order: Anthropic `tool_result` blocks (`id` from `tool_use_id`, `content` as sent, `isError` when `is_error` is `true`), OpenAI `tool` messages (`id` from `tool_call_id`, `content` as sent), OpenAI Responses `function_call_output` items (`id` from `call_id`, `output` as `content`, named after the `function_call` item with the same `call_id`), and Gemini `functionResponse` parts (`id`, `name`, and `response` as `content`). For Anthropic and OpenAI Chat Completions, `name` is the name of the tool call in the same request with the matching id, or `null` when there is none. A multi-turn request resends its history, so a later call lists the earlier results again. The fake records what was sent; the test decides what is right.
-
-### Latency and timeouts
-
-Two step fields add latency. `firstByteDelayMs` holds back the whole response: the server waits that long before sending anything, status and headers included, on every generation route, for a buffered or streamed reply and for an error step. On a stream, `streamInterChunkDelayMs` then waits before each delta (each text, thinking and tool-call argument delta; a Gemini `functionCall` chunk has no wait); a buffered response ignores it. Both are 0 by default and at most 600000 (10 minutes).
-
-Only a step's own fields wait. The responses that come from no step never wait: the no-more-steps and no-scenario 400s, the lenient canned reply, and the `exception` 400s, 401s, 404s and the Batches 501.
-
-A call is numbered and logged when it arrives, before the wait, and the wait runs outside the engine's lock. Other calls are served while one waits, so a later call can finish first, and a reset, load or unload during the wait doesn't change the waiting call's response. The call log records the delays each call used (`firstByteDelayMs`, and `streamInterChunkDelayMs` only when the response was an event stream: a streamed request answered by a reply, or by an error step with `streamErrorAfterChunks`), not measured time.
-
-A client whose timeout is shorter than `firstByteDelayMs` times out. Its call was logged once, when it arrived, and stays in the log. The server finishes the wait (it does not stop early), its response goes nowhere, and the next request is served normally with the next step. A client that retries the request, such as the `openai` SDK with its default `max_retries`, makes a new call, which gets the next step. A client that disconnects between streamed chunks is handled the same way.
-
-```json
-{ "name": "slow-provider", "steps": [{ "text": "slow", "firstByteDelayMs": 5000 }] }
-```
-
-With that scenario, an `openai` client created with `timeout=1.0` and `max_retries=0` raises `openai.APITimeoutError`.
-
-### Writing scenarios for tests
-
-- Each test owns its scenario, even when that means repeating steps another scenario also has. Changing a scenario then affects only the test that owns it. Name a scenario file after its test, or build it inline with `loadInline`.
-- Script one step per call, in the order the app makes its calls, including every retry and error. A call the scenario has no step for fails with `no more steps`, and with the JUnit extension a step no call used fails the test, so a missing or extra call shows up in the test. Without the extension, check `engine.unusedSteps` is empty at the end of the test. Over HTTP, check that `GET /health`'s `unusedSteps` is empty.
-- Load the scenario, or reset it, at the start of each test, so its first call gets step 1 and the call log holds only its calls. The JUnit extension does this before each test.
-
-For example, a test whose app retries once after a rate limit scripts both calls, then checks the app's reply and that the app made exactly those two calls:
-
-```kotlin
-@FakeLlmTest
-class MyClientTest {
-    @Test
-    fun `retries once after a rate limit`(engine: ScenarioEngine, server: FakeLlmServer) {
-        engine.loadInline(
-            Scenario(
-                name = "retries-once-after-a-rate-limit",
-                steps =
-                    listOf(
-                        Step(error = ErrorStep(status = 429, headers = mapOf("retry-after" to "0"))),
-                        Step(text = "Recovered."),
-                    ),
-            ),
-        )
-        val client = MyClient(baseUrl = "${server.baseUrl}/anthropic")
-
-        assertEquals("Recovered.", client.ask("Summarize this."))
-        assertEquals(listOf("error:429", "text"), engine.calls().map { it.outcome })
-    }
-}
-```
-
-For a whole pipeline, see `TicketPipelineTest` in [examples/](examples/). `TicketPipeline` makes three calls, each to a different vendor's API: it classifies a support ticket (Anthropic), extracts its details with a forced tool call (OpenAI Chat Completions), and streams a summary (Gemini). Each test's scenario file scripts every call in order, including a rate limit, tool-call arguments that are not valid JSON, a summary cut off at `max_tokens`, and a call after the last step.
-
-### Scenario schema and `validate`
-
-[schema/scenario.schema.json](schema/scenario.schema.json) is a JSON Schema (2020-12) for scenario files, generated from the [OpenAPI spec](openapi/fake-llm.yaml)'s `Scenario` schema. A top-level `"$schema"` key pointing at it, as in the example above, lets VS Code and IntelliJ check a scenario file and complete its field names as you type. The server ignores the key; it is allowed only at the top level, not in a step. JSON Schema counts `24.0` and `2e1` as integers, so an editor accepts them; the server and `validate` reject them. The URL follows `main`; inside a repository that has a copy of the schema, a relative path such as `"../schema/scenario.schema.json"` also works, offline too.
-
-`validate` checks scenario files without starting a server, with the same checks as a load by name, including that the declared `name` matches the file name (so a file meant only for an inline load is reported if its name differs). A directory means its `*.json` files, not its subdirectories:
-
-```bash
-java -jar build/libs/fake-llm-all.jar validate src/test/scenarios
-docker run --rm -v "$PWD/scenarios:/scenarios:ro" fake-llm validate /scenarios
-```
-
-Each valid file gets an `ok <path>` line, and each invalid one a `<path>: <problem>` line on stderr, such as `scenarios/weather.json: step 2: $.steps[1]: unknown field 'stopReasn'`. Every file is checked, with the first problem in each reported. The exit code is 0 when every file is valid, 1 when any is invalid, and 2 for a usage error: no paths, a path that does not exist, a directory with no `.json` files, or a flag. (The server's own usage errors exit 1.)
-
-### Bundled scenarios
-
-| Name | What it does |
-| --- | --- |
-| `hello` | One step: a short greeting. |
-| `rate-limit-429` | Call 1 is HTTP 429 with a `retry-after: 2` header. Call 2 is a weather sentence. |
-| `overloaded-529` | Call 1 is HTTP 529. Call 2 is a short support reply. A streamed request on any route still gets HTTP 529, because the error step leaves `streamErrorAfterChunks` unset. |
-| `refusal` | One text reply with `stopReason` `refusal`. |
-| `max-tokens-cutoff` | One text reply cut off inside a JSON value, with `stopReason` `max_tokens`. |
-| `malformed-json` | Call 1 is prose with a broken JSON fragment. Call 2 is a valid JSON object. |
-| `stream-error-midway` | Anthropic and OpenAI streaming write three 8-code-point filler deltas, then the error body: an `overloaded_error` event for Anthropic, a data frame for OpenAI (the `openai` SDK raises `APIError`, because the body has an `error` key). Gemini streaming writes the same three filler chunks, then that body as a data frame. Its first key is not `error`, so the `google-genai` SDK does not raise: it yields one more chunk with no candidates, and the stream ends. OpenAI Responses streaming writes the same three filler deltas, then that body as an `error` event; the body has an `error` key, so the `openai` SDK raises `APIError`. A non-streaming client receives that error as HTTP 529. |
-| `thinking-stream` | A text reply with a thinking trace. Anthropic and OpenAI Responses streaming split both into 8-code-point chunks and wait 20 ms between chunks. |
-| `fail-then-retry` | Call 1 is HTTP 500. Call 2 is a normal text reply. |
-
-The bundled scenarios are for trying the server and for the examples in this README. A test suite should keep its own scenarios, as above.
-
-### Loading a scenario
-
-At startup, `--scenario <name>` overrides `FAKE_LLM_SCENARIO`. With neither set, the process starts with no scenario. A generation request then returns HTTP 400 until a scenario is loaded, unless the process is lenient, in which case it serves the canned reply.
-
-`--scenario-dir <path>` overrides `FAKE_LLM_SCENARIO_DIR`. A name is read from `<dir>/<name>.json` when that file exists, and otherwise from the bundled scenarios. `GET /control/scenarios` lists the `*.json` stems in that directory plus the bundled names. The combined list is deduplicated and sorted. (In-process use can add your project's classpath scenarios; see [Use as a library](#use-as-a-library).)
-
-`POST /control/scenario` loads a scenario in the running process and starts it over: the call log and the exchange log are emptied, and the next call is call 1 and gets step 1. The body is a JSON object with exactly one of `name` or `scenario`:
-
-```bash
-curl -s -X POST http://localhost:8080/control/scenario \
-  -H 'content-type: application/json' \
-  -d '{"name":"hello"}'
-```
-
-```json
-{"loaded":"hello","steps":1}
-```
-
-An inline scenario is decoded with the same strict rules as a file. The name does not have to match a file:
-
-```bash
-curl -s -X POST http://localhost:8080/control/scenario \
-  -H 'content-type: application/json' \
-  -d '{"scenario":{"name":"inline","steps":[{"text":"ok"}]}}'
-```
-
-```json
-{"loaded":"inline","steps":1}
-```
-
-Sending both `name` and `scenario`, or neither, is HTTP 400. A bad name or a body the decoder rejects is HTTP 400 with `{"fake_llm_error":"exception","detail":"..."}`.
+Call N, on any generation route, gets step N. The last step does not repeat: a call after it gets HTTP 400. A scenario loads by name from a scenario directory, the bundled scenarios (`hello`, `rate-limit-429`, `fail-then-retry` and others) or, in process, the test classpath; or inline over the control API. The [scenario reference](docs/scenarios.md) has every field, the bundled scenarios, and `validate`, which checks scenario files; the [recipes](docs/recipes/index.md) test retries, truncated and malformed output, and mid-stream failures.
 
 ## Endpoints
 
-Every generation reply names the request's model, as the providers do: `model` on a buffered Anthropic message and the stream's `message_start`, on OpenAI Chat Completions and Responses bodies, chunks and stream events, and `modelVersion` on Gemini bodies and chunks. A request without a string `model` gets `""` back.
-
-Anything that matches none of the routes below is HTTP 404:
-
-```json
-{"fake_llm_error":"no route: GET /nope"}
-```
-
-A handler that throws, including a body that is not valid JSON, is HTTP 400:
-
-```json
-{"fake_llm_error":"exception","detail":"..."}
-```
-
-A call after the scenario's last step, or a call with no scenario loaded in strict mode, is also HTTP 400. Its `fake_llm_error` value is `no more steps` or `no scenario loaded`, not `exception`. The fields are described under Scenarios.
-
-### `GET /health`
-
-Always open, including when a control token is set. Reports liveness, the loaded scenario name or `null` when none is loaded, whether lenient mode is on, the scenario's step count and unused steps, and the server's version.
-
-```json
-{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.5.0"}
-```
-
-The version varies with the release. `steps` is the loaded scenario's step count, and `unusedSteps` lists the steps no call has used since the last load, reset or unload (both `null` / `[]` with no scenario). A test can assert `unusedSteps` is empty to check its app made every scripted call. The JUnit extension makes the same check in process after each test.
-
-### `POST /anthropic/v1/messages`
-
-Anthropic Messages JSON. A reply step with `"stream": true` is answered as `text/event-stream`: `message_start`, content blocks and deltas, `message_delta`, `message_stop`. A thinking step adds a thinking block before the text block, and tool calls add `tool_use` blocks after it (see [Tool calls](#tool-calls)). An error step with `streamErrorAfterChunks` set uses the shorter stream described above. Any other request, including an error step that leaves `streamErrorAfterChunks` unset, is one buffered response: the reply step as JSON, or the error step as that HTTP status, even when the client set `"stream": true`.
-
-The buffered message carries `id` (`fake-msg-<seq>`), `type`, `role`, `model` (the request's model, as on the stream's `message_start`), `content` (an optional thinking block, the text block when the step has text, then one `tool_use` block per tool call), `stop_reason`, `stop_sequence` (the step's `stopSequence`, or `null`), and `usage`.
-
-A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, including when `"stream": true`. That response is `application/json`, and no SSE bytes are written. With no scenario loaded, lenient mode serves the canned reply instead, and `"stream": true` streams it as a text step.
-
-### `/anthropic/v1/messages/batches`
-
-Any method on a path that starts with `/anthropic/v1/messages/batches` returns HTTP 501:
-
-```json
-{"fake_llm_error":"the Anthropic Batches API is not implemented"}
-```
-
-### `POST /openai/v1/chat/completions`
-
-One JSON chat completion: `id` `fake-openai-<seq>`, `object` `chat.completion`, `model` (the request's), one choice with `message.role` `assistant`, `message.content` set to the step text (`null` on a tool-call step without text), `message.tool_calls` on a tool-call step, `finish_reason` as mapped above, and `usage`. [Tool calls](#tool-calls) describes the tool-call fields and chunks. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a chat completion. With no scenario loaded, lenient mode returns the canned reply as a completion.
-
-With `"stream": true`, a reply step is answered as `text/event-stream` of data-only frames (`data: <payload>`, no `event:` line). Each chunk has `id` `fake-openai-<seq>`, `object` `chat.completion.chunk`, `model` (the request's), and one choice with `index`, `delta` and `finish_reason`. The frames are, in order: the role chunk (`delta` `{"role":"assistant","content":""}`, with `content` `null` on a tool-call step without text), one content chunk per `streamChunkChars` code points of the text, the tool-call chunks described under [Tool calls](#tool-calls), the finish chunk (empty `delta`, `finish_reason` as mapped above), then `data: [DONE]`. When the request sets `stream_options.include_usage` to true (read like `stream`), a usage chunk with no choices comes before `[DONE]`, and every other chunk carries `"usage": null`. An error step with `streamErrorAfterChunks` set sends the role chunk and the filler chunks, then the error body as a data frame (a generic `server_error` body when `body` is blank), and closes the stream with no finish chunk, usage chunk or `[DONE]`. A call the scenario has no step for, and an error step that leaves `streamErrorAfterChunks` unset, get the JSON response, with no SSE bytes.
-
-### `POST /openai/v1/responses`
-
-The OpenAI Responses API. A buffered request gets one `Response`: `id` `resp_fake_<seq>`, `object` `response`, `status`, `error` (null), `incomplete_details`, `model` (the request's), `output`, `parallel_tool_calls`, `tool_choice`, `tools` and `usage`, in that order, with no `created_at`. `output` is the reasoning item `rs_fake_<seq>` (`type` `reasoning`, one `summary_text` part holding the step's `thinking`, no `status`) when the step has `thinking`, the message item `msg_fake_<seq>` (role `assistant`, one `output_text` part) when it has text, then one `function_call` item per tool call (see [Tool calls](#tool-calls)). `max_tokens` makes the response and its message item `incomplete`, with `incomplete_details.reason` `max_output_tokens`; anything else is `completed`. `usage.output_tokens_details.reasoning_tokens` is always 0. A reasoning item sent back in a later request's `input` is accepted and adds no prompt text.
-
-With `"stream": true`, the response is `text/event-stream` of named events (`event: <type>`), each payload starting with `type` and ending with `sequence_number`, numbered from 0. The stream is `response.created` and `response.in_progress` (an in-progress response with empty `output` and null `usage`); for thinking, the reasoning item's `response.output_item.added`, `response.reasoning_summary_part.added`, one `response.reasoning_summary_text.delta` per `streamChunkChars` code points (each after `streamInterChunkDelayMs`), then `response.reasoning_summary_text.done`, `response.reasoning_summary_part.done` and `response.output_item.done`, all at `output_index` 0; for text, the message's `response.output_item.added` and `response.content_part.added`, one `response.output_text.delta` per `streamChunkChars` code points (each after `streamInterChunkDelayMs`), then `response.output_text.done`, `response.content_part.done` and `response.output_item.done`; then each tool call's events, with the message's and the calls' `output_index` one higher after a reasoning item; and last `response.completed`, or `response.incomplete` for `max_tokens`, carrying the buffered response. There is no `[DONE]`.
-
-An error step with `streamErrorAfterChunks` set opens the message, sends the filler deltas, then `event: error` with `error.body` as given, or the API's own error event (`{"type":"error","code":"server_error","message":"scripted stream error","param":null,"sequence_number":<n>}`) when `body` is blank, and closes the stream. The `openai` SDK raises `APIError` (not `APIStatusError`, and not retried) for a body with an `error` key, and yields the generic event without raising. A call the scenario has no step for, and an error step that leaves `streamErrorAfterChunks` unset, get the JSON response, with no SSE bytes.
-
-fake-llm accepts `previous_response_id`, `store` and `conversation` and doesn't resolve or store anything. Each call is the next step by arrival order, like every other call, and the request's own `instructions` and `input` are what is parsed and logged. A `previous_response_id` that fake-llm never issued is not an error. Request fields such as `tools`, `text.format` and `reasoning` are ignored.
-
-```python
-response = client.responses.create(model="example-gpt", input="Hello")
-print(response.output_text)
-
-with client.responses.stream(model="example-gpt", input="Hello") as stream:
-    for event in stream:
-        if event.type == "response.output_text.delta":
-            print(event.delta, end="")
-    final = stream.get_final_response()
-```
-
-### `POST /gemini/…:generateContent`
-
-One JSON `generateContent` body: one candidate whose parts are the text part, when the step has text, and one `functionCall` part per tool call (see [Tool calls](#tool-calls)), `finishReason` `STOP` or `MAX_TOKENS`, `usageMetadata`, `modelVersion` (the model in the URL), and `fake_llm_seq`. A call the scenario has no step for is HTTP 400 with the JSON body described under Scenarios, not a `generateContent` body. With no scenario loaded, lenient mode returns the canned reply as one candidate.
-
-### `POST /gemini/…:streamGenerateContent`
-
-The same reply as a server-sent event stream, served only with `alt=sse` in the query string, which the `google-genai` SDK always sends. Without `alt=sse` the request gets the `exception` 400 and is not a call: it takes no number, and the step stays next. The JSON-array form the real API sends without `alt=sse` is not served.
-
-The response is `text/event-stream` of data-only frames (`data: <payload>`, no `event:` line), with no `[DONE]`. Each frame is one `GenerateContentResponse` whose candidate has exactly one part: first one text part per `streamChunkChars` code points of the text (each after `streamInterChunkDelayMs`), then each tool call as a whole `functionCall` part, as in the buffered body. Only the last chunk carries `finishReason` and `usageMetadata`; every chunk carries `modelVersion` and `fake_llm_seq`. A step with no text and no tool calls is one last chunk with an empty text part. An error step with `streamErrorAfterChunks` set sends the filler chunks, then the error body as a data frame (a generic `INTERNAL` body when `body` is blank), with no chunk carrying `finishReason`. A call the scenario has no step for, and an error step that leaves `streamErrorAfterChunks` unset, get the JSON response, with no SSE bytes.
-
-```python
-for chunk in client.models.generate_content_stream(model="gemini-2.0-flash", contents="Hello"):
-    print(chunk.text, end="")
-```
-
-### Embeddings
-
-`POST /openai/v1/embeddings`, `POST /gemini/…:embedContent` and `POST /gemini/…:batchEmbedContents` answer with fake vectors derived from the text, so a pipeline that embeds text can run against fake-llm with no second fake. `google-genai`'s `embed_content` calls `batchEmbedContents`, for one input or many.
-
-- **Not calls.** They answer from the request alone: no step, no call-log or exchange-log entry, no `firstByteDelayMs`, and the same answer with or without a scenario and in strict or lenient mode. Adding embedding requests to an app does not renumber its scenario.
-- **The vector.** Component i comes from SHA-256 of the UTF-8 text plus the block number `i / 8` (4 bytes, big-endian): the signed big-endian 32-bit integer at offset `(i % 8) * 4`, over 2^31. The vector is then divided by its length, so it has unit length, and stored as float32. The same text and size give the same vector on every run and platform, on both vendors; different texts give unrelated vectors. There is no semantic similarity.
-- **Size.** `dimensions` (OpenAI) or `outputDimensionality` (Gemini, per request), an integer from 1 to 8192, 1536 by default. Anything else, such as `0`, `"8"` or `8.0`, gets the `exception` 400.
-- **OpenAI.** `input` is a string, an array of strings, one token array or an array of token arrays; a token array is hashed as its JSON text (`[1,2,3]`). An empty string, an empty array or a mixed array gets the 400. `encoding_format` is `float` (the default) or `base64` (little-endian float32, which the `openai` SDK asks for and decodes when you don't set it). Each JSON number is the shortest decimal that reads back as the float32's exact value, such as `0.10000000149011612` for the float32 nearest 0.1, so both forms give the same values. `model` is echoed, and `usage` is an estimate: a quarter of each string's code points, rounded up (at least 1), or a token array's length.
-- **Gemini.** The text is the content's parts' `text` joined with a newline. `taskType`, `title`, `role` and the models in the path and the requests are ignored.
-- **Limits.** At most 2048 inputs per OpenAI request (OpenAI's own limit), and at most 3,145,728 values (2048 × 1536) in one response on any route, each input's size counted. Both are checked before any vector is built; over either is the 400.
-
-```python
-vectors = client.embeddings.create(model="example-embedding", input=["a", "b"], dimensions=8)
-```
-
-### Token counting and model lists
-
-These requests answer fixed bodies, so an app that counts tokens or checks its model before a call runs unchanged against fake-llm:
-
-| Route | Body |
+| Method and path | What it does |
 | --- | --- |
-| `POST /anthropic/v1/messages/count_tokens` | `{"input_tokens":100}` for any body the Messages route accepts; the `exception` 400 for one it rejects. |
-| `GET /anthropic/v1/models` | `{"data":[<model>],"has_more":false,"first_id":"fake-llm","last_id":"fake-llm"}` |
-| `GET /anthropic/v1/models/{id}` | `{"type":"model","id":"<id>","display_name":"<id>","created_at":"1970-01-01T00:00:00Z","lifecycle":"active"}` |
-| `GET /openai/v1/models` | `{"object":"list","data":[<model>]}` |
-| `GET /openai/v1/models/{id}` | `{"id":"<id>","object":"model","created":0,"owned_by":"fake-llm"}` |
-| `GET /gemini/{version}/models` | `{"models":[<model>]}`, with no `nextPageToken` |
-| `GET /gemini/{version}/models/{model}` | `{"name":"models/<model>","version":"fake-llm","displayName":"<model>","supportedGenerationMethods":["generateContent","streamGenerateContent","embedContent","batchEmbedContents"]}` |
+| `POST /anthropic/v1/messages` | Anthropic Messages, buffered or streamed: the next step. |
+| `POST /anthropic/v1/messages/count_tokens` | `{"input_tokens":100}`. Not a call. |
+| `/anthropic/v1/messages/batches` | Not implemented: HTTP 501. |
+| `POST /openai/v1/chat/completions` | OpenAI Chat Completions, buffered or streamed: the next step. |
+| `POST /openai/v1/responses` | OpenAI Responses, buffered or streamed: the next step. |
+| `POST /gemini/{version}/models/{model}:generateContent` | Gemini, buffered: the next step. |
+| `POST /gemini/{version}/models/{model}:streamGenerateContent?alt=sse` | Gemini, streamed: the next step. |
+| `POST /openai/v1/embeddings`, `POST /gemini/…:embedContent`, `…:batchEmbedContents` | Deterministic fake embeddings from the text. Not calls. |
+| `GET /anthropic/v1/models`, `/openai/v1/models`, `/gemini/{version}/models`, and `…/models/{id}` | One model, `fake-llm`; a lookup echoes the id. Not calls. |
+| `GET /health` | Liveness, the loaded scenario, its unused steps, and the version. |
+| `GET /openapi` | The OpenAPI document for this version. |
+| `/control/…` | Load, reset and unload scenarios; read the call and exchange logs. |
 
-- **One model.** Each list holds one model, `fake-llm`, in the vendor's format. A lookup answers for any id and echoes it, decoded (an SDK sends a `/` in an id as `%2F`), so an app that checks its configured model exists passes with whatever name it uses.
-- **Not calls.** Like the embeddings routes, they take no step, have no call-log or exchange-log entry, and answer the same with or without a scenario and in strict or lenient mode. The count is the fixed 100 even when the next step sets `usage`.
-- **Routing.** Query parameters (`limit`, `pageSize`, `pageToken` and so on) are ignored. Another method on these paths, a trailing slash, and a `GET` on a Gemini method path such as `.../models/m:generateContent` are 404.
-
-### Control API
-
-The reference for the control API, `/health` and `/openapi` is the OpenAPI 3.1 document [openapi/fake-llm.yaml](openapi/fake-llm.yaml). A running server serves the copy for its version at `GET /openapi` (as `application/yaml`, with no token needed), so a client in any language can read the contract, or generate code from it. The spec lists the vendor routes too and links to each provider's own reference. This section summarises it.
-
-Clients should ignore response fields they do not know, since a later version may add fields. Request bodies are strict: `POST /control/scenario` rejects unknown fields, as does the scenario format. Human-readable messages, such as most `fake_llm_error` texts and the `detail` of a 400, are diagnostics, not part of the contract.
-
-When `FAKE_LLM_CONTROL_TOKEN` is set to a non-blank value, every path under `/control/` requires an `Authorization` header whose value is exactly `Bearer <token>`. A missing or different header is HTTP 401, with `WWW-Authenticate: Bearer`:
-
-```json
-{"fake_llm_error":"unauthorized: missing or invalid Authorization: Bearer <token>"}
-```
-
-Vendor routes and `/health` stay open. With no token configured, the control routes are open. The environment variable is read first. A JVM system property of the same name is used only when the environment variable is absent. A blank environment variable counts as unset and does not fall through to the system property.
-
-`POST /control/scenario` is described above. It replaces the loaded scenario and starts it over.
-
-`GET /control/scenarios` returns the names the loader can see:
-
-```json
-{"scenarios":["fail-then-retry","hello","malformed-json","max-tokens-cutoff","overloaded-529","rate-limit-429","refusal","stream-error-midway","thinking-stream"]}
-```
-
-With a scenario directory set, `*.json` names from that directory are merged in, and the list is sorted again.
-
-`POST /control/reset` starts the loaded scenario over, as loading it again would: the call log and the exchange log are emptied, and the next call is call 1 and gets step 1, with response IDs from `fake-msg-1` again. The body is ignored.
-
-```json
-{"reset":true}
-```
-
-`POST /control/unload` removes the loaded scenario, as `ScenarioEngine.unload()` does. The call log and the exchange log are emptied, and the next call is call 1. Until a scenario is loaded again, a call gets the `no scenario loaded` 400, or the canned reply on a lenient server, and `GET /health` reports `"scenario": null`. With no scenario loaded, it succeeds, and still empties both logs and restarts numbering. The body is ignored. Use it between tests that share one server, so that each one starts like a server started without a scenario.
-
-```json
-{"unloaded":true}
-```
-
-`GET /control/calls` returns the call log as a JSON array, in call order. `vendor` is `anthropic`, `openai`, `openai-responses` or `gemini`. `seq` is the call's number since the last load, reset or unload, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call arrived, before any wait. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](#tool-calls) describes them. `firstByteDelayMs` and `streamInterChunkDelayMs` are the delays the call's step applied: `streamInterChunkDelayMs` only when the response was an event stream, and both 0 when no step served the call. The CLI and the image also print each call's `seq`, vendor, model, outcome and step as a line on stdout (see [Configuration](#configuration)).
-
-```json
-[
-  {
-    "seq": 1,
-    "step": 1,
-    "vendor": "anthropic",
-    "model": "example-model",
-    "systemShape": "absent",
-    "messageCount": 1,
-    "outcome": "text",
-    "timestampMs": 1710000000000,
-    "promptSample": "Hello\n",
-    "toolCalls": [],
-    "toolResults": [],
-    "firstByteDelayMs": 0,
-    "streamInterChunkDelayMs": 0
-  }
-]
-```
-
-`GET /control/exchanges` returns the exchange log: one entry per call, in `seq` order, matching `GET /control/calls` entry for entry, with the request as fake-llm received it and the response as fake-llm wrote it. Each entry has `seq`, `request` and `response`:
-
-- `request.method` is the HTTP method, and `request.path` the raw path, then `?` and the raw query when there is one, still percent-encoded.
-- `request.headers` has every request header, names lowercased and sorted, each with its values in the order received.
-- `request.body` is the raw request body, decoded as UTF-8 and not re-serialized, so whitespace and key order are kept.
-- Secrets are redacted: each value of the `authorization`, `proxy-authorization`, `x-api-key`, `x-goog-api-key` and `api-key` headers is recorded as `[redacted]`, and so is the value of a query parameter named exactly `key` (`key=[redacted]`).
-- `response.status` is the status fake-llm sent, or started to send, and `response.headers` the headers fake-llm set, in the same form, without the `Date`, `Content-length` and `Transfer-encoding` headers the server adds as it sends.
-- `response.body` is every byte written to the response body, in order: the JSON text, or the whole event stream, every frame, including a mid-stream error frame and OpenAI's `data: [DONE]`.
-- `response.state` is `open` while the body is still being written (`body` holds what has been written so far), `complete` once fake-llm finished the response and closed the body normally, and `aborted` when sending the headers, or a write, flush or close, failed (usually because the client disconnected), or the server stopped mid-response. An `aborted` body holds the bytes written before the failure; the client may have received fewer. A server stopped while a call waits out its `firstByteDelayMs` records the `exception` 400 it tried to send, `aborted`, while the call log still names the step.
-- `response` is `null` until fake-llm starts sending the response, for example during a step's `firstByteDelayMs` wait.
-
-Requests that are not calls (the `exception` 400s, 404s, the Batches 501, the embeddings routes, token counting and the model lists, and health and control requests) are not listed. Bodies are not capped. The log is emptied with the call log by a load, a reset or an unload.
-
-```json
-[
-  {
-    "seq": 1,
-    "request": {
-      "method": "POST",
-      "path": "/anthropic/v1/messages",
-      "headers": {
-        "content-length": ["88"],
-        "content-type": ["application/json"],
-        "host": ["127.0.0.1:8080"],
-        "x-api-key": ["[redacted]"]
-      },
-      "body": "{\"model\":\"example-model\",\"max_tokens\":64,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
-    },
-    "response": {
-      "status": 200,
-      "headers": { "content-type": ["application/json"] },
-      "body": "{\"id\":\"fake-msg-1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"example-model\",\"content\":[{\"type\":\"text\",\"text\":\"Hi.\"}],…}",
-      "state": "complete"
-    }
-  }
-]
-```
-
-From Kotlin or Java, [`FakeLlmClient`](#control-api-client) makes these calls and parses the responses. With curl, pass the bearer token on each control call when one is configured:
-
-```bash
-curl -s http://localhost:8080/control/calls \
-  -H "authorization: Bearer $FAKE_LLM_CONTROL_TOKEN"
-curl -s http://localhost:8080/control/exchanges \
-  -H "authorization: Bearer $FAKE_LLM_CONTROL_TOKEN"
-```
+Every generation reply names the request's model. Anything else is HTTP 404. [Endpoints](docs/endpoints.md) describes each vendor route's bodies and streams, and [Control API](docs/control-api.md) the `/health`, `/openapi` and `/control/` routes and the control token. The OpenAPI document, [openapi/fake-llm.yaml](openapi/fake-llm.yaml), is the contract.
 
 ## Configuration
 
@@ -963,7 +217,7 @@ Embeddings are a hash of the text: equal texts get equal vectors, and there is n
 
 Delays are fixed per step: there is no jitter. Each waiting call holds one of the server's 16 request threads until its wait ends, even after the client has gone, and more requests queue when all 16 are busy.
 
-On the generation routes, token counts are 100 input and 50 output unless the step sets `usage`; they are not a count of the prompt or the reply. The embeddings routes report an estimate instead (see [Embeddings](#embeddings)). `POST /anthropic/v1/messages/count_tokens` reports the same constant, `input_tokens` 100, for any prompt. Anthropic reports the input count as `input_tokens` and the output count as `output_tokens`. `cache_creation_input_tokens` is 20 and `cache_read_input_tokens` is 10 when the request carries a `cache_control` breakpoint, and both are 0 otherwise. A breakpoint is a `cache_control` object on a block in the `system` array or in a message `content` array. `type` must be `ephemeral`, and `ttl`, if present, must be `5m` or `1h`. On a stream, the input and cache figures are on `message_start`, and `output_tokens` is on `message_delta`. OpenAI reports the input count as `prompt_tokens`, the output count as `completion_tokens`, and their sum as `total_tokens`. On an OpenAI stream, usage is sent only when `stream_options.include_usage` is true, in a final chunk with no choices. Gemini reports the input count as `promptTokenCount`, the output count as `candidatesTokenCount`, and their sum as `totalTokenCount`. On a Gemini stream, `usageMetadata` is only on the last chunk. OpenAI Responses reports the input count as `input_tokens`, the output count as `output_tokens` and their sum as `total_tokens`, with `cached_tokens` and `reasoning_tokens` 0; on a stream, usage is on `response.completed` (or `response.incomplete`).
+On the generation routes, token counts are 100 input and 50 output unless the step sets `usage`; they are not a count of the prompt or the reply. The embeddings routes report an estimate instead (see [Embeddings](docs/endpoints.md#embeddings)). `POST /anthropic/v1/messages/count_tokens` reports the same constant, `input_tokens` 100, for any prompt. Anthropic reports the input count as `input_tokens` and the output count as `output_tokens`. `cache_creation_input_tokens` is 20 and `cache_read_input_tokens` is 10 when the request carries a `cache_control` breakpoint, and both are 0 otherwise. A breakpoint is a `cache_control` object on a block in the `system` array or in a message `content` array. `type` must be `ephemeral`, and `ttl`, if present, must be `5m` or `1h`. On a stream, the input and cache figures are on `message_start`, and `output_tokens` is on `message_delta`. OpenAI reports the input count as `prompt_tokens`, the output count as `completion_tokens`, and their sum as `total_tokens`. On an OpenAI stream, usage is sent only when `stream_options.include_usage` is true, in a final chunk with no choices. Gemini reports the input count as `promptTokenCount`, the output count as `candidatesTokenCount`, and their sum as `totalTokenCount`. On a Gemini stream, `usageMetadata` is only on the last chunk. OpenAI Responses reports the input count as `input_tokens`, the output count as `output_tokens` and their sum as `total_tokens`, with `cached_tokens` and `reasoning_tokens` 0; on a stream, usage is on `response.completed` (or `response.incomplete`).
 
 Tool calls are scripted per step; request fields such as `tools`, `tool_choice` and Gemini `tools` and `toolConfig` are ignored, so a step's tool calls are sent whatever tools the request declares.
 
@@ -983,6 +237,8 @@ The example project tests the published artifact, not the source, so publish it 
 ```
 
 `./gradlew -p examples test --include-build ..` runs the same tests against the source instead, through a composite build.
+
+Reference documentation lives in `docs/` and is published to the [site](https://davidjones-griz.github.io/fake-llm/); update the page there, not the README.
 
 ### Public API
 
@@ -1015,7 +271,7 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 - **The pytest plugin** in [pytest-fake-llm/](pytest-fake-llm/) is tested with itself: CI's `python` job builds the image from the same commit and runs the plugin's tests on Python 3.11, 3.12, 3.13, 3.14 and 3.15, with the session's server started from that image. Tests marked `docker` start containers of their own. Each version installs the hash-pinned `pytest-fake-llm/requirements-test.txt`, then the plugin. A test checks that the plugin's `version` in `pytest-fake-llm/pyproject.toml` is the one in `gradle.properties`, since the plugin starts the image with that tag. Locally, with Docker: `docker build -t fake-llm:dev .`, `python -m pip install --require-hashes -r pytest-fake-llm/requirements-test.txt`, `python -m pip install --no-build-isolation --no-deps ./pytest-fake-llm`, then `python -m pytest pytest-fake-llm/tests --fake-llm-image=fake-llm:dev`. Without Docker, `--fake-llm-url=http://localhost:8080` against `java -jar build/libs/fake-llm-all.jar` runs all but the `docker` tests.
 - Commits that only reformat code are listed in `.git-blame-ignore-revs`, which GitHub's blame view honours; locally, run `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 
-The documentation site in `docs/` is built with [Zensical](https://zensical.org/) from `mkdocs.yml` by the [Docs](.github/workflows/docs.yml) workflow, which also runs the quickstart script against an image built from the commit, and deploys the site from `main`. `DocsTest` checks that the scenario reference has a row for every scenario field, the control API page a heading for `/health`, `/openapi` and every control route, each recipe a bundled scenario the tests load, and every image tag and version in `docs/` the current version. To build it locally: `python -m pip install --require-hashes -r docs/requirements.txt && zensical serve`.
+The documentation site in `docs/` is built with [Zensical](https://zensical.org/) from `mkdocs.yml` by the [Docs](.github/workflows/docs.yml) workflow, which also runs the quickstart script against an image built from the commit, and deploys the site from `main`. `DocsTest` checks that the scenario reference has a row for every scenario field, the control API page a heading for `/health`, `/openapi` and every control route, the endpoints page a heading for every vendor operation, each recipe a bundled scenario the tests load, and every image tag and version in `docs/` the current version. `ReadmeTest` keeps this README under 400 lines, free of scenario field tables, and with the headings that workflow comments cite. To build it locally: `python -m pip install --require-hashes -r docs/requirements.txt && zensical serve`.
 
 ### Dependency updates
 
