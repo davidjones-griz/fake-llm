@@ -511,6 +511,49 @@ class ScenarioEngineTest {
     }
 
     @Test
+    fun `onCall gets each call's record after it is logged`() {
+        val engine = engineWith(Scenario(name = "inline", steps = listOf(Step(text = "one"), Step(error = ErrorStep(429)))))
+        val seen = mutableListOf<CallRecord>()
+        engine.onCall = { record ->
+            assertTrue(record in engine.calls(), "the record is logged before the hook runs")
+            seen.add(record)
+        }
+        engine.resolve("anthropic", req())
+        engine.resolve("openai", req())
+        engine.resolve("gemini", req())
+        assertEquals(engine.calls(), seen)
+        assertEquals(listOf("text", "error:429", "no-more-steps"), seen.map { it.outcome })
+    }
+
+    @Test
+    fun `onCall is not called for a rejected request`() {
+        val raw = Step(toolCalls = listOf(ToolCall(name = "get_weather", rawArguments = "{\"city\": Paris}")))
+        val engine = engineWith(Scenario(name = "raw", steps = listOf(raw)))
+        val seen = mutableListOf<CallRecord>()
+        engine.onCall = { seen.add(it) }
+        assertFailsWith<IllegalArgumentException> { engine.resolve("gemini", req()) }
+        assertEquals(emptyList(), seen)
+    }
+
+    @Test
+    fun `onCall runs outside the lock`() {
+        val engine = engineWith(textScenario("one"))
+        val pool = Executors.newSingleThreadExecutor()
+        val inHook = CountDownLatch(1)
+        try {
+            engine.onCall = {
+                inHook.countDown()
+                // Another thread takes the engine's lock; it would wait forever if the hook held it.
+                assertEquals(1, pool.submit<List<CallRecord>> { engine.calls() }.get(5, TimeUnit.SECONDS).size)
+            }
+            engine.resolve("anthropic", req())
+            assertTrue(inHook.await(0, TimeUnit.SECONDS))
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    @Test
     fun `an error step's status must be an HTTP status`() {
         ErrorStep(100)
         ErrorStep(599)

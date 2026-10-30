@@ -153,6 +153,13 @@ public class ScenarioEngine(
     private var exchangeLog = mutableListOf<Pair<Long, ExchangeCapture>>()
 
     /**
+     * Called with each call's record after it is logged, outside the lock, on the thread serving the
+     * call. Set by the CLI to print the call log line; null (the library default) does nothing.
+     */
+    @Volatile
+    internal var onCall: ((CallRecord) -> Unit)? = null
+
+    /**
      * Loads the scenario [name] and installs it as [loadInline] does. Reads
      * `<scenarioDirectory>/<name>.json` when [scenarioDirectory] is set and that file exists, then
      * the project's classpath resource `/scenarios/<name>.json`, then the bundled scenario. Throws
@@ -265,6 +272,7 @@ public class ScenarioEngine(
         req: ParsedRequest,
         capture: ExchangeCapture? = null,
     ): Resolution {
+        var logged: CallRecord? = null
         val (n, loaded, served) =
             synchronized(lock) {
                 val s = scenario
@@ -297,10 +305,13 @@ public class ScenarioEngine(
                             "text"
                         }
                     }
-                log.add(callRecord(n, vendor, req, outcome, step))
+                val record = callRecord(n, vendor, req, outcome, step)
+                log.add(record)
+                logged = record
                 capture?.let { exchangeLog.add(n to it) }
                 Triple(n, s, step)
             }
+        logged?.let { record -> onCall?.invoke(record) }
         val step =
             served ?: when {
                 loaded != null -> errorStep(noMoreStepsBody(loaded, n, vendor, req))

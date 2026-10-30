@@ -146,7 +146,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the image
         run: docker build -t fake-llm:ci .
-      - name: Run, check /health and /openapi, stop
+      - name: Run, check /health, /openapi and the call log, stop
         run: |
           set -eu
           docker run -d --name fake-llm-ci -p 8080:8080 fake-llm:ci
@@ -166,6 +166,19 @@ jobs:
           # The image serves the OpenAPI document bundled in the jar.
           curl -fsS -o "$RUNNER_TEMP/openapi.yaml" http://127.0.0.1:8080/openapi
           grep -q '^openapi: 3\.1\.' "$RUNNER_TEMP/openapi.yaml"
+          # One call (strict, no scenario: the no-scenario 400) prints one call log line.
+          curl -sS -o /dev/null -X POST http://127.0.0.1:8080/openai/v1/chat/completions \
+            -H 'content-type: application/json' \
+            -d '{"model":"example-gpt","messages":[{"role":"user","content":"hi"}]}'
+          # The log driver copies stdout asynchronously, so allow it a moment.
+          line='fake-llm: call 1 openai model="example-gpt" outcome=no-scenario step=-'
+          for _ in 1 2 3 4 5; do
+            if docker logs fake-llm-ci | grep -qF "$line"; then
+              break
+            fi
+            sleep 1
+          done
+          docker logs fake-llm-ci | grep -F "$line"
       - name: Validate scenario files with the image
         run: |
           set -eu

@@ -64,9 +64,10 @@ import kotlin.system.exitProcess
  * Startup flags override the matching environment variable when both are set: `--port <n>` (`PORT`,
  * default 8080), `--scenario <name>` (`FAKE_LLM_SCENARIO`), `--scenario-dir <path>`
  * (`FAKE_LLM_SCENARIO_DIR`). `--lenient` (no value) turns lenient mode on; without it,
- * `FAKE_LLM_LENIENT=true` or `false` (any case) decides, default false. An unknown flag, a port
+ * `FAKE_LLM_LENIENT=true` or `false` (any case) decides, default false. `--no-call-log`
+ * (`FAKE_LLM_CALL_LOG=false`) turns off the line printed for each call. An unknown flag, a port
  * outside 0–65535, a scenario directory that is not a valid path, or any other `FAKE_LLM_LENIENT`
- * value prints a short usage line and exits.
+ * or `FAKE_LLM_CALL_LOG` value prints a short usage line and exits.
  *
  * **Control auth.** When [readControlToken] resolves a token, every path under `/control/` requires
  * `Authorization: Bearer <token>`. The check is a path prefix, so `/health` stays open. With no
@@ -95,6 +96,7 @@ public fun main(args: Array<String>) {
             exitProcess(1)
         }
     val engine = config.engine()
+    if (config.callLog) engine.onCall = { println(callLogLine(it)) }
     config.scenario?.let { engine.load(it) }
     val server = startFakeLlmServer(config.port, engine)
     println("fake-llm listening on :${server.port} (scenario=${engine.currentScenarioName() ?: "none"})")
@@ -113,6 +115,7 @@ internal data class StartupConfig(
     val scenario: String?,
     val scenarioDir: Path?,
     val lenient: Boolean,
+    val callLog: Boolean = true,
 ) {
     /** The engine [main] serves: this lenient mode and scenario directory. */
     fun engine(): ScenarioEngine = ScenarioEngine(lenient = lenient, scenarioDirectory = scenarioDir)
@@ -136,37 +139,40 @@ internal data class StartupConfig(
 /**
  * Flags win over [env]. An unknown flag or a bad value throws [StartupUsageException].
  * [env] defaults to the process environment. A blank environment variable is ignored.
- * `--lenient` takes no value and turns lenient mode on. `FAKE_LLM_LENIENT` accepts `true` or `false` in any case.
+ * `--lenient` takes no value and turns lenient mode on. `--no-call-log` takes no value and turns the
+ * call log line off. `FAKE_LLM_LENIENT` and `FAKE_LLM_CALL_LOG` accept `true` or `false` in any case.
  */
 internal fun parseStartupConfig(
     args: Array<String>,
     env: Map<String, String> = System.getenv(),
 ): StartupConfig {
-    var portFlag: String? = null
-    var scenarioFlag: String? = null
-    var scenarioDirFlag: String? = null
-    var lenientFlag = false
+    val flags = StartupFlags()
     var i = 0
     while (i < args.size) {
         val arg = args[i]
         when (arg) {
             "--port" -> {
-                portFlag = optionValue(args, i, arg)
+                flags.port = optionValue(args, i, arg)
                 i += 2
             }
 
             "--scenario" -> {
-                scenarioFlag = optionValue(args, i, arg)
+                flags.scenario = optionValue(args, i, arg)
                 i += 2
             }
 
             "--scenario-dir" -> {
-                scenarioDirFlag = optionValue(args, i, arg)
+                flags.scenarioDir = optionValue(args, i, arg)
                 i += 2
             }
 
             "--lenient" -> {
-                lenientFlag = true
+                flags.lenient = true
+                i += 1
+            }
+
+            "--no-call-log" -> {
+                flags.callLog = false
                 i += 1
             }
 
@@ -175,27 +181,48 @@ internal fun parseStartupConfig(
             }
         }
     }
-    // A present flag overrides the environment variable for the same setting.
-    val portRaw = portFlag ?: env["PORT"]?.takeIf { it.isNotBlank() } ?: DEFAULT_PORT
-    val port = portRaw.toIntOrNull()?.takeIf { it in 0..MAX_PORT } ?: usage("invalid port '$portRaw'")
-    val scenario = scenarioFlag ?: env["FAKE_LLM_SCENARIO"]?.takeIf { it.isNotBlank() }
-    val scenarioDirRaw = scenarioDirFlag ?: env["FAKE_LLM_SCENARIO_DIR"]?.takeIf { it.isNotBlank() }
-    val lenient = lenientFlag || parseLenientEnv(env["FAKE_LLM_LENIENT"])
-    return StartupConfig(
-        port = port,
-        scenario = scenario,
-        scenarioDir = StartupConfig.parseScenarioDir(scenarioDirRaw),
-        lenient = lenient,
-    )
+    return flags.resolve(env)
 }
 
-/** Blank or absent [envValue] is false. Anything other than true or false (any case) is a usage error. */
-private fun parseLenientEnv(envValue: String?): Boolean {
-    val raw = envValue?.takeIf { it.isNotBlank() } ?: return false
+/** The startup flags as given; null (or false for [lenient]) when absent. */
+private class StartupFlags {
+    var port: String? = null
+    var scenario: String? = null
+    var scenarioDir: String? = null
+    var lenient = false
+    var callLog: Boolean? = null
+
+    /** A present flag overrides the environment variable for the same setting. */
+    fun resolve(env: Map<String, String>): StartupConfig {
+        val portRaw = port ?: env["PORT"]?.takeIf { it.isNotBlank() } ?: DEFAULT_PORT
+        val port = portRaw.toIntOrNull()?.takeIf { it in 0..MAX_PORT } ?: usage("invalid port '$portRaw'")
+        val scenarioDirRaw = scenarioDir ?: env["FAKE_LLM_SCENARIO_DIR"]?.takeIf { it.isNotBlank() }
+        val lenient = lenient || parseBooleanEnv("FAKE_LLM_LENIENT", env["FAKE_LLM_LENIENT"], default = false)
+        val callLog = callLog ?: parseBooleanEnv("FAKE_LLM_CALL_LOG", env["FAKE_LLM_CALL_LOG"], default = true)
+        return StartupConfig(
+            port = port,
+            scenario = scenario ?: env["FAKE_LLM_SCENARIO"]?.takeIf { it.isNotBlank() },
+            scenarioDir = StartupConfig.parseScenarioDir(scenarioDirRaw),
+            lenient = lenient,
+            callLog = callLog,
+        )
+    }
+}
+
+/**
+ * Blank or absent [envValue] is [default]. Anything other than true or false (any case) is a usage
+ * error naming the variable [name].
+ */
+private fun parseBooleanEnv(
+    name: String,
+    envValue: String?,
+    default: Boolean,
+): Boolean {
+    val raw = envValue?.takeIf { it.isNotBlank() } ?: return default
     return when (raw.lowercase()) {
         "true" -> true
         "false" -> false
-        else -> usage("invalid FAKE_LLM_LENIENT value '$raw' (expected true or false)")
+        else -> usage("invalid $name value '$raw' (expected true or false)")
     }
 }
 
@@ -211,7 +238,7 @@ private fun optionValue(
 
 private fun usage(detail: String): Nothing =
     throw StartupUsageException(
-        "fake-llm: $detail\nUsage: fake-llm [--port <n>] [--scenario <name>] [--scenario-dir <path>] [--lenient]\n" +
+        "fake-llm: $detail\nUsage: fake-llm [--port <n>] [--scenario <name>] [--scenario-dir <path>] [--lenient] [--no-call-log]\n" +
             "       fake-llm validate <file|dir>...\n" +
             "       fake-llm --version",
     )
