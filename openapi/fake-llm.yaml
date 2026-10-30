@@ -51,7 +51,7 @@ info:
     provider's API, and this document does not describe them field by field. The conformance
     cases in `conformance/cases` define them exactly, including the values fake-llm fixes: the
     token counts (unless the step sets `usage`), the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`,
-    `resp_fake_<n>`, `msg_fake_<n>`, `fc_fake_<n>_<i>`), the thinking signature, the
+    `resp_fake_<n>`, `msg_fake_<n>`, `rs_fake_<n>`, `fc_fake_<n>_<i>`), the thinking signature, the
     streamed-error filler text and generic error body, the OpenAI, OpenAI Responses and Gemini
     generic stream error bodies, the lenient canned reply, and the embeddings vectors and their
     usage estimate. Every generation reply names the request's model: `model` on a buffered
@@ -1152,7 +1152,10 @@ components:
           type: [string, "null"]
         thinking:
           type: [string, "null"]
-          description: An Anthropic thinking block, before the text and tool calls. Only on a reply step.
+          description: >-
+            An Anthropic thinking block, or an OpenAI Responses `reasoning` output item
+            (`rs_fake_<n>`, one `summary_text` part), before the text and tool calls. Only on a
+            reply step. Ignored by OpenAI Chat Completions and Gemini.
         stopReason:
           type: string
           default: end_turn

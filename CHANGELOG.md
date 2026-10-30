@@ -57,6 +57,9 @@ change the public API.
 
 ### Changed
 
+- OpenAI Responses: a step's `thinking` is sent as a `reasoning` output item (`rs_fake_<seq>`,
+  one `summary_text` part) before the message, and streamed as reasoning summary events. It was
+  ignored before; steps without `thinking` are unchanged.
 - Vendor replies name the request's model: OpenAI Chat Completions and Responses bodies and chunks
   say the request's `model` instead of `fake-openai`, a buffered Anthropic message has `model`, and
   Gemini bodies and stream chunks have `modelVersion`. A request without a model gets `""`.

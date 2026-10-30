@@ -201,7 +201,7 @@
             "string",
             "null"
           ],
-          "description": "An Anthropic thinking block, before the text and tool calls. Only on a reply step."
+          "description": "An Anthropic thinking block, or an OpenAI Responses `reasoning` output item (`rs_fake_<n>`, one `summary_text` part), before the text and tool calls. Only on a reply step. Ignored by OpenAI Chat Completions and Gemini."
         },
         "stopReason": {
           "type": "string",
