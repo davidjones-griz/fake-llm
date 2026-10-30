@@ -1,6 +1,7 @@
 // HTTP plumbing for the fake LLM server: the listen socket, request dispatch, the control API,
 // and the JSON response writer shared by those handlers. Vendor request handlers live in
-// VendorHandlers.kt and ResponsesStreaming.kt, and the embeddings routes in EmbeddingRoutes.kt.
+// VendorHandlers.kt and ResponsesStreaming.kt, the embeddings routes in EmbeddingRoutes.kt, and
+// token counting and the model lists in InfoRoutes.kt.
 package com.davidjonesgriz.fakellm
 
 import com.sun.net.httpserver.HttpExchange
@@ -49,7 +50,7 @@ internal fun route(
             )
             return@runCatching
         }
-        val handled = controlRoute(ex, engine) || embeddingRoute(ex) || vendorRoute(ex, engine)
+        val handled = controlRoute(ex, engine) || embeddingRoute(ex) || infoRoute(ex) || vendorRoute(ex, engine)
         if (!handled) {
             respond(ex, HTTP_NOT_FOUND, """{"fake_llm_error":"no route: ${ex.requestMethod} ${ex.requestURI.path}"}""")
         }

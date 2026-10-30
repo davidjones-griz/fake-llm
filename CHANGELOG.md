@@ -9,6 +9,9 @@ change the public API.
 
 ### Added
 
+- `POST /anthropic/v1/messages/count_tokens` (always `input_tokens` 100) and the model list and
+  lookup routes for Anthropic, OpenAI and Gemini (one model, `fake-llm`; a lookup echoes the id).
+  They are not calls: they take no step and are not logged.
 - The image declares a `HEALTHCHECK` on `GET /health`, so `docker ps`, Compose and service
   containers see `healthy` once the server listens. It follows `PORT`; a server started with
   `--port` needs its own check.

@@ -1,6 +1,6 @@
 # fake-llm
 
-A local HTTP stand-in for Anthropic Messages, OpenAI chat completions and Responses, and Gemini `generateContent` and `streamGenerateContent`, driven by a JSON scenario, plus OpenAI and Gemini embeddings, which answer from the request alone. The server is the JDK `com.sun.net.httpserver` plus kotlinx-serialization.
+A local HTTP stand-in for Anthropic Messages, OpenAI chat completions and Responses, and Gemini `generateContent` and `streamGenerateContent`, driven by a JSON scenario, plus OpenAI and Gemini embeddings, Anthropic token counting and the three model lists, which answer from the request alone. The server is the JDK `com.sun.net.httpserver` plus kotlinx-serialization.
 
 ## Why
 
@@ -471,7 +471,7 @@ A scenario file is JSON. Unknown keys are rejected. `name` is required, `descrip
 }
 ```
 
-After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with the `exception` 400 (a body that is not JSON, has no `messages` or `contents` array, or has an invalid `cache_control`, or whose next step has a tool call with `rawArguments` that its format can't carry), a 404, the Batches 501 and the [embeddings routes](#embeddings) are not calls.
+After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with the `exception` 400 (a body that is not JSON, has no `messages` or `contents` array, or has an invalid `cache_control`, or whose next step has a tool call with `rawArguments` that its format can't carry), a 404, the Batches 501, the [embeddings routes](#embeddings), and [token counting and the model lists](#token-counting-and-model-lists) are not calls.
 
 Each step is a reply (`text`, `toolCalls`, or both) or an `error`. When a step in a file or an inline scenario is invalid, the error names its number, from 1, and the path of the field at fault, such as `step 2: $.steps[1]: unknown field 'stopReasn'`. The path is relative to the scenario, including for an inline scenario in `POST /control/scenario`.
 
@@ -808,6 +808,24 @@ for chunk in client.models.generate_content_stream(model="gemini-2.0-flash", con
 vectors = client.embeddings.create(model="example-embedding", input=["a", "b"], dimensions=8)
 ```
 
+### Token counting and model lists
+
+These requests answer fixed bodies, so an app that counts tokens or checks its model before a call runs unchanged against fake-llm:
+
+| Route | Body |
+| --- | --- |
+| `POST /anthropic/v1/messages/count_tokens` | `{"input_tokens":100}` for any body the Messages route accepts; the `exception` 400 for one it rejects. |
+| `GET /anthropic/v1/models` | `{"data":[<model>],"has_more":false,"first_id":"fake-llm","last_id":"fake-llm"}` |
+| `GET /anthropic/v1/models/{id}` | `{"type":"model","id":"<id>","display_name":"<id>","created_at":"1970-01-01T00:00:00Z","lifecycle":"active"}` |
+| `GET /openai/v1/models` | `{"object":"list","data":[<model>]}` |
+| `GET /openai/v1/models/{id}` | `{"id":"<id>","object":"model","created":0,"owned_by":"fake-llm"}` |
+| `GET /gemini/{version}/models` | `{"models":[<model>]}`, with no `nextPageToken` |
+| `GET /gemini/{version}/models/{model}` | `{"name":"models/<model>","version":"fake-llm","displayName":"<model>","supportedGenerationMethods":["generateContent","streamGenerateContent","embedContent","batchEmbedContents"]}` |
+
+- **One model.** Each list holds one model, `fake-llm`, in the vendor's format. A lookup answers for any id and echoes it, decoded (an SDK sends a `/` in an id as `%2F`), so an app that checks its configured model exists passes with whatever name it uses.
+- **Not calls.** Like the embeddings routes, they take no step, have no call-log or exchange-log entry, and answer the same with or without a scenario and in strict or lenient mode. The count is the fixed 100 even when the next step sets `usage`.
+- **Routing.** Query parameters (`limit`, `pageSize`, `pageToken` and so on) are ignored. Another method on these paths, a trailing slash, and a `GET` on a Gemini method path such as `.../models/m:generateContent` are 404.
+
 ### Control API
 
 The reference for the control API, `/health` and `/openapi` is the OpenAPI 3.1 document [openapi/fake-llm.yaml](openapi/fake-llm.yaml). A running server serves the copy for its version at `GET /openapi` (as `application/yaml`, with no token needed), so a client in any language can read the contract, or generate code from it. The spec lists the vendor routes too and links to each provider's own reference. This section summarises it.
@@ -877,7 +895,7 @@ With a scenario directory set, `*.json` names from that directory are merged in,
 - `response.state` is `open` while the body is still being written (`body` holds what has been written so far), `complete` once fake-llm finished the response and closed the body normally, and `aborted` when sending the headers, or a write, flush or close, failed (usually because the client disconnected), or the server stopped mid-response. An `aborted` body holds the bytes written before the failure; the client may have received fewer. A server stopped while a call waits out its `firstByteDelayMs` records the `exception` 400 it tried to send, `aborted`, while the call log still names the step.
 - `response` is `null` until fake-llm starts sending the response, for example during a step's `firstByteDelayMs` wait.
 
-Requests that are not calls (the `exception` 400s, 404s, the Batches 501, the embeddings routes, and health and control requests) are not listed. Bodies are not capped. The log is emptied with the call log by a load, a reset or an unload.
+Requests that are not calls (the `exception` 400s, 404s, the Batches 501, the embeddings routes, token counting and the model lists, and health and control requests) are not listed. Bodies are not capped. The log is emptied with the call log by a load, a reset or an unload.
 
 ```json
 [
@@ -942,7 +960,7 @@ Embeddings are a hash of the text: equal texts get equal vectors, and there is n
 
 Delays are fixed per step: there is no jitter. Each waiting call holds one of the server's 16 request threads until its wait ends, even after the client has gone, and more requests queue when all 16 are busy.
 
-On the generation routes, token counts are 100 input and 50 output unless the step sets `usage`; they are not a count of the prompt or the reply. The embeddings routes report an estimate instead (see [Embeddings](#embeddings)). Anthropic reports the input count as `input_tokens` and the output count as `output_tokens`. `cache_creation_input_tokens` is 20 and `cache_read_input_tokens` is 10 when the request carries a `cache_control` breakpoint, and both are 0 otherwise. A breakpoint is a `cache_control` object on a block in the `system` array or in a message `content` array. `type` must be `ephemeral`, and `ttl`, if present, must be `5m` or `1h`. On a stream, the input and cache figures are on `message_start`, and `output_tokens` is on `message_delta`. OpenAI reports the input count as `prompt_tokens`, the output count as `completion_tokens`, and their sum as `total_tokens`. On an OpenAI stream, usage is sent only when `stream_options.include_usage` is true, in a final chunk with no choices. Gemini reports the input count as `promptTokenCount`, the output count as `candidatesTokenCount`, and their sum as `totalTokenCount`. On a Gemini stream, `usageMetadata` is only on the last chunk. OpenAI Responses reports the input count as `input_tokens`, the output count as `output_tokens` and their sum as `total_tokens`, with `cached_tokens` and `reasoning_tokens` 0; on a stream, usage is on `response.completed` (or `response.incomplete`).
+On the generation routes, token counts are 100 input and 50 output unless the step sets `usage`; they are not a count of the prompt or the reply. The embeddings routes report an estimate instead (see [Embeddings](#embeddings)). `POST /anthropic/v1/messages/count_tokens` reports the same constant, `input_tokens` 100, for any prompt. Anthropic reports the input count as `input_tokens` and the output count as `output_tokens`. `cache_creation_input_tokens` is 20 and `cache_read_input_tokens` is 10 when the request carries a `cache_control` breakpoint, and both are 0 otherwise. A breakpoint is a `cache_control` object on a block in the `system` array or in a message `content` array. `type` must be `ephemeral`, and `ttl`, if present, must be `5m` or `1h`. On a stream, the input and cache figures are on `message_start`, and `output_tokens` is on `message_delta`. OpenAI reports the input count as `prompt_tokens`, the output count as `completion_tokens`, and their sum as `total_tokens`. On an OpenAI stream, usage is sent only when `stream_options.include_usage` is true, in a final chunk with no choices. Gemini reports the input count as `promptTokenCount`, the output count as `candidatesTokenCount`, and their sum as `totalTokenCount`. On a Gemini stream, `usageMetadata` is only on the last chunk. OpenAI Responses reports the input count as `input_tokens`, the output count as `output_tokens` and their sum as `total_tokens`, with `cached_tokens` and `reasoning_tokens` 0; on a stream, usage is on `response.completed` (or `response.incomplete`).
 
 Tool calls are scripted per step; request fields such as `tools`, `tool_choice` and Gemini `tools` and `toolConfig` are ignored, so a step's tool calls are sent whatever tools the request declares.
 

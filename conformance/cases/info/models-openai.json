@@ -1,0 +1,86 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "models-openai",
+  "description": "GET /openai/v1/models lists one model, fake-llm; a lookup echoes the requested id; another method is 404. Not calls.",
+  "server": {
+    "fresh": true
+  },
+  "scenario": null,
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/openai/v1/models"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "id": "fake-llm",
+              "object": "model",
+              "created": 0,
+              "owned_by": "fake-llm"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/openai/v1/models/example-gpt"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "example-gpt",
+          "object": "model",
+          "created": 0,
+          "owned_by": "fake-llm"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/models",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

@@ -9,6 +9,12 @@ openapi/fake-llm.yaml:
     - '#/paths/~1anthropic~1v1~1messages~1batches/get/responses'
     - '#/paths/~1anthropic~1v1~1messages~1batches/post/responses'
     - '#/paths/~1anthropic~1v1~1messages~1batches~1{batchId}/get/responses'
+    # The model lists and lookups take no input and answer any id; they have no client error.
+    - '#/paths/~1anthropic~1v1~1models/get/responses'
+    - '#/paths/~1anthropic~1v1~1models~1{modelId}/get/responses'
+    - '#/paths/~1openai~1v1~1models/get/responses'
+    - '#/paths/~1openai~1v1~1models~1{model}/get/responses'
+    - '#/paths/~1gemini~1{version}~1models/get/responses'
   operation-2xx-response:
     # Not implemented: these operations never succeed.
     - '#/paths/~1anthropic~1v1~1messages~1batches/get/responses'

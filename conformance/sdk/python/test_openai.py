@@ -320,3 +320,14 @@ def test_embeddings_dimensions(fake, openai_client):
     assert [len(v) for v in vectors] == [8, 8, 8]
     assert vectors[0] == vectors[1] and vectors[0] != vectors[2]
     assert fake.log() == []
+
+
+def test_models(fake, openai_client):
+    # A request that took a step would be logged; these take none.
+    fake.load([{"text": "unused"}])
+    assert [m.id for m in openai_client.models.list()] == ["fake-llm"]
+    model = openai_client.models.retrieve("example-gpt")
+    assert (model.id, model.object, model.owned_by) == ("example-gpt", "model", "fake-llm")
+    # The SDK sends the slash as %2F; the lookup echoes the id it decodes.
+    assert openai_client.models.retrieve("meta-llama/Llama-3.1-8B").id == "meta-llama/Llama-3.1-8B"
+    assert fake.log() == []

@@ -42,7 +42,10 @@ info:
     request, or a Gemini request). That step is not used, and the next call gets it. A Gemini
     `streamGenerateContent` request without `alt=sse` is not a call either. The embeddings routes
     are not calls either: they answer from the request alone, whether or not a scenario is loaded,
-    in strict and lenient mode, and take no step and no log entry. On the OpenAI Responses
+    in strict and lenient mode, and take no step and no log entry. Token counting
+    (`POST /anthropic/v1/messages/count_tokens`) and the model list and lookup routes are not
+    calls either: they answer fixed bodies (one model, `fake-llm`; a lookup echoes the requested
+    id), whether or not a scenario is loaded. On the OpenAI Responses
     route, `previous_response_id`, `store` and `conversation` are accepted and ignored: fake-llm
     stores nothing, each call gets the next step, and only the request's own `instructions` and
     `input` are read.
@@ -53,11 +56,11 @@ info:
     token counts (unless the step sets `usage`), the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`,
     `resp_fake_<n>`, `msg_fake_<n>`, `rs_fake_<n>`, `fc_fake_<n>_<i>`), the thinking signature, the
     streamed-error filler text and generic error body, the OpenAI, OpenAI Responses and Gemini
-    generic stream error bodies, the lenient canned reply, and the embeddings vectors and their
-    usage estimate. Every generation reply names the request's model: `model` on a buffered
-    Anthropic message and the stream's `message_start` and on OpenAI and Responses bodies, chunks
-    and events, and `modelVersion` on Gemini bodies and chunks; a request without a string `model`
-    gets `""`.
+    generic stream error bodies, the lenient canned reply, the embeddings vectors and their usage
+    estimate, the count_tokens count (100), and the model id `fake-llm`. Every generation reply
+    names the request's model: `model` on a buffered Anthropic message and the stream's
+    `message_start` and on OpenAI and Responses bodies, chunks and events, and `modelVersion` on
+    Gemini bodies and chunks; a request without a string `model` gets `""`.
 
     **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
     cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.
@@ -287,6 +290,32 @@ paths:
           $ref: "#/components/responses/VendorBadRequest"
         default:
           $ref: "#/components/responses/ScriptedError"
+  /anthropic/v1/messages/count_tokens:
+    post:
+      tags: [vendor]
+      operationId: countAnthropicTokens
+      summary: Anthropic token counting stand-in
+      description: |
+        Answers `{"input_tokens": 100}` for any body the Messages route accepts
+        (https://docs.anthropic.com/en/api/messages-count-tokens): the fixed input token count
+        every Messages reply reports by default. A body the Messages route rejects gets
+        `ExceptionError`. Not a call: no step, not logged, the same with or without a scenario.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: The token count.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /anthropic/v1/messages/batches:
     get:
       tags: [vendor]
@@ -324,6 +353,46 @@ paths:
       responses:
         "501":
           $ref: "#/components/responses/NotImplemented"
+  /anthropic/v1/models:
+    get:
+      tags: [vendor]
+      operationId: listAnthropicModels
+      summary: Anthropic Models API stand-in
+      description: |
+        One model, `fake-llm`, in the Anthropic Models list format
+        (https://docs.anthropic.com/en/api/models-list). Query parameters are ignored.
+        Not a call: no step, not logged, the same with or without a scenario.
+      security: []
+      responses:
+        "200":
+          description: A model list.
+          content:
+            application/json:
+              schema:
+                type: object
+  /anthropic/v1/models/{modelId}:
+    parameters:
+      - name: modelId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [vendor]
+      operationId: getAnthropicModel
+      summary: Anthropic Models API stand-in
+      description: |
+        The model `modelId`, whatever it is, in the Anthropic model format
+        (https://docs.anthropic.com/en/api/models).
+        Not a call: no step, not logged, the same with or without a scenario.
+      security: []
+      responses:
+        "200":
+          description: The requested model.
+          content:
+            application/json:
+              schema:
+                type: object
   /openai/v1/chat/completions:
     post:
       tags: [vendor]
@@ -422,6 +491,109 @@ paths:
                 type: object
         "400":
           $ref: "#/components/responses/BadRequest"
+  /openai/v1/models:
+    get:
+      tags: [vendor]
+      operationId: listOpenAiModels
+      summary: OpenAI Models API stand-in
+      description: |
+        One model, `fake-llm`, in the OpenAI Models list format
+        (https://platform.openai.com/docs/api-reference/models/list).
+        Not a call: no step, not logged, the same with or without a scenario.
+      security: []
+      responses:
+        "200":
+          description: A model list.
+          content:
+            application/json:
+              schema:
+                type: object
+  /openai/v1/models/{model}:
+    parameters:
+      - name: model
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [vendor]
+      operationId: getOpenAiModel
+      summary: OpenAI Models API stand-in
+      description: |
+        The model `model`, whatever it is, in the OpenAI model format
+        (https://platform.openai.com/docs/api-reference/models/retrieve).
+        Not a call: no step, not logged, the same with or without a scenario.
+      security: []
+      responses:
+        "200":
+          description: The requested model.
+          content:
+            application/json:
+              schema:
+                type: object
+  /gemini/{version}/models:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The API version segment, such as `v1beta`.
+        schema:
+          type: string
+    get:
+      tags: [vendor]
+      operationId: listGeminiModels
+      summary: Gemini Models API stand-in
+      description: |
+        One model, `fake-llm`, in the Gemini `models.list` format
+        (https://ai.google.dev/api/models), with no `nextPageToken`. `pageSize` and `pageToken` are
+        ignored.
+        Not a call: no step, not logged, the same with or without a scenario.
+      security: []
+      responses:
+        "200":
+          description: A model list.
+          content:
+            application/json:
+              schema:
+                type: object
+  /gemini/{version}/models/{model}:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The API version segment, such as `v1beta`.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        description: A model id with no `:`; a path with a `:` is a method, such as `:generateContent`.
+        schema:
+          type: string
+    get:
+      tags: [vendor]
+      operationId: getGeminiModel
+      summary: Gemini Models API stand-in
+      description: |
+        The model `models/<model>`, whatever `model` is, in the Gemini `models.get` format
+        (https://ai.google.dev/api/models).
+        Not a call: no step, not logged, the same with or without a scenario.
+      security: []
+      responses:
+        "200":
+          description: The requested model.
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: |
+            A `model` segment with a `:` is a method path, such as `GET .../models/m:generateContent`,
+            which no GET route answers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageError"
   /gemini/{version}/models/{model}:generateContent:
     parameters:
       - name: version
@@ -611,8 +783,8 @@ components:
     BadRequest:
       description: |
         The request could not be handled: a body that is not valid JSON or does not match the
-        request schema, a scenario that cannot be found or decoded, or an embeddings request outside
-        the documented rules.
+        request schema, a scenario that cannot be found or decoded, an embeddings request outside
+        the documented rules, or a count_tokens body the Messages route rejects.
       content:
         application/json:
           schema:

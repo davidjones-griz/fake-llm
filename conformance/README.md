@@ -156,6 +156,7 @@ them, exactly. That includes the values fake-llm fixes:
 - the lenient canned reply, `This is a canned response from fake-llm.`;
 - the embeddings vectors (pinned at small sizes, cross-checked with an independent script), their
   JSON number form and base64 form, and the usage estimate;
+- the count_tokens count (100) and the model id `fake-llm` in the model lists;
 - the bundled scenario names, and the contents of `hello`.
 
 ## Adding a case
@@ -187,7 +188,8 @@ in `test_exchanges.py`, the exchange log (`GET /control/exchanges`). It covers w
 supports today: Anthropic Messages buffered and streaming, OpenAI Chat Completions and Responses
 buffered and streaming, and Gemini `generateContent` buffered and `streamGenerateContent` streaming.
 It also covers client timeouts against `firstByteDelayMs`, and the OpenAI and Gemini embeddings
-routes (the `openai` SDK's default base64 call, the float form, and `embed_content`).
+routes (the `openai` SDK's default base64 call, the float form, and `embed_content`), Anthropic
+token counting, and each SDK's model list and lookup.
 
 ```
 conformance/sdk/python/
