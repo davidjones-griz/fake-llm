@@ -1,8 +1,8 @@
 name: SDK latest
 
-# Runs the SDK conformance suite (conformance/sdk/python) daily against the newest releases of the
-# official Python SDKs, unpinned, so a new release that breaks against fake-llm shows up before
-# Dependabot proposes it. Pull requests run the pinned versions (ci.yml's conformance job). A
+# Runs the SDK conformance suites (conformance/sdk/python and conformance/sdk/node) daily against the
+# newest releases of the official SDKs, unpinned, so a new release that breaks against fake-llm shows
+# up before Dependabot proposes it. Pull requests run the pinned versions (ci.yml's conformance job). A
 # failure fails the run; GitHub emails whoever last changed the cron line. See
 # conformance/README.md#sdk-suite.
 on:
@@ -26,22 +26,56 @@ jobs:
         with:
           cache-provider: basic
       - name: Build the fat jar
+        id: build
         run: ./gradlew shadowJar --no-daemon
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: conformance/sdk/python/.python-version
-      - name: Install the latest SDKs
+      - name: Install the latest Python SDKs
         run: python -m pip install --upgrade -r conformance/sdk/python/requirements.in
-      - name: List the installed versions
+      - name: List the installed Python versions
         run: |
           {
-            echo "| Package | Version |"
+            echo "| Python package | Version |"
             echo "| --- | --- |"
             for package in anthropic openai google-genai pytest; do
               echo "| $package | $(python -m pip show "$package" | sed -n 's/^Version: //p') |"
             done
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Run the SDK suite against the fat jar
+      - name: Run the Python SDK suite against the fat jar
+        id: python
         env:
           FAKE_LLM_COMMAND: java -jar build/libs/fake-llm-all.jar
         run: python -m pytest conformance/sdk/python
+      # The Node suite runs even when the Python run failed, so one run reports both. No typecheck
+      # here: a type-only change in a new release shouldn't fail the run if the behaviour is fine.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        id: setup-node
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        with:
+          node-version-file: conformance/sdk/node/.node-version
+      # --ignore-scripts: @google/genai's preinstall and protobufjs's postinstall only print a message.
+      - name: Install the latest Node SDKs
+        id: node-install
+        if: ${{ !cancelled() && steps.setup-node.outcome == 'success' }}
+        working-directory: conformance/sdk/node
+        run: |
+          npm ci --ignore-scripts
+          npm install --no-save --ignore-scripts @anthropic-ai/sdk@latest openai@latest @google/genai@latest
+      - name: List the installed Node versions
+        if: ${{ !cancelled() && steps.node-install.outcome == 'success' }}
+        working-directory: conformance/sdk/node
+        run: |
+          {
+            echo "| Node package | Version |"
+            echo "| --- | --- |"
+            for package in @anthropic-ai/sdk openai @google/genai; do
+              echo "| $package | $(node -p "require('./node_modules/$package/package.json').version") |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run the Node SDK suite against the fat jar
+        if: ${{ !cancelled() && steps.node-install.outcome == 'success' }}
+        working-directory: conformance/sdk/node
+        env:
+          FAKE_LLM_COMMAND: java -jar ${{ github.workspace }}/build/libs/fake-llm-all.jar
+        run: npm test

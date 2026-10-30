@@ -6,7 +6,8 @@ testcontainers/build/
 examples/build/
 examples/.gradle/
 conformance/runner/build/
-# The SDK conformance suite is a test client, and a local .venv there must not enter the build context.
+# The SDK conformance suites are test clients, and a local .venv or node_modules there must not enter
+# the build context.
 conformance/sdk/
 # The pytest plugin is a test client too, with the same concern.
 pytest-fake-llm/

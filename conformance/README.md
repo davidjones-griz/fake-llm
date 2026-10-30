@@ -168,16 +168,22 @@ them, exactly. That includes the values fake-llm fixes:
 
 ## SDK suite
 
-`conformance/sdk/python/` checks that the official client libraries accept what the server sends:
-the `anthropic`, `openai` and `google-genai` Python SDKs, at the versions pinned in
-`requirements.txt`. Each test loads its own scenario, makes calls through an SDK, and asserts on
-what the SDK parsed or raised and on the exact call log (`GET /control/calls`) and, in
-`test_exchanges.py`, the exchange log (`GET /control/exchanges`). It covers what the
-server supports today: Anthropic Messages buffered and streaming, OpenAI Chat Completions and
-Responses buffered and streaming, and Gemini `generateContent` buffered and
-`streamGenerateContent` streaming. It also covers client timeouts against `firstByteDelayMs`. The
-HTTP cases above say what the server sends; this suite says a real client can read it. CI's
-`conformance` job runs both against the same fat jar and Docker image.
+The SDK suites check that the official client libraries accept what the server sends, in two
+languages: `conformance/sdk/python/` drives the Python SDKs and `conformance/sdk/node/` the Node
+SDKs. The HTTP cases above say what the server sends; these suites say a real client can read it.
+CI's `conformance` job runs all three against the same fat jar and Docker image, and the
+[SDK latest](../.github/workflows/sdk-latest.yml) workflow runs both SDK suites daily against the
+newest SDK releases.
+
+### Python
+
+`conformance/sdk/python/` drives the `anthropic`, `openai` and `google-genai` Python SDKs, at the
+versions pinned in `requirements.txt`. Each test loads its own scenario, makes calls through an SDK,
+and asserts on what the SDK parsed or raised and on the exact call log (`GET /control/calls`) and,
+in `test_exchanges.py`, the exchange log (`GET /control/exchanges`). It covers what the server
+supports today: Anthropic Messages buffered and streaming, OpenAI Chat Completions and Responses
+buffered and streaming, and Gemini `generateContent` buffered and `streamGenerateContent` streaming.
+It also covers client timeouts against `firstByteDelayMs`.
 
 ```
 conformance/sdk/python/
@@ -224,4 +230,56 @@ pull request.
 daily against the newest releases, unpinned, and lists their versions in the run's summary. A
 failure there means a new SDK release breaks against fake-llm before Dependabot proposes it.
 
-A new SDK test needs a feature the server already supports; a missing feature is its own issue.
+### Node
+
+`conformance/sdk/node/` drives the `@anthropic-ai/sdk`, `openai` and `@google/genai` packages, at
+the versions pinned in `package.json` and locked in `package-lock.json`. It mirrors the Python suite's
+design: the same `FAKE_LLM_COMMAND` / `FAKE_LLM_BASE_URL` contract, one inline scenario per test,
+and assertions on what the SDK parsed or threw and on the exact call log. It is a first cut of 31
+tests (buffered and streamed replies, tool calls, errors, retries and scripted usage for each
+format); the rest of the Python suite's coverage is follow-up work.
+
+```
+conformance/sdk/node/
+  .node-version      26
+  package.json       the five packages, pinned exactly, and the test and typecheck scripts
+  package-lock.json  the lock (npm install output)
+  tsconfig.json      strict type checking only (noEmit)
+  support.ts         the server, the control helpers and the clients
+  anthropic.test.ts  openai.test.ts  openai-responses.test.ts  gemini.test.ts
+```
+
+The tests are TypeScript, run by Node's type stripping (`node --test`, no build step), with the
+built-in `node:test` runner. `npm run typecheck` runs `tsc --noEmit` against the SDKs' own type
+definitions, so a change in an SDK's API fails at check time. Each test file starts its own server
+and the files run one at a time. With Node 26, from `conformance/sdk/node/`:
+
+```bash
+npm ci --ignore-scripts
+npm run typecheck
+(cd ../../.. && ./gradlew shadowJar)
+FAKE_LLM_COMMAND="java -jar $PWD/../../../build/libs/fake-llm-all.jar" npm test
+# or against a running strict server with no control token:
+FAKE_LLM_BASE_URL=http://localhost:8080 npm test
+```
+
+`npm test` prints a spec report and writes a JUnit report to `reports/<FAKE_LLM_REPORT>.xml`
+(`reports/local.xml` by default). `--ignore-scripts` skips two install scripts that only print a
+message (`@google/genai`'s `preinstall` and `protobufjs`'s `postinstall`); the suite needs neither.
+
+**Retries.** As in the Python suite, the Anthropic and OpenAI clients keep their default retries,
+and a retryable error step carries `retry-after-ms: 10`. `@google/genai` does not retry by default
+either (it retries only when given `retryOptions`), and `default client does not retry` pins that
+down.
+
+**Bumping a pin.** From `conformance/sdk/node/`, run `npm install --ignore-scripts --save-exact
+<name>@<version>` and commit `package.json` and `package-lock.json`. Dependabot does this weekly
+for all five packages in one pull request, except `@types/node` majors, which follow
+`.node-version` and move by hand with it.
+
+**Latest releases.** The SDK latest workflow also installs the newest `@anthropic-ai/sdk`, `openai`
+and `@google/genai` over the lock and runs the suite, without `typecheck`: a type-only change in a
+new release does not fail the run if the behaviour is fine.
+
+A new SDK test, in either language, needs a feature the server already supports; a missing feature
+is its own issue.
