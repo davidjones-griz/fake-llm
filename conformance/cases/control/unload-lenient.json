@@ -48,7 +48,10 @@
           "scenario": null,
           "lenient": true,
           "steps": null,
-          "unusedSteps": []
+          "unusedSteps": [],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     },

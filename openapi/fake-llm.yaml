@@ -78,7 +78,7 @@ paths:
     get:
       tags: [health]
       operationId: getHealth
-      summary: Report liveness, the loaded scenario, its unused steps and lenient mode
+      summary: Report liveness, the loaded scenario, its unused steps, lenient mode and the version
       security: []
       responses:
         "200":
@@ -665,7 +665,7 @@ components:
   schemas:
     Health:
       type: object
-      required: [status, scenario, lenient, steps, unusedSteps]
+      required: [status, scenario, lenient, steps, unusedSteps, version]
       properties:
         status:
           type: string
@@ -694,6 +694,11 @@ components:
             load, reset or unload, in order: always the last ones. Empty when none is loaded or every
             step has served a call. A test can assert it is empty to check the app made every
             scripted call.
+        version:
+          type: string
+          description: |
+            The server's version, the same as this document's `info.version`. Servers before this
+            release do not send it.
     LoadRequest:
       description: Exactly one of `name` or `scenario`.
       oneOf:

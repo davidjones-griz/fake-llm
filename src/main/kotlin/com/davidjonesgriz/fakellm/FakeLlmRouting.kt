@@ -83,6 +83,7 @@ private fun controlRoute(
                     put("lenient", engine.lenient)
                     put("steps", progress.steps)
                     put("unusedSteps", buildJsonArray { progress.unusedSteps.forEach { add(JsonPrimitive(it)) } })
+                    put("version", fakeLlmVersion)
                 }.toString(),
             )
         }
@@ -233,6 +234,15 @@ internal fun respond(
 internal fun jsonString(s: String?): String = if (s == null) "null" else JsonPrimitive(s).toString()
 
 private val logJson = Json { encodeDefaults = true }
+
+/** This build's version, from the `fake-llm.version` resource the build writes; `unknown` if it is missing. */
+internal val fakeLlmVersion: String by lazy {
+    FakeLlmServer::class.java
+        .getResourceAsStream("/com/davidjonesgriz/fakellm/fake-llm.version")
+        ?.use { it.readBytes().decodeToString().trim() }
+        ?.takeIf { it.isNotEmpty() }
+        ?: "unknown"
+}
 
 /** The OpenAPI document bundled in the jar (see openapi/fake-llm.yaml), or null if it is missing. */
 private val bundledOpenApiSpec: String? by lazy {

@@ -199,11 +199,13 @@ public final class com/davidjonesgriz/fakellm/FakeLlmHealth {
 	public final fun component2 ()Z
 	public final fun component3 ()Ljava/lang/Integer;
 	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Ljava/lang/String;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getLenient ()Z
 	public final fun getScenario ()Ljava/lang/String;
 	public final fun getSteps ()Ljava/lang/Integer;
 	public final fun getUnusedSteps ()Ljava/util/List;
+	public final fun getVersion ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "health-without-scenario",
-  "description": "GET /health reports no scenario on a new server.",
+  "description": "GET /health reports no scenario, and the server's version, on a new server.",
   "server": {
     "fresh": true
   },
@@ -22,7 +22,10 @@
           "scenario": null,
           "lenient": false,
           "steps": null,
-          "unusedSteps": []
+          "unusedSteps": [],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     }

@@ -53,10 +53,10 @@ class OpenApiConformanceTest {
         // A response body with an undocumented field must fail the strict check, and a request body
         // the server rejects must fail the request schema.
         val health = "#/paths/~1health/get/responses/200/content/application~1json/schema"
-        assertEquals(emptyList(), validate(health, """{"status":"ok","scenario":null,"lenient":false,"steps":null,"unusedSteps":[]}"""))
-        assertTrue(
-            validate(health, """{"status":"ok","scenario":null,"lenient":false,"steps":null,"unusedSteps":[],"extra":1}""").isNotEmpty(),
-        )
+        val valid = """{"status":"ok","scenario":null,"lenient":false,"steps":null,"unusedSteps":[],"version":"0.5.0"}"""
+        assertEquals(emptyList(), validate(health, valid))
+        assertTrue(validate(health, valid.replace("}", ""","extra":1}""")).isNotEmpty())
+        assertTrue(validate(health, valid.replace(""","version":"0.5.0"""", "")).isNotEmpty(), "version is required")
         assertTrue(validate(health, """{"status":"ok","scenario":null,"lenient":false,"steps":null}""").isNotEmpty())
         val load = "#/paths/~1control~1scenario/post/requestBody/content/application~1json/schema"
         assertEquals(emptyList(), validate(load, """{"name":"hello"}"""))
@@ -153,11 +153,15 @@ class OpenApiConformanceTest {
             )
         assertEquals(
             emptyList(),
-            caseDisagreements(case("""{"status":200,"body":{"status":"ok","scenario":"s","lenient":false,"steps":1,"unusedSteps":[1]}}""")),
+            caseDisagreements(
+                case("""{"status":200,"body":{"status":"ok","scenario":"s","lenient":false,"steps":1,"unusedSteps":[1],"version":"v"}}"""),
+            ),
         )
         assertTrue(
             caseDisagreements(
-                case("""{"status":200,"body":{"status":"ok","scenario":"s","lenient":false,"steps":1,"unusedSteps":[1],"x":1}}"""),
+                case(
+                    """{"status":200,"body":{"status":"ok","scenario":"s","lenient":false,"steps":1,"unusedSteps":[1],"version":"v","x":1}}""",
+                ),
             ).isNotEmpty(),
         )
         assertTrue(caseDisagreements(case("""{"status":418}""")).isNotEmpty())

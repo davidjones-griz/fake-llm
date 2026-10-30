@@ -43,7 +43,10 @@
           "scenario": "hello",
           "lenient": false,
           "steps": 1,
-          "unusedSteps": [1]
+          "unusedSteps": [1],
+          "version": {
+            "$type": "string"
+          }
         }
       }
     }
