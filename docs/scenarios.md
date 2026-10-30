@@ -192,7 +192,7 @@ For a whole pipeline, see `TicketPipelineTest` in [examples/](https://github.com
 
 ```bash
 java -jar build/libs/fake-llm-all.jar validate src/test/scenarios
-docker run --rm -v "$PWD/scenarios:/scenarios:ro" ghcr.io/davidjones-griz/fake-llm:0.5.0 validate /scenarios
+docker run --rm -v "$PWD/scenarios:/scenarios:ro" ghcr.io/davidjones-griz/fake-llm:0.6.0 validate /scenarios
 ```
 
 Each valid file gets an `ok <path>` line, and each invalid one a `<path>: <problem>` line on stderr, such as `scenarios/weather.json: step 2: $.steps[1]: unknown field 'stopReasn'`. Every file is checked, with the first problem in each reported. The exit code is 0 when every file is valid, 1 when any is invalid, and 2 for a usage error: no paths, a path that does not exist, a directory with no `.json` files, or a flag. (The server's own usage errors exit 1.)
