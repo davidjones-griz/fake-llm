@@ -28,3 +28,6 @@ conformance/sdk/node/reports/
 
 # Kotlin 2.x compiler state
 .kotlin/
+
+# The documentation site's build output.
+site/

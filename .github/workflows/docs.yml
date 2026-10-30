@@ -1,0 +1,71 @@
+# Builds the documentation site on every pull request and push to main, runs the quickstart script
+# against an image built from the commit, and deploys the site to GitHub Pages from main.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: docs/.python-version
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+      - name: Install Zensical
+        run: python -m pip install --require-hashes -r docs/requirements.txt
+      - name: Build the site
+        run: zensical build --clean --strict
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  quickstart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The quickstart runs the released tag; tag this commit's image with that name so the script
+      # runs it without pulling, and a quickstart change is tested before it is released.
+      - name: Build the image under the quickstart's tag
+        run: |
+          set -eu
+          tag=$(grep -o 'ghcr\.io/davidjones-griz/fake-llm:[0-9][0-9.]*[0-9]' docs/quickstart/quickstart.sh | head -1)
+          docker build -t "$tag" .
+      - name: Run the quickstart
+        run: |
+          set -euo pipefail
+          bash -euo pipefail docs/quickstart/quickstart.sh | tee "$RUNNER_TEMP/quickstart.out"
+          grep -q '"status":"ok"' "$RUNNER_TEMP/quickstart.out"
+          grep -q '"type":"message"' "$RUNNER_TEMP/quickstart.out"
+          grep -q '"vendor":"anthropic"' "$RUNNER_TEMP/quickstart.out"
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, quickstart]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: deployment

@@ -57,6 +57,8 @@ tasks.test {
     inputs.dir("conformance/cases").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("conformanceCases")
     // The scenario JSON Schema and the scenario files the tests check against it and the spec.
     inputs.file("schema/scenario.schema.json").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("scenarioSchema")
+    // DocsTest reads the documentation pages. The OpenAPI document is already an input, as a resource.
+    inputs.dir("docs").withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("docs")
     listOf(
         "examples/src/test/resources/scenarios",
         "examples/src/test/scenarios",

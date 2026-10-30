@@ -2,6 +2,8 @@
 
 A local HTTP stand-in for Anthropic Messages, OpenAI chat completions and Responses, and Gemini `generateContent` and `streamGenerateContent`, driven by a JSON scenario, plus OpenAI and Gemini embeddings, Anthropic token counting and the three model lists, which answer from the request alone. The server is the JDK `com.sun.net.httpserver` plus kotlinx-serialization.
 
+Documentation: <https://davidjones-griz.github.io/fake-llm/> (quickstart, scenario reference, control API, recipes).
+
 ## Why
 
 I got tired of my CI pipeline failing over trivial bugs that should have been caught easily, because there was no way to run each LLM-calling component without deploying it and paying for real model calls. I extracted fake-llm from a personal project so I could exercise each component on its own.
@@ -1013,6 +1015,8 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 - **The pytest plugin** in [pytest-fake-llm/](pytest-fake-llm/) is tested with itself: CI's `python` job builds the image from the same commit and runs the plugin's tests on Python 3.11, 3.12, 3.13, 3.14 and 3.15, with the session's server started from that image. Tests marked `docker` start containers of their own. Each version installs the hash-pinned `pytest-fake-llm/requirements-test.txt`, then the plugin. A test checks that the plugin's `version` in `pytest-fake-llm/pyproject.toml` is the one in `gradle.properties`, since the plugin starts the image with that tag. Locally, with Docker: `docker build -t fake-llm:dev .`, `python -m pip install --require-hashes -r pytest-fake-llm/requirements-test.txt`, `python -m pip install --no-build-isolation --no-deps ./pytest-fake-llm`, then `python -m pytest pytest-fake-llm/tests --fake-llm-image=fake-llm:dev`. Without Docker, `--fake-llm-url=http://localhost:8080` against `java -jar build/libs/fake-llm-all.jar` runs all but the `docker` tests.
 - Commits that only reformat code are listed in `.git-blame-ignore-revs`, which GitHub's blame view honours; locally, run `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 
+The documentation site in `docs/` is built with [Zensical](https://zensical.org/) from `mkdocs.yml` by the [Docs](.github/workflows/docs.yml) workflow, which also runs the quickstart script against an image built from the commit, and deploys the site from `main`. `DocsTest` checks that the scenario reference has a row for every scenario field, the control API page a heading for `/health`, `/openapi` and every control route, each recipe a bundled scenario the tests load, and every image tag and version in `docs/` the current version. To build it locally: `python -m pip install --require-hashes -r docs/requirements.txt && zensical serve`.
+
 ### Dependency updates
 
 [Dependabot](.github/dependabot.yml) opens version-update pull requests every Monday for the Gradle builds (the root build and `examples/`, including the Gradle wrapper), the GitHub Actions in `.github/workflows/`, the Dockerfile base images, and the linter images in `.github/linters/`. Minor and patch updates are grouped into one pull request per ecosystem, and the two base-image digests are updated together. Kotlin, its Gradle plugins and the kotlinx-serialization runtime move together in one group across both builds, majors included, and the detekt and ktlint plugins have a group of their own, because a new rule release can bring new findings. Every other major update arrives on its own, except the linter images, the SDK conformance suites' Python and Node packages (`@types/node` majors aside, see below) and the pytest plugin's test dependencies, which are grouped whatever the update type. Each update must pass the same required checks as any other pull request.
@@ -1034,7 +1038,7 @@ Compiler warnings are errors. A warning in the main or test code fails `./gradle
 
 A release is published from a `vX.Y.Z` tag on `main` by the [Release](.github/workflows/release.yml) workflow.
 
-1. In a pull request, set `version` in `gradle.properties`, `info.version` in `openapi/fake-llm.yaml` and `version` in `pytest-fake-llm/pyproject.toml` to `X.Y.Z` (tests check that they match), change the CHANGELOG heading from `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, and move every `ghcr.io/davidjones-griz/fake-llm:` tag in `README.md`, the service image in `examples/github-actions/fake-llm-tests.yml` and the `@vX.Y.Z` in the pytest plugin's install line to `X.Y.Z`.
+1. In a pull request, set `version` in `gradle.properties`, `info.version` in `openapi/fake-llm.yaml` and `version` in `pytest-fake-llm/pyproject.toml` to `X.Y.Z` (tests check that they match), change the CHANGELOG heading from `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, and move every `ghcr.io/davidjones-griz/fake-llm:` tag in `README.md` and `docs/`, the service image in `examples/github-actions/fake-llm-tests.yml` and the `@vX.Y.Z` in the pytest plugin's install line to `X.Y.Z`.
 2. After it merges, tag the merge commit and push the tag: `git tag vX.Y.Z <merge commit> && git push origin vX.Y.Z`.
 
 The workflow then runs four jobs:
