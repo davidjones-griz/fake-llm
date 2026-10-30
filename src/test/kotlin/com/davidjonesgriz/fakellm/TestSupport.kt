@@ -206,6 +206,8 @@ internal val invalidScenarios =
         "usage on an error step" to """{"name":"x","steps":[{"error":{"status":500},"usage":{"inputTokens":1}}]}""",
         "a negative inputTokens" to """{"name":"x","steps":[{"text":"t","usage":{"inputTokens":-1}}]}""",
         "an unknown field in usage" to """{"name":"x","steps":[{"text":"t","usage":{"cachedTokens":1}}]}""",
+        "stopSequence without stopReason stop_sequence" to """{"name":"x","steps":[{"text":"t","stopSequence":"END"}]}""",
+        "an empty stopSequence" to """{"name":"x","steps":[{"text":"t","stopReason":"stop_sequence","stopSequence":""}]}""",
         "outputTokens past Int" to """{"name":"x","steps":[{"text":"t","usage":{"outputTokens":3000000000}}]}""",
     )
 

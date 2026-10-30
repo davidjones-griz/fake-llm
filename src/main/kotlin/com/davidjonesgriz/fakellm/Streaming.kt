@@ -129,10 +129,14 @@ internal fun contentBlockStopJson(index: Int = 0): String =
         put("index", index)
     }.toString()
 
-/** `message_delta` carries only the cumulative `output_tokens`. Input and cache tokens stay on `message_start`. */
+/**
+ * `message_delta` carries the step's stop sequence and only the cumulative `output_tokens`. Input
+ * and cache tokens stay on `message_start`.
+ */
 internal fun messageDeltaJson(
     stopReason: String,
     outputTokens: Int = FIXED_OUTPUT_TOKENS,
+    stopSequence: String? = null,
 ): String =
     buildJsonObject {
         put("type", "message_delta")
@@ -140,7 +144,7 @@ internal fun messageDeltaJson(
             "delta",
             buildJsonObject {
                 put("stop_reason", stopReason)
-                put("stop_sequence", JsonNull)
+                put("stop_sequence", stopSequence)
             },
         )
         put(

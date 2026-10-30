@@ -142,8 +142,9 @@ private fun StringBuilder.appendTexts(el: JsonElement?) {
 
 /**
  * The buffered Anthropic message for [step]: the thinking block, the text block when it has text,
- * then one `tool_use` block per call. With tool calls, `stop_reason` is `tool_use`. [model] is the
- * request's model, echoed as the API echoes the model that served the request.
+ * then one `tool_use` block per call. With tool calls, `stop_reason` is `tool_use`. `stop_sequence`
+ * is the step's [Step.stopSequence], or null. [model] is the request's model, echoed as the API
+ * echoes the model that served the request.
  */
 internal fun anthropicEnvelope(
     step: Step,
@@ -194,7 +195,7 @@ internal fun anthropicEnvelope(
             },
         )
         put("stop_reason", if (toolCalls.isEmpty()) stopReason else "tool_use")
-        put("stop_sequence", JsonNull)
+        put("stop_sequence", step.stopSequence)
         put(
             "usage",
             buildJsonObject {

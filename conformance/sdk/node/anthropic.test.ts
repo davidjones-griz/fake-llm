@@ -41,10 +41,22 @@ test("text", async (t) => {
     message.content.map((b) => [b.type, b.type === "text" ? b.text : null]),
     [["text", "Billing questions go to the billing team."]],
   );
-  assert.equal(message.stop_reason, "end_turn");
+  // The SDK passes the body through, so a missing stop_sequence would be undefined, not null.
+  assert.deepEqual([message.stop_reason, message.stop_sequence], ["end_turn", null]);
   assert.deepEqual([message.usage.input_tokens, message.usage.output_tokens], [100, 50]);
   assert.deepEqual([message.usage.cache_creation_input_tokens, message.usage.cache_read_input_tokens], [0, 0]);
   assert.deepEqual(await f.log(), [call(1, "text", 1)]);
+});
+
+test("stop sequence", async (t) => {
+  const f = fake(server, t);
+  const step = { text: "42", stopReason: "stop_sequence", stopSequence: "</answer>" };
+  await f.load([step, step]);
+  const message = await create();
+  assert.deepEqual([message.stop_reason, message.stop_sequence], ["stop_sequence", "</answer>"]);
+  const streamed = await stream().finalMessage();
+  assert.deepEqual([streamed.stop_reason, streamed.stop_sequence], ["stop_sequence", "</answer>"]);
+  assert.deepEqual(await f.log(), [call(1, "text", 1), call(2, "text", 2)]);
 });
 
 test("max tokens", async (t) => {

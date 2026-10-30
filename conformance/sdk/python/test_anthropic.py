@@ -62,6 +62,17 @@ def test_stop_sequence_null_in_body(fake, anthropic_client):
     assert list(body)[list(body).index("stop_reason") + 1] == "stop_sequence" and body["stop_sequence"] is None
 
 
+def test_stop_sequence(fake, anthropic_client):
+    step = {"text": "42", "stopReason": "stop_sequence", "stopSequence": "</answer>"}
+    fake.load([step, step])
+    message = create(anthropic_client)
+    assert (message.stop_reason, message.stop_sequence, message.content[0].text) == ("stop_sequence", "</answer>", "42")
+    with anthropic_client.messages.stream(model="example-model", max_tokens=256, messages=MESSAGES) as s:
+        final = s.get_final_message()
+    assert (final.stop_reason, final.stop_sequence) == ("stop_sequence", "</answer>")
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]
+
+
 def test_max_tokens(fake, anthropic_client):
     fake.load([{"text": "The summary stops in the mid", "stopReason": "max_tokens"}])
     message = create(anthropic_client)

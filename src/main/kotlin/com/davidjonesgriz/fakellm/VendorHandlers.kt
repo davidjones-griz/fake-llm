@@ -100,7 +100,7 @@ private fun streamAnthropicMessages(
                 writeSse(out, "content_block_stop", contentBlockStopJson(index++))
             }
             val stopReason = if (step.toolCalls == null) step.stopReason else "tool_use"
-            writeSse(out, "message_delta", messageDeltaJson(stopReason, step.appliedUsage.outputTokens))
+            writeSse(out, "message_delta", messageDeltaJson(stopReason, step.appliedUsage.outputTokens, step.stopSequence))
             writeSse(out, "message_stop", messageStopJson())
         }
     } finally {
