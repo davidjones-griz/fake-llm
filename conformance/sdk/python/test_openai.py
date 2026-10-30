@@ -48,6 +48,15 @@ def test_text(fake, openai_client):
     assert (record["messageCount"], record["promptSample"]) == (1, "Hello\n")
 
 
+def test_content_parts(fake, openai_client):
+    fake.load([{"text": "Cat."}])
+    parts = [{"type": "text", "text": "What is in this picture?"}, {"type": "image_url", "image_url": {"url": "https://example.com/cat.png"}}]
+    messages = [{"role": "developer", "content": "Answer in one word."}, {"role": "user", "content": parts}]
+    assert create(openai_client, messages=messages).choices[0].message.content == "Cat."
+    record = fake.calls()[0]
+    assert (record["systemShape"], record["messageCount"], record["promptSample"]) == ("blocks", 2, "Answer in one word.\nWhat is in this picture?\n")
+
+
 def test_max_tokens(fake, openai_client):
     fake.load([{"text": "The summary stops in the mid", "stopReason": "max_tokens"}])
     assert create(openai_client).choices[0].finish_reason == "length"

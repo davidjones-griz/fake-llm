@@ -12,25 +12,33 @@ import kotlinx.serialization.json.put
 
 private val openAiLenientJson = Json { ignoreUnknownKeys = true }
 
+/** The message roles that carry a system prompt: `developer` replaces `system` for newer models. */
+private val OPENAI_SYSTEM_ROLES = setOf("system", "developer")
+
 internal fun parseOpenAiRequest(body: String): ParsedRequest {
     val obj = openAiLenientJson.parseToJsonElement(body).jsonObject
     val model = (obj["model"] as? JsonPrimitive)?.content ?: ""
     val messages = obj["messages"] as? JsonArray ?: error("request has no messages array")
     val systemShape =
-        if (messages.any {
-                ((it as? JsonObject)?.get("role") as? JsonPrimitive)?.content == "system"
-            }
-        ) {
-            "blocks"
-        } else {
-            "absent"
-        }
+        if (messages.any { (it as? JsonObject)?.stringField("role") in OPENAI_SYSTEM_ROLES }) "blocks" else "absent"
     val text =
         buildString {
             messages.forEach { m ->
-                // Only string content is text: an assistant tool-call message sends "content": null.
-                val content = (m as? JsonObject)?.get("content") as? JsonPrimitive
-                if (content != null && content.isString) append(content.content).append('\n')
+                // String content, or the string `text` of each content part. Anything else, such as
+                // an assistant tool-call message's "content": null, adds nothing.
+                when (val content = (m as? JsonObject)?.get("content")) {
+                    is JsonPrimitive -> {
+                        if (content.isString) append(content.content).append('\n')
+                    }
+
+                    is JsonArray -> {
+                        content.filterIsInstance<JsonObject>().forEach { part ->
+                            part.stringField("text")?.let { append(it).append('\n') }
+                        }
+                    }
+
+                    else -> {}
+                }
             }
         }
     val stream = (obj["stream"] as? JsonPrimitive)?.content?.toBoolean() ?: false

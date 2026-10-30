@@ -1,0 +1,97 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-prompt-content-parts",
+  "description": "Message content given as an array of parts adds each part's string text to the prompt, in order; other parts add nothing. A developer message counts as a system prompt.",
+  "scenario": {
+    "name": "openai-prompt-content-parts",
+    "steps": [
+      {
+        "text": "Noted."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "developer",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Answer in one word."
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "What is in this picture?"
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {
+                    "url": "https://example.com/cat.png"
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "Be brief."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "$type": "object"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "openai",
+            "model": "example-gpt",
+            "systemShape": "blocks",
+            "messageCount": 2,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Answer in one word.\nWhat is in this picture?\nBe brief.\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
+          }
+        ]
+      }
+    }
+  ]
+}
