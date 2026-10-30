@@ -10,7 +10,7 @@ I got tired of my CI pipeline failing over trivial bugs that should have been ca
 
 The code that calls an LLM is deterministic; the model is the only part you cannot predict. A scenario takes that part away: it is an ordered list of steps, and call N gets step N, locally and with no model call. That includes the failure paths: a scripted error status, a cutoff in the middle of a stream, `max_tokens` truncation, malformed output, a tool call with valid or malformed arguments, and a failure followed by a successful retry.
 
-A call the scenario has no step for fails: a call after the last step returns HTTP 400 (`no more steps`), and so does a call with no scenario loaded, unless the server runs with `--lenient` or `FAKE_LLM_LENIENT=true`, which answers that case with a canned reply.
+A call the scenario has no step for fails: a call after the last step returns HTTP 400 (`no-more-steps`), and so does a call with no scenario loaded, unless the server runs with `--lenient` or `FAKE_LLM_LENIENT=true`, which answers that case with a canned reply.
 
 ## Quickstart
 
@@ -44,7 +44,7 @@ message = client.messages.create(
 print(message.content[0].text)  # the scenario's one step
 ```
 
-`curl -s http://localhost:8080/control/calls` then lists that call: its vendor route, model, prompt and the step that answered it. `hello` has one step, so a second call gets HTTP 400 (`no more steps`) until `POST /control/reset` starts the scenario over.
+`curl -s http://localhost:8080/control/calls` then lists that call: its vendor route, model, prompt and the step that answered it. `hello` has one step, so a second call gets HTTP 400 (`no-more-steps`) until `POST /control/reset` starts the scenario over.
 
 The SDKs' base URLs:
 
@@ -186,7 +186,7 @@ Call N, on any generation route, gets step N. The last step does not repeat: a c
 | `GET /openapi` | The OpenAPI document for this version. |
 | `/control/…` | Load, reset and unload scenarios; read the call and exchange logs. |
 
-Every generation reply names the request's model. Anything else is HTTP 404. [Endpoints](docs/endpoints.md) describes each vendor route's bodies and streams, and [Control API](docs/control-api.md) the `/health`, `/openapi` and `/control/` routes and the control token. The OpenAPI document, [openapi/fake-llm.yaml](openapi/fake-llm.yaml), is the contract.
+Every generation reply names the request's model. Anything else is HTTP 404. A request fake-llm can't serve gets a 400 whose `fake_llm_error` is a stable code, such as `no-more-steps` or `invalid-request`, with a `message` saying why; [Endpoints](docs/endpoints.md#fake-llms-400-responses) lists the codes. [Endpoints](docs/endpoints.md) describes each vendor route's bodies and streams, and [Control API](docs/control-api.md) the `/health`, `/openapi` and `/control/` routes and the control token. The OpenAPI document, [openapi/fake-llm.yaml](openapi/fake-llm.yaml), is the contract.
 
 ## Configuration
 

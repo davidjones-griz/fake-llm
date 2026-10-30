@@ -10,13 +10,34 @@ Anything that matches none of the routes below is HTTP 404:
 {"fake_llm_error":"no route: GET /nope"}
 ```
 
-A handler that throws, including a body that is not valid JSON, is HTTP 400:
+A request fake-llm can't serve gets one of [fake-llm's 400 responses](#fake-llms-400-responses), described below.
+
+## fake-llm's 400 responses
+
+Every 400 fake-llm sends itself has the same structure: a stable error code and a message.
 
 ```json
-{"fake_llm_error":"exception","detail":"..."}
+{"fake_llm_error":"invalid-request","message":"request has no messages array"}
 ```
 
-A call after the scenario's last step, or a call with no scenario loaded in strict mode, is also HTTP 400. Its `fake_llm_error` value is `no more steps` or `no scenario loaded`, not `exception`. The fields are described in the [scenario reference](scenarios.md#scenario-files).
+| Field | Meaning |
+| --- | --- |
+| `fake_llm_error` | The error code, from the table below. It is part of the contract, so a test can assert on it. A body that has it is fake-llm's own 400, not a step's scripted error. |
+| `message` | Why the request failed, for a person to read. It is a diagnostic, not part of the contract, and its wording can change. |
+| other fields | `no-more-steps` and `no-scenario` also carry the call's fields; see [Scenario files](scenarios.md#scenario-files). |
+
+| Code | When | A call? |
+| --- | --- | --- |
+| `no-more-steps` | A call after the loaded scenario's last step, in strict and lenient mode. The body also has `scenario`, `steps`, `seq`, `vendor`, `model`, `system_shape`, `message_count` and `prompt_preview`. | Yes |
+| `no-scenario` | A call with no scenario loaded, in strict mode (lenient mode serves the canned reply). The body has the same call fields as `no-more-steps`, without `scenario` and `steps`. | Yes |
+| `invalid-json` | The request body is not JSON, or not a JSON object, on any route that reads a body. | No |
+| `invalid-request` | Valid JSON the route rejects: no `messages` or `contents` array, an invalid `cache_control`, a Gemini `streamGenerateContent` request without `alt=sse`, an embeddings request outside the rules, a count_tokens body the Messages route rejects, or a `POST /control/scenario` body that has an unknown field, lacks exactly one of `name` and `scenario`, or has a `name` that is not a non-blank string or a `scenario` that is not an object. | No |
+| `unsupported-step` | The next step has a tool call with `rawArguments` that the request's format can't carry: a buffered Anthropic request, or a Gemini request. The step stays next. | No |
+| `unknown-scenario` | A load by name found no such scenario. | No |
+| `invalid-scenario` | A scenario failed to load: an illegal name, a scenario that doesn't decode or validate, or a file whose declared name differs from its file name. | No |
+| `exception` | Any other failure. | No |
+
+A request that gets a 400 and is not a call takes no step and no call-log or exchange-log entry. A streamed request that gets a 400 gets it as JSON, with no SSE bytes. Other errors (the 401 for the control token, the 404 above and the Batches 501) still carry only a message in `fake_llm_error`.
 
 ## Requests that are not calls
 
@@ -26,7 +47,7 @@ A call after the scenario's last step, or a call with no scenario loaded in stri
 
 - **Not calls.** They answer from the request alone: no step, no call-log or exchange-log entry, no `firstByteDelayMs`, and the same answer with or without a scenario and in strict or lenient mode. Adding embedding requests to an app does not renumber its scenario.
 - **The vector.** Component i comes from SHA-256 of the UTF-8 text plus the block number `i / 8` (4 bytes, big-endian): the signed big-endian 32-bit integer at offset `(i % 8) * 4`, over 2^31. The vector is then divided by its length, so it has unit length, and stored as float32. The same text and size give the same vector on every run and platform, on both vendors; different texts give unrelated vectors. There is no semantic similarity.
-- **Size.** `dimensions` (OpenAI) or `outputDimensionality` (Gemini, per request), an integer from 1 to 8192, 1536 by default. Anything else, such as `0`, `"8"` or `8.0`, gets the `exception` 400.
+- **Size.** `dimensions` (OpenAI) or `outputDimensionality` (Gemini, per request), an integer from 1 to 8192, 1536 by default. Anything else, such as `0`, `"8"` or `8.0`, gets the `invalid-request` 400.
 - **OpenAI.** `input` is a string, an array of strings, one token array or an array of token arrays; a token array is hashed as its JSON text (`[1,2,3]`). An empty string, an empty array or a mixed array gets the 400. `encoding_format` is `float` (the default) or `base64` (little-endian float32, which the `openai` SDK asks for and decodes when you don't set it). Each JSON number is the shortest decimal that reads back as the float32's exact value, such as `0.10000000149011612` for the float32 nearest 0.1, so both forms give the same values. `model` is echoed, and `usage` is an estimate: a quarter of each string's code points, rounded up (at least 1), or a token array's length.
 - **Gemini.** The text is the content's parts' `text` joined with a newline. `taskType`, `title`, `role` and the models in the path and the requests are ignored.
 - **Limits.** At most 2048 inputs per OpenAI request (OpenAI's own limit), and at most 3,145,728 values (2048 × 1536) in one response on any route, each input's size counted. Both are checked before any vector is built; over either is the 400.
@@ -55,7 +76,7 @@ A call the scenario has no step for is HTTP 400 with the JSON body described in 
 
 ### `POST /anthropic/v1/messages/count_tokens`
 
-`{"input_tokens":100}` for any body the Messages route accepts; the `exception` 400 for one it rejects. Not a call; see [Token counting and model lists](#token-counting-and-model-lists).
+`{"input_tokens":100}` for any body the Messages route accepts; the `invalid-request` 400 for one it rejects. Not a call; see [Token counting and model lists](#token-counting-and-model-lists).
 
 ### `GET /anthropic/v1/messages/batches`
 
@@ -140,7 +161,7 @@ One JSON `generateContent` body: one candidate whose parts are the text part, wh
 
 ### `POST /gemini/{version}/models/{model}:streamGenerateContent`
 
-The same reply as a server-sent event stream, served only with `alt=sse` in the query string, which the `google-genai` SDK always sends. Without `alt=sse` the request gets the `exception` 400 and is not a call: it takes no number, and the step stays next. The JSON-array form the real API sends without `alt=sse` is not served.
+The same reply as a server-sent event stream, served only with `alt=sse` in the query string, which the `google-genai` SDK always sends. Without `alt=sse` the request gets the `invalid-request` 400, whatever its body (the query is checked before the body is read), and is not a call: it takes no number, and the step stays next. The JSON-array form the real API sends without `alt=sse` is not served.
 
 The response is `text/event-stream` of data-only frames (`data: <payload>`, no `event:` line), with no `[DONE]`. Each frame is one `GenerateContentResponse` whose candidate has exactly one part: first one text part per `streamChunkChars` code points of the text (each after `streamInterChunkDelayMs`), then each tool call as a whole `functionCall` part, as in the buffered body. Only the last chunk carries `finishReason` and `usageMetadata`; every chunk carries `modelVersion` and `fake_llm_seq`. A step with no text and no tool calls is one last chunk with an empty text part. An error step with `streamErrorAfterChunks` set sends the filler chunks, then the error body as a data frame (a generic `INTERNAL` body when `body` is blank), with no chunk carrying `finishReason`. A call the scenario has no step for, and an error step that leaves `streamErrorAfterChunks` unset, get the JSON response, with no SSE bytes.
 

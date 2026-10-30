@@ -127,7 +127,7 @@ Turns every skip into a failure. CI sets it: with a command target, nothing shou
   passes for `application/json`). Headers a case does not list are ignored.
 - **Matchers**: `{ "$type": "integer" }`, `{ "$type": "string" }` and `{ "$type": "object" }`,
   which accept any value of that type. Cases use them only for values that vary (`timestampMs`)
-  and for the messages the spec says are diagnostics, not contract (`detail`, and the
+  and for the messages the spec says are diagnostics, not contract (a 400's `message`, and the
   `fake_llm_error` text of a 401, 404 or 501). Cases use `object` only for the request headers in
   `GET /control/exchanges` entries, which depend on the client.
 - **Timeouts:** each response, body included, must arrive within 10 seconds, so a stream that
@@ -224,7 +224,7 @@ scripts one of those scripts one step per attempt, and gives each retryable erro
 `retry-after-ms: 10` header so the run stays fast. `google-genai` does not retry by default, and
 `test_default_client_does_not_retry` pins that down; its retry tests use a client set to 3
 attempts. A "retries exhausted" test scripts exactly 3 errors, so an extra retry gets the
-`no more steps` 400 and fails the test.
+`no-more-steps` 400 and fails the test.
 
 **Bumping a pin.** Edit nothing by hand. From `conformance/sdk/python/`, with Python 3.13 and
 pip-tools 7.6.2, rerun

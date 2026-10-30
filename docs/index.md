@@ -4,7 +4,7 @@ fake-llm is a local HTTP server that answers the Anthropic Messages, OpenAI Chat
 
 The code that calls a model is deterministic; the model is the only part a test cannot predict. A scenario takes that part away. Call N gets step N, locally and with no model call, including the failure paths: an error status, a cutoff in the middle of a stream, `max_tokens` truncation, malformed output, a tool call with valid or malformed arguments, and a failure followed by a successful retry. The server records every call, so a test can check what the app sent as well as what it did with the reply.
 
-A call the scenario has no step for fails: a call after the last step returns HTTP 400 (`no more steps`), and so does a call with no scenario loaded, unless the server runs in lenient mode.
+A call the scenario has no step for fails: a call after the last step returns HTTP 400 (`no-more-steps`), and so does a call with no scenario loaded, unless the server runs in lenient mode.
 
 ## Where to go next
 
