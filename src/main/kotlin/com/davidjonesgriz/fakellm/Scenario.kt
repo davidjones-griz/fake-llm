@@ -111,6 +111,12 @@ public data class Step(
      * tokens. Only on a reply step. Totals are the sum. The Anthropic cache figures do not change.
      */
     val usage: TokenUsage? = null,
+    /**
+     * The stop sequence that ended the reply, sent as Anthropic's `stop_sequence`. Only with
+     * [stopReason] `"stop_sequence"`; null (the default) sends `stop_sequence: null`. Other formats
+     * have no such field and ignore it.
+     */
+    val stopSequence: String? = null,
 ) {
     init {
         require(((text != null) || (toolCalls != null)) xor (error != null)) {
@@ -139,6 +145,10 @@ public data class Step(
         require(usage == null || text != null || toolCalls != null) {
             "usage is only valid on a step with text or toolCalls"
         }
+        require(stopSequence == null || stopReason == "stop_sequence") {
+            "stopSequence requires stopReason stop_sequence, got '$stopReason'"
+        }
+        require(stopSequence == null || stopSequence.isNotEmpty()) { "stopSequence must not be empty" }
     }
 }
 

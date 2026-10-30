@@ -12,6 +12,8 @@ change the public API.
 - `POST /anthropic/v1/messages/count_tokens` (always `input_tokens` 100) and the model list and
   lookup routes for Anthropic, OpenAI and Gemini (one model, `fake-llm`; a lookup echoes the id).
   They are not calls: they take no step and are not logged.
+- `stopSequence` on a step: the stop sequence Anthropic reports in `stop_sequence` (buffered and
+  in `message_delta`), with `stopReason` `stop_sequence`.
 - The image declares a `HEALTHCHECK` on `GET /health`, so `docker ps`, Compose and service
   containers see `healthy` once the server listens. It follows `PORT`; a server started with
   `--port` needs its own check.
@@ -60,6 +62,9 @@ change the public API.
 
 ### Changed
 
+- The buffered Anthropic message now includes `stop_sequence` (null unless the step sets
+  `stopSequence`), as the Messages API and fake-llm's own stream do. `Step` gains a trailing
+  constructor parameter, `stopSequence`.
 - OpenAI Responses: a step's `thinking` is sent as a `reasoning` output item (`rs_fake_<seq>`,
   one `summary_text` part) before the message, and streamed as reasoning summary events. It was
   ignored before; steps without `thinking` are unchanged.

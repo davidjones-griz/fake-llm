@@ -1319,6 +1319,16 @@ components:
             properties:
               error:
                 type: object
+        - if:
+            required: [stopSequence]
+            properties:
+              stopSequence:
+                type: string
+          then:
+            required: [stopReason]
+            properties:
+              stopReason:
+                const: stop_sequence
       properties:
         text:
           type: [string, "null"]
@@ -1336,6 +1346,7 @@ components:
             `toolCalls` it must be `end_turn` or `tool_use`, and every format with a stop reason
             reports a tool-call stop; an OpenAI Responses reply with tool calls is `completed`.
             `max_tokens` is an `incomplete` OpenAI Responses reply (`max_output_tokens`).
+            `stop_sequence` reports a matched stop sequence; set `stopSequence` to say which.
         error:
           oneOf:
             - $ref: "#/components/schemas/ErrorStep"
@@ -1387,6 +1398,13 @@ components:
             The token counts this reply reports. Only on a reply step. Unset counts keep the
             defaults (100 input, 50 output); totals are the sum; the Anthropic cache figures don't
             change.
+        stopSequence:
+          type: [string, "null"]
+          minLength: 1
+          description: >-
+            The stop sequence that ended the reply, sent as Anthropic's `stop_sequence` (buffered,
+            and in the stream's `message_delta`). Only with `stopReason` `stop_sequence`. Other
+            formats ignore it.
     ToolCall:
       type: object
       description: One scripted tool call.

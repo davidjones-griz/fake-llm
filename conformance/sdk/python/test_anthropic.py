@@ -45,13 +45,32 @@ def test_text(fake, anthropic_client):
     message = create(anthropic_client)
     assert (message.id, message.type, message.role, message.model) == ("fake-msg-1", "message", "assistant", "example-model")
     assert [(block.type, block.text) for block in message.content] == [("text", "Billing questions go to the billing team.")]
-    assert message.stop_reason == "end_turn"
+    assert (message.stop_reason, message.stop_sequence) == ("end_turn", None)
     usage = message.usage
     assert (usage.input_tokens, usage.output_tokens) == (100, 50)
     assert (usage.cache_creation_input_tokens, usage.cache_read_input_tokens) == (0, 0)
     assert fake.log() == [call(1, "text", 1)]
     record = fake.calls()[0]
     assert (record["messageCount"], record["promptSample"]) == (1, "Hello\n")
+
+
+def test_stop_sequence_null_in_body(fake, anthropic_client):
+    # The SDK reads a missing stop_sequence as None too, so check the body itself.
+    fake.load([{"text": "Billing."}])
+    raw = anthropic_client.messages.with_raw_response.create(model="example-model", max_tokens=256, messages=MESSAGES)
+    body = json.loads(raw.text())
+    assert list(body)[list(body).index("stop_reason") + 1] == "stop_sequence" and body["stop_sequence"] is None
+
+
+def test_stop_sequence(fake, anthropic_client):
+    step = {"text": "42", "stopReason": "stop_sequence", "stopSequence": "</answer>"}
+    fake.load([step, step])
+    message = create(anthropic_client)
+    assert (message.stop_reason, message.stop_sequence, message.content[0].text) == ("stop_sequence", "</answer>", "42")
+    with anthropic_client.messages.stream(model="example-model", max_tokens=256, messages=MESSAGES) as s:
+        final = s.get_final_message()
+    assert (final.stop_reason, final.stop_sequence) == ("stop_sequence", "</answer>")
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]
 
 
 def test_max_tokens(fake, anthropic_client):

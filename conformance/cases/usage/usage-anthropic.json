@@ -50,6 +50,7 @@
             }
           ],
           "stop_reason": "end_turn",
+          "stop_sequence": null,
           "usage": {
             "input_tokens": 1200,
             "output_tokens": 340,

@@ -1,0 +1,93 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "anthropic-stop-sequence",
+  "description": "A step's stopSequence is the buffered message's stop_sequence, after stop_reason stop_sequence. The text is sent as written.",
+  "scenario": {
+    "name": "anthropic-stop-sequence",
+    "steps": [
+      {
+        "text": "42",
+        "stopReason": "stop_sequence",
+        "stopSequence": "</answer>"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 256,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "42"
+            }
+          ],
+          "stop_reason": "stop_sequence",
+          "stop_sequence": "</answer>",
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
+          }
+        ]
+      }
+    }
+  ]
+}

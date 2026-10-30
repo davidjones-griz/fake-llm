@@ -1,6 +1,7 @@
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -248,10 +249,51 @@ class WireTest {
                 """{"type":"thinking","thinking":"Look.","signature":"fake-thinking-signature"},""" +
                 """{"type":"text","text":"Checking."},""" +
                 """{"type":"tool_use","id":"toolu_fake_1_1","name":"get_weather","input":{"city":"Paris"}},""" +
-                """{"type":"tool_use","id":"toolu_custom","name":"get_time","input":{}}],"stop_reason":"tool_use",""" +
+                """{"type":"tool_use","id":"toolu_custom","name":"get_time","input":{}}],"stop_reason":"tool_use","stop_sequence":null,""" +
                 """"usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}""",
             vendorEnvelope("anthropic", step, seq = 1, model = "example-model", cacheable = false),
         )
+    }
+
+    @Test
+    fun `anthropic envelope sends the step's stopSequence after stop_reason`() {
+        val step = Step(text = "42", stopReason = "stop_sequence", stopSequence = "</answer>")
+        assertEquals(
+            """{"id":"fake-msg-3","type":"message","role":"assistant","model":"example-model",""" +
+                """"content":[{"type":"text","text":"42"}],"stop_reason":"stop_sequence","stop_sequence":"</answer>",""" +
+                """"usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}""",
+            vendorEnvelope("anthropic", step, seq = 3, model = "example-model", cacheable = false),
+        )
+    }
+
+    @Test
+    fun `a streamed anthropic message_delta carries the step's stopSequence, and message_start stays null`() {
+        val step = Step(text = "42", stopReason = "stop_sequence", stopSequence = "</answer>")
+        withServer(ScenarioEngine().also { it.loadInline(Scenario(name = "s", steps = listOf(step))) }) { client, _ ->
+            val frames = namedFrames(client.post("/anthropic/v1/messages", anthropicBody("hi", stream = true)).body())
+            val start = Json.parseToJsonElement(frames.first { it.first == "message_start" }.second).jsonObject
+            assertEquals(JsonNull, start.getValue("message").jsonObject.getValue("stop_sequence"))
+            assertEquals(
+                """{"type":"message_delta","delta":{"stop_reason":"stop_sequence","stop_sequence":"</answer>"},""" +
+                    """"usage":{"output_tokens":50}}""",
+                frames.single { it.first == "message_delta" }.second,
+            )
+        }
+    }
+
+    @Test
+    fun `stopSequence needs stopReason stop_sequence and must not be empty`() {
+        Step(text = "t", stopReason = "stop_sequence")
+        Step(text = "t", stopReason = "stop_sequence", stopSequence = "END")
+        assertEquals(
+            "stopSequence requires stopReason stop_sequence, got 'end_turn'",
+            assertFailsWith<IllegalArgumentException> { Step(text = "t", stopSequence = "END") }.message,
+        )
+        assertEquals(
+            "stopSequence must not be empty",
+            assertFailsWith<IllegalArgumentException> { Step(text = "t", stopReason = "stop_sequence", stopSequence = "") }.message,
+        )
+        assertFailsWith<IllegalArgumentException> { Step(toolCalls = listOf(ToolCall(name = "f")), stopSequence = "END") }
     }
 
     @Test
