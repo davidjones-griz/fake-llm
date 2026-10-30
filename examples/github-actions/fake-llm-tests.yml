@@ -20,7 +20,7 @@ jobs:
       fake-llm:
         # A release tag, not latest, so a new release can't change your tests' results unannounced.
         # POST /control/unload, used between tests, needs 0.5.0 or later.
-        image: ghcr.io/davidjones-griz/fake-llm:0.5.0
+        image: ghcr.io/davidjones-griz/fake-llm:0.6.0
         ports:
           - 8080:8080
         # A service takes no command-line arguments, so fake-llm is configured by environment.
@@ -30,7 +30,7 @@ jobs:
           # Optional. When set, every /control/ request must send it as a bearer token.
           FAKE_LLM_CONTROL_TOKEN: fake-llm-ci-token
         # The runner starts the steps once this check passes. curl is in the image.
-        # Images from 0.6.0 declare this check themselves; it stays here for 0.5.0.
+        # Images from 0.6.0 declare this check themselves; it stays here so the recipe also works with 0.5.0.
         options: >-
           --health-cmd "curl -fsS http://127.0.0.1:8080/health"
           --health-interval 2s

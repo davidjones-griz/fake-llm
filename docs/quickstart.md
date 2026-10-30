@@ -11,7 +11,7 @@ You need Docker and curl. The image is on GHCR, for linux/amd64 and linux/arm64.
 Apart from the container ID that `docker run -d` prints and the name `docker stop` prints, each step prints one line. `/health` reports that the server is up with no scenario loaded:
 
 ```json
-{"status":"ok","scenario":null,"lenient":false,"steps":null,"unusedSteps":[],"version":"0.5.0"}
+{"status":"ok","scenario":null,"lenient":false,"steps":null,"unusedSteps":[],"version":"0.6.0"}
 ```
 
 Loading `hello` reports its name and step count:
@@ -37,7 +37,7 @@ The call log has one entry: which route was called, with which model, what the a
 To keep the server in the foreground and load a scenario at startup instead:
 
 ```bash
-docker run --rm -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario hello
+docker run --rm -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.6.0 --scenario hello
 ```
 
 ## From a checkout

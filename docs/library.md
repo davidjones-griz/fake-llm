@@ -1,6 +1,6 @@
 # Use as a library
 
-Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `com.davidjonesgriz:fake-llm:0.5.0`. Classes are in the `com.davidjonesgriz.fakellm` package. To build from a checkout instead, publish it to your local Maven repository:
+Kotlin and Java tests can start the server in the same JVM instead of running a separate process. The coordinates are `com.davidjonesgriz:fake-llm:0.6.0`. Classes are in the `com.davidjonesgriz.fakellm` package. To build from a checkout instead, publish it to your local Maven repository:
 
 ```bash
 ./gradlew publishToMavenLocal
@@ -8,7 +8,7 @@ Kotlin and Java tests can start the server in the same JVM instead of running a 
 
 ```kotlin
 repositories { mavenLocal() }
-dependencies { testImplementation("com.davidjonesgriz:fake-llm:0.5.0") }
+dependencies { testImplementation("com.davidjonesgriz:fake-llm:0.6.0") }
 ```
 
 or include it as a composite build. Gradle then substitutes the dependency with the checkout's source, with no publishing step. The included build runs on your project's Gradle, which must be 9.2 or newer (and so run on JDK 17 or newer); it compiles with a JDK 21 toolchain, and your tests must run on Java 21 or newer:
@@ -86,7 +86,7 @@ The client ignores response fields it does not know, so a server that has gained
 
 ## JUnit Jupiter extension
 
-`com.davidjonesgriz:fake-llm-junit-jupiter:0.5.0` runs an in-process server for each test class, so a test needs no setup or teardown of its own. Its classes are in the `com.davidjonesgriz.fakellm.junit` package, and it brings `fake-llm` with it. It works with JUnit Jupiter 5.10.5 or newer, including 6.x. Your project supplies JUnit; the extension does not add it. Kotlin's `kotlin("test")` brings JUnit 5.10.1 on its own, so a Kotlin project should also add a newer BOM, such as `testImplementation(platform("org.junit:junit-bom:5.14.4"))`.
+`com.davidjonesgriz:fake-llm-junit-jupiter:0.6.0` runs an in-process server for each test class, so a test needs no setup or teardown of its own. Its classes are in the `com.davidjonesgriz.fakellm.junit` package, and it brings `fake-llm` with it. It works with JUnit Jupiter 5.10.5 or newer, including 6.x. Your project supplies JUnit; the extension does not add it. Kotlin's `kotlin("test")` brings JUnit 5.10.1 on its own, so a Kotlin project should also add a newer BOM, such as `testImplementation(platform("org.junit:junit-bom:5.14.4"))`.
 
 ```kotlin
 @FakeLlmTest
@@ -136,7 +136,7 @@ The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6
 
 ## Testcontainers
 
-`com.davidjonesgriz:fake-llm-testcontainers:0.5.0` runs fake-llm's Docker image with [Testcontainers](https://java.testcontainers.org/), for tests that want the server in its own container, as they run a database or a message broker. `FakeLlmContainer` is a `GenericContainer`, in the `com.davidjonesgriz.fakellm.testcontainers` package. It brings `fake-llm` (for `FakeLlmClient`) and Testcontainers 2 with it, and needs Docker, or another runtime Testcontainers supports, where the tests run. With Testcontainers' JUnit Jupiter extension, `org.testcontainers:testcontainers-junit-jupiter`:
+`com.davidjonesgriz:fake-llm-testcontainers:0.6.0` runs fake-llm's Docker image with [Testcontainers](https://java.testcontainers.org/), for tests that want the server in its own container, as they run a database or a message broker. `FakeLlmContainer` is a `GenericContainer`, in the `com.davidjonesgriz.fakellm.testcontainers` package. It brings `fake-llm` (for `FakeLlmClient`) and Testcontainers 2 with it, and needs Docker, or another runtime Testcontainers supports, where the tests run. With Testcontainers' JUnit Jupiter extension, `org.testcontainers:testcontainers-junit-jupiter`:
 
 ```java
 @Testcontainers

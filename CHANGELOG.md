@@ -7,6 +7,8 @@ change the public API.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-30
+
 ### Added
 
 - A documentation site, <https://davidjones-griz.github.io/fake-llm/>: a quickstart with the

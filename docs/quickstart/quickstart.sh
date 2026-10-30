@@ -1,5 +1,5 @@
 # Start the released image in the background. Arguments after the image name go to fake-llm.
-docker run --rm -d --name fake-llm -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.5.0
+docker run --rm -d --name fake-llm -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.6.0
 
 # Wait until it answers, then check it is up and has no scenario loaded.
 curl -s --retry 30 --retry-delay 1 --retry-all-errors http://localhost:8080/health

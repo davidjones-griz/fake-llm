@@ -17,7 +17,7 @@ A call the scenario has no step for fails: a call after the last step returns HT
 Start the image with the bundled scenario `hello`. Arguments after the image name are passed to fake-llm:
 
 ```bash
-docker run --rm -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario hello
+docker run --rm -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.6.0 --scenario hello
 ```
 
 Check that it is up:
@@ -27,7 +27,7 @@ curl -s http://localhost:8080/health
 ```
 
 ```json
-{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.5.0"}
+{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.6.0"}
 ```
 
 Point an SDK at the server; the server does not check API keys:
@@ -61,7 +61,7 @@ The [Quickstart](docs/quickstart.md) page has the full walk-through, with the re
 The image is on GHCR, for linux/amd64 and linux/arm64:
 
 ```bash
-docker run -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario hello
+docker run -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.6.0 --scenario hello
 ```
 
 From 0.6.0 the image reports `healthy` once `GET /health` answers. Set the port with `-e PORT=<n>`, not `--port`, or the health check probes 8080. Compose can wait for it with `depends_on: {fake-llm: {condition: service_healthy}}`.
@@ -73,11 +73,11 @@ The libraries are on Maven Central. With Gradle:
 ```kotlin
 repositories { mavenCentral() }
 dependencies {
-    testImplementation("com.davidjonesgriz:fake-llm:0.5.0")
+    testImplementation("com.davidjonesgriz:fake-llm:0.6.0")
     // Optional: the JUnit Jupiter extension.
-    testImplementation("com.davidjonesgriz:fake-llm-junit-jupiter:0.5.0")
+    testImplementation("com.davidjonesgriz:fake-llm-junit-jupiter:0.6.0")
     // Optional: the Testcontainers container.
-    testImplementation("com.davidjonesgriz:fake-llm-testcontainers:0.5.0")
+    testImplementation("com.davidjonesgriz:fake-llm-testcontainers:0.6.0")
 }
 ```
 
@@ -87,21 +87,21 @@ With Maven:
 <dependency>
   <groupId>com.davidjonesgriz</groupId>
   <artifactId>fake-llm</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
   <scope>test</scope>
 </dependency>
 <!-- Optional: the JUnit Jupiter extension. -->
 <dependency>
   <groupId>com.davidjonesgriz</groupId>
   <artifactId>fake-llm-junit-jupiter</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
   <scope>test</scope>
 </dependency>
 <!-- Optional: the Testcontainers container. -->
 <dependency>
   <groupId>com.davidjonesgriz</groupId>
   <artifactId>fake-llm-testcontainers</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
   <scope>test</scope>
 </dependency>
 ```
@@ -203,7 +203,7 @@ The process binds the IPv6 wildcard `::` when the host can, and otherwise the IP
 | `--no-call-log` | `FAKE_LLM_CALL_LOG` | on (`true`) | One line per call on stdout: seq, vendor route, model, outcome and step, such as `fake-llm: call 2 openai model="example-gpt" outcome=error:429 step=2`. Prompts, arguments, headers and bodies are not printed. The flag takes no value and turns it off. The environment variable accepts `true` or `false`, case-insensitively. |
 | none | `FAKE_LLM_CONTROL_TOKEN` | unset, control routes open | Bearer token for `/control/*`. A JVM system property of the same name is the fallback when the environment variable is absent. |
 
-`fake-llm --version` (or `docker run --rm ghcr.io/davidjones-griz/fake-llm:0.5.0 --version`) prints `fake-llm <version>` and exits 0. It works only as the sole argument: after server flags, `--version` is an unknown flag.
+`fake-llm --version` (or `docker run --rm ghcr.io/davidjones-griz/fake-llm:0.6.0 --version`) prints `fake-llm <version>` and exits 0. It works only as the sole argument: after server flags, `--version` is an unknown flag.
 
 ## Limits
 

@@ -11,7 +11,7 @@ The service:
 ```yaml
 services:
   fake-llm:
-    image: ghcr.io/davidjones-griz/fake-llm:0.5.0
+    image: ghcr.io/davidjones-griz/fake-llm:0.6.0
     ports:
       - 8080:8080
     env:
@@ -24,7 +24,7 @@ services:
       --health-retries 30
 ```
 
-- **Pin a release tag**, such as `0.5.0`, not `latest` or `0.5`. Those two tags move with each release, so a new release could change your tests' results with no change in your repository. The recipe needs 0.5.0 or later, for `POST /control/unload`.
+- **Pin a release tag**, such as `0.6.0`, not `latest` or `0.6`. Those two tags move with each release, so a new release could change your tests' results with no change in your repository. The recipe needs 0.5.0 or later, for `POST /control/unload`.
 - **Configure it with environment variables.** A service container takes no command-line arguments, so use the variables under [Configuration](https://github.com/davidjones-griz/fake-llm#configuration): `FAKE_LLM_SCENARIO` (a scenario loaded at startup), `FAKE_LLM_SCENARIO_DIR`, `FAKE_LLM_LENIENT` and `FAKE_LLM_CONTROL_TOKEN`. Keep the container's port at 8080, and choose the runner's port in `ports`.
 - **The health check** runs inside the container, so it needs a program in the image. The image has `curl`, from its eclipse-temurin base. `GET /health` needs no token. The runner starts the job's steps once the check passes, and fails the job if it never does. Without a health check, the steps can start before the server listens. From 0.6.0 the image declares its own health check on `GET /health` (every 5 s; failures in the first 30 s don't count), so a service container waits for it with no `options`. The recipe keeps its `--health-cmd` so that it also works with 0.5.0. A service's `--health-cmd` replaces the image's command, and any timing flag it leaves unset comes from the image.
 - **The control token is optional.** When it is set, every `/control/` request must send `Authorization: Bearer <token>`. The ports of a GitHub-hosted runner are not reachable from outside the job, so the token can be written in the workflow.
@@ -87,7 +87,7 @@ Where the CI system can run `docker`, start the image in a step after the checko
 ```bash
 docker run -d --name fake-llm -p 8080:8080 \
   -v "$PWD/tests/scenarios:/scenarios:ro" \
-  ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario-dir /scenarios
+  ghcr.io/davidjones-griz/fake-llm:0.6.0 --scenario-dir /scenarios
 for _ in $(seq 30); do
   curl -fsS http://127.0.0.1:8080/health > /dev/null && break
   sleep 1

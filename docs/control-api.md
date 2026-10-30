@@ -30,7 +30,7 @@ From Kotlin or Java, [`FakeLlmClient`](library.md#control-api-client) makes thes
 Always open, including when a control token is set. Reports liveness, the loaded scenario name or `null` when none is loaded, whether lenient mode is on, the scenario's step count and unused steps, and the server's version.
 
 ```json
-{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.5.0"}
+{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.6.0"}
 ```
 
 The version varies with the release. `steps` is the loaded scenario's step count, and `unusedSteps` lists the steps no call has used since the last load, reset or unload (both `null` / `[]` with no scenario). A test can assert `unusedSteps` is empty to check its app made every scripted call. The JUnit extension makes the same check in process after each test.
