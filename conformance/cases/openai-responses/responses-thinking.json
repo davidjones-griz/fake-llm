@@ -1,0 +1,113 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "responses-thinking",
+  "description": "A step's thinking is a reasoning item, rs_fake_<seq> with one summary_text part, first in output, before the message. reasoning_tokens stays 0.",
+  "scenario": {
+    "name": "responses-thinking",
+    "steps": [
+      {
+        "text": "Billing.",
+        "thinking": "The user asks about an invoice."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "input": "Hello"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "resp_fake_1",
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "model": "example-gpt",
+          "output": [
+            {
+              "id": "rs_fake_1",
+              "type": "reasoning",
+              "summary": [
+                {
+                  "type": "summary_text",
+                  "text": "The user asks about an invoice."
+                }
+              ]
+            },
+            {
+              "id": "msg_fake_1",
+              "type": "message",
+              "status": "completed",
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "Billing.",
+                  "annotations": []
+                }
+              ]
+            }
+          ],
+          "parallel_tool_calls": true,
+          "tool_choice": "auto",
+          "tools": [],
+          "usage": {
+            "input_tokens": 100,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 50,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 150
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "openai-responses",
+            "model": "example-gpt",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Hello\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
+          }
+        ]
+      }
+    }
+  ]
+}

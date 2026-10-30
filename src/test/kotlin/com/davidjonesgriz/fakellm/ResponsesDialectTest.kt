@@ -175,4 +175,39 @@ class ResponsesDialectTest {
             vendorEnvelope(RESPONSES_VENDOR, step, seq = 3, model = "example-gpt"),
         )
     }
+
+    private fun reasoning(
+        text: String,
+        seq: Int = 1,
+    ) = """{"id":"rs_fake_$seq","type":"reasoning","summary":[{"type":"summary_text","text":${JsonPrimitive(text)}}]}"""
+
+    @Test
+    fun `a step with thinking puts the reasoning item first, before the message`() {
+        assertEquals(
+            response("completed", reasoning("The user asks about an invoice.") + "," + message("Billing.")),
+            responsesEnvelope(Step(text = "Billing.", thinking = "The user asks about an invoice."), 1, "example-gpt"),
+        )
+    }
+
+    @Test
+    fun `thinking with tool calls and no text is the reasoning item, then the function_call items`() {
+        val step = Step(thinking = "Need the time.", toolCalls = listOf(ToolCall(name = "get_time")))
+        assertEquals(
+            response(
+                "completed",
+                reasoning("Need the time.", seq = 4) + "," +
+                    """{"id":"fc_fake_4_1","type":"function_call","status":"completed","call_id":"call_fake_4_1","name":"get_time","arguments":"{}"}""",
+                seq = 4,
+            ),
+            vendorEnvelope(RESPONSES_VENDOR, step, seq = 4, model = "example-gpt"),
+        )
+    }
+
+    @Test
+    fun `max_tokens with thinking leaves the reasoning item without a status and the message incomplete`() {
+        assertEquals(
+            response("incomplete", reasoning("Summarising.", seq = 2) + "," + message("cut off", "incomplete", seq = 2), seq = 2),
+            responsesEnvelope(Step(text = "cut off", thinking = "Summarising.", stopReason = "max_tokens"), 2, "example-gpt"),
+        )
+    }
 }
