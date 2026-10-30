@@ -18,8 +18,13 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
-# The SDK conformance suite's JUnit XML reports.
+# The Python SDK conformance suite's JUnit XML reports.
 conformance/sdk/python/reports/
+
+# Node
+node_modules/
+# The Node SDK conformance suite's JUnit XML reports.
+conformance/sdk/node/reports/
 
 # Kotlin 2.x compiler state
 .kotlin/
