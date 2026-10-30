@@ -12,6 +12,9 @@ change the public API.
 - `GET /health` reports the server's `version`, and `FakeLlmHealth.version` reads it (null for an
   older server).
 - `fake-llm --version` prints the version and exits.
+- The CLI and the image print one line per call on stdout
+  (`fake-llm: call 2 openai model="example-gpt" outcome=error:429 step=2`). `--no-call-log` or
+  `FAKE_LLM_CALL_LOG=false` turns it off. The library prints nothing new.
 - `Scenario.fromJson(text)`: decodes a scenario written in the scenario file format, with the
   checks and messages of an inline load, so Java code can build a scenario from a text block.
 - From Java, `FakeLlm.startFakeLlmServer(port, engine)` without the control token argument, which

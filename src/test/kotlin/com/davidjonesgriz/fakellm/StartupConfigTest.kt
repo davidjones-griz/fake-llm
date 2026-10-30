@@ -89,6 +89,8 @@ class StartupConfigTest {
         } else {
             assertEquals(lenientEnv.equals("true", ignoreCase = true), config.lenient)
         }
+        val callLogEnv = System.getenv("FAKE_LLM_CALL_LOG")?.takeIf { it.isNotBlank() }
+        assertEquals(callLogEnv?.equals("false", ignoreCase = true) != true, config.callLog)
     }
 
     @Test
@@ -178,5 +180,22 @@ class StartupConfigTest {
             }
         assertTrue(badEnv.message!!.contains("1"))
         assertTrue(badEnv.message!!.contains("expected true or false"))
+    }
+
+    @Test
+    fun `the call log defaults to on, reads FAKE_LLM_CALL_LOG, and --no-call-log turns it off`() {
+        assertEquals(true, parseStartupConfig(emptyArray(), env = emptyMap()).callLog)
+        assertEquals(false, parseStartupConfig(emptyArray(), env = mapOf("FAKE_LLM_CALL_LOG" to "false")).callLog)
+        assertEquals(false, parseStartupConfig(emptyArray(), env = mapOf("FAKE_LLM_CALL_LOG" to "FALSE")).callLog)
+        assertEquals(true, parseStartupConfig(emptyArray(), env = mapOf("FAKE_LLM_CALL_LOG" to "true")).callLog)
+        assertEquals(true, parseStartupConfig(emptyArray(), env = mapOf("FAKE_LLM_CALL_LOG" to "  ")).callLog)
+        assertEquals(false, parseStartupConfig(arrayOf("--no-call-log"), env = emptyMap()).callLog)
+        assertEquals(false, parseStartupConfig(arrayOf("--no-call-log"), env = mapOf("FAKE_LLM_CALL_LOG" to "true")).callLog)
+    }
+
+    @Test
+    fun `an invalid FAKE_LLM_CALL_LOG is a usage error`() {
+        val e = assertFailsWith<StartupUsageException> { parseStartupConfig(emptyArray(), env = mapOf("FAKE_LLM_CALL_LOG" to "yes")) }
+        assertEquals("fake-llm: invalid FAKE_LLM_CALL_LOG value 'yes' (expected true or false)", e.message!!.lines().first())
     }
 }
