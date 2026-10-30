@@ -279,3 +279,13 @@ def test_embed_content_matches_openai(fake, gemini_client, openai_client):
     (default,) = gemini_client.models.embed_content(model="example-gemini", contents="a").embeddings
     assert len(default.values) == 1536
     assert fake.log() == []
+
+
+def test_models(fake, gemini_client):
+    # A request that took a step would be logged; these take none.
+    fake.load([{"text": "unused"}])
+    assert [m.name for m in gemini_client.models.list()] == ["models/fake-llm"]
+    model = gemini_client.models.get(model="example-gemini")
+    assert (model.name, model.display_name) == ("models/example-gemini", "example-gemini")
+    assert "generateContent" in model.supported_actions
+    assert fake.log() == []

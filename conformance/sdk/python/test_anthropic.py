@@ -310,3 +310,19 @@ def test_scripted_usage(fake, anthropic_client):
         streamed = events.get_final_message()
     assert (message.usage.input_tokens, message.usage.output_tokens) == (1200, 340)
     assert (streamed.usage.input_tokens, streamed.usage.output_tokens) == (1200, 340)
+
+
+def test_count_tokens_not_a_call(fake, anthropic_client):
+    fake.load([{"text": "only"}])
+    assert anthropic_client.messages.count_tokens(model="example-model", messages=MESSAGES).input_tokens == 100
+    assert create(anthropic_client).id == "fake-msg-1"
+    assert fake.log() == [call(1, "text", 1)]
+
+
+def test_models(fake, anthropic_client):
+    # A request that took a step would be logged; these take none.
+    fake.load([{"text": "unused"}])
+    assert [m.id for m in anthropic_client.models.list()] == ["fake-llm"]
+    model = anthropic_client.models.retrieve("example-model")
+    assert (model.id, model.display_name, model.type) == ("example-model", "example-model", "model")
+    assert fake.log() == []

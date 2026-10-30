@@ -1,0 +1,112 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "models-gemini",
+  "description": "GET /gemini/{version}/models lists one model, fake-llm; a lookup echoes the requested model; another method, and a GET on a method path such as :generateContent, are 404. Not calls.",
+  "server": {
+    "fresh": true
+  },
+  "scenario": null,
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/gemini/v1beta/models"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "models": [
+            {
+              "name": "models/fake-llm",
+              "version": "fake-llm",
+              "displayName": "fake-llm",
+              "supportedGenerationMethods": [
+                "generateContent",
+                "streamGenerateContent",
+                "embedContent",
+                "batchEmbedContents"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/gemini/v1beta/models/example-gemini"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "name": "models/example-gemini",
+          "version": "fake-llm",
+          "displayName": "example-gemini",
+          "supportedGenerationMethods": [
+            "generateContent",
+            "streamGenerateContent",
+            "embedContent",
+            "batchEmbedContents"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/gemini/v1beta/models/example-gemini:generateContent"
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}
