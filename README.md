@@ -101,6 +101,8 @@ The image is on GHCR, for linux/amd64 and linux/arm64:
 docker run -p 8080:8080 ghcr.io/davidjones-griz/fake-llm:0.5.0 --scenario hello
 ```
 
+From 0.6.0 the image reports `healthy` once `GET /health` answers. Set the port with `-e PORT=<n>`, not `--port`, or the health check probes 8080. Compose can wait for it with `depends_on: {fake-llm: {condition: service_healthy}}`.
+
 To run it beside an app's tests in CI, see [Run in CI](#run-in-ci). For Python tests, the [pytest plugin](#pytest-plugin) starts it for each test session.
 
 The libraries are on Maven Central. With Gradle:
@@ -346,7 +348,7 @@ services:
 
 - **Pin a release tag**, such as `0.5.0`, not `latest` or `0.5`. Those two tags move with each release, so a new release could change your tests' results with no change in your repository. The recipe needs 0.5.0 or later, for `POST /control/unload`.
 - **Configure it with environment variables.** A service container takes no command-line arguments, so use the variables under [Configuration](#configuration): `FAKE_LLM_SCENARIO` (a scenario loaded at startup), `FAKE_LLM_SCENARIO_DIR`, `FAKE_LLM_LENIENT` and `FAKE_LLM_CONTROL_TOKEN`. Keep the container's port at 8080, and choose the runner's port in `ports`.
-- **The health check** runs inside the container, so it needs a program in the image. The image has `curl`, from its eclipse-temurin base. `GET /health` needs no token. The runner starts the job's steps once the check passes, and fails the job if it never does. Without a health check, the steps can start before the server listens.
+- **The health check** runs inside the container, so it needs a program in the image. The image has `curl`, from its eclipse-temurin base. `GET /health` needs no token. The runner starts the job's steps once the check passes, and fails the job if it never does. Without a health check, the steps can start before the server listens. From 0.6.0 the image declares its own health check on `GET /health` (every 5 s; failures in the first 30 s don't count), so a service container waits for it with no `options`. The recipe keeps its `--health-cmd` so that it also works with 0.5.0. A service's `--health-cmd` replaces the image's command, and any timing flag it leaves unset comes from the image.
 - **The control token is optional.** When it is set, every `/control/` request must send `Authorization: Bearer <token>`. The ports of a GitHub-hosted runner are not reachable from outside the job, so the token can be written in the workflow.
 
 The job's `env` points the app at the service. The steps run on the runner, so the address is `localhost` and the port from `ports`:
