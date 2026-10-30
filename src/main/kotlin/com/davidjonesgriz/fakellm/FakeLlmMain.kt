@@ -41,8 +41,9 @@ import kotlin.system.exitProcess
  *  - The generation routes share the scenario's steps: call N, on whichever route, gets step N.
  *    A step's `firstByteDelayMs` holds back the whole response, and its `streamInterChunkDelayMs`
  *    spaces out streamed deltas.
- *  - `GET /health` — liveness, the loaded scenario name, its step count and unused steps, and
- *    whether lenient mode is on. Always open, including when a control token is configured.
+ *  - `GET /health` — liveness, the loaded scenario name, its step count and unused steps,
+ *    whether lenient mode is on, and the server's version. Always open, including when a control
+ *    token is configured.
  *  - `POST /control/scenario` with exactly one of `{"name": "..."}` or `{"scenario": { ... }}` —
  *    load that scenario and start it over (empty call and exchange logs, next call is call 1). A name is resolved from the scenario
  *    directory (`--scenario-dir` or `FAKE_LLM_SCENARIO_DIR`), then the classpath `/scenarios/`, then
@@ -57,7 +58,8 @@ import kotlin.system.exitProcess
  *    query parameter redacted) and response as written, in call order.
  *
  * `fake-llm validate <file|dir>...` checks scenario files instead of starting a server (see
- * [validateScenarios]).
+ * [validateScenarios]). `fake-llm --version`, as the only argument, prints `fake-llm <version>`
+ * and exits.
  *
  * Startup flags override the matching environment variable when both are set: `--port <n>` (`PORT`,
  * default 8080), `--scenario <name>` (`FAKE_LLM_SCENARIO`), `--scenario-dir <path>`
@@ -76,6 +78,10 @@ import kotlin.system.exitProcess
  * host can bind.
  */
 public fun main(args: Array<String>) {
+    if (args.singleOrNull() == "--version") {
+        println("fake-llm $fakeLlmVersion")
+        return
+    }
     if (args.firstOrNull() == "validate") {
         val code = validateScenarios(args.drop(1), System.out, System.err)
         if (code != 0) exitProcess(code)
@@ -206,5 +212,6 @@ private fun optionValue(
 private fun usage(detail: String): Nothing =
     throw StartupUsageException(
         "fake-llm: $detail\nUsage: fake-llm [--port <n>] [--scenario <name>] [--scenario-dir <path>] [--lenient]\n" +
-            "       fake-llm validate <file|dir>...",
+            "       fake-llm validate <file|dir>...\n" +
+            "       fake-llm --version",
     )

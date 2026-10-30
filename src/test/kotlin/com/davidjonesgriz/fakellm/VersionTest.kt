@@ -3,7 +3,9 @@ package com.davidjonesgriz.fakellm
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.PrintStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -23,5 +25,18 @@ class VersionTest {
             assertEquals(buildVersion, body.getValue("version").jsonPrimitive.content)
             FakeLlmClient("http://127.0.0.1:${client.port}").use { assertEquals(buildVersion, it.health().version) }
         }
+    }
+
+    @Test
+    fun `--version prints the version and starts no server`() {
+        val out = ByteArrayOutputStream()
+        val saved = System.out
+        System.setOut(PrintStream(out, true, Charsets.UTF_8))
+        try {
+            main(arrayOf("--version"))
+        } finally {
+            System.setOut(saved)
+        }
+        assertEquals("fake-llm $buildVersion\n", out.toString(Charsets.UTF_8).replace("\r\n", "\n"))
     }
 }
