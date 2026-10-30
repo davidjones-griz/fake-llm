@@ -153,6 +153,8 @@ them, exactly. That includes the values fake-llm fixes:
   and the generic stream error body for an error step with a blank body, including the OpenAI
   Responses `error` event;
 - the lenient canned reply, `This is a canned response from fake-llm.`;
+- the embeddings vectors (pinned at small sizes, cross-checked with an independent script), their
+  JSON number form and base64 form, and the usage estimate;
 - the bundled scenario names, and the contents of `hello`.
 
 ## Adding a case
@@ -183,7 +185,8 @@ and asserts on what the SDK parsed or raised and on the exact call log (`GET /co
 in `test_exchanges.py`, the exchange log (`GET /control/exchanges`). It covers what the server
 supports today: Anthropic Messages buffered and streaming, OpenAI Chat Completions and Responses
 buffered and streaming, and Gemini `generateContent` buffered and `streamGenerateContent` streaming.
-It also covers client timeouts against `firstByteDelayMs`.
+It also covers client timeouts against `firstByteDelayMs`, and the OpenAI and Gemini embeddings
+routes (the `openai` SDK's default base64 call, the float form, and `embed_content`).
 
 ```
 conformance/sdk/python/

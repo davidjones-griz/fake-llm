@@ -36,6 +36,12 @@ change the public API.
   older server).
 - `usage` on a step: the input and output token counts a reply reports, on every format, buffered
   and streamed (`TokenUsage` in Kotlin). Unset counts keep 100 and 50.
+- Embeddings: `POST /openai/v1/embeddings` (float and base64) and Gemini `:embedContent` and
+  `:batchEmbedContents`. Each vector is derived from SHA-256 of the text: deterministic, unit
+  length, 1536 values by default (`dimensions` / `outputDimensionality` from 1 to 8192). Each JSON
+  number reads back as the float32's exact value, so the float and base64 forms are equal. At
+  most 2048 inputs per OpenAI request and 3,145,728 values per response. They are not calls: they
+  take no step and are not logged.
 - A Node SDK conformance suite in `conformance/sdk/node/` that drives the official
   `@anthropic-ai/sdk`, `openai` and `@google/genai` packages, at pinned versions, against the fat
   jar and the Docker image in CI, plus the daily run against their latest releases.
