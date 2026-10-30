@@ -57,6 +57,7 @@
                   }
                 }
               ],
+              "modelVersion": "example-gemini",
               "fake_llm_seq": 1
             }
           },
@@ -75,6 +76,7 @@
                   }
                 }
               ],
+              "modelVersion": "example-gemini",
               "fake_llm_seq": 1
             }
           },

@@ -41,6 +41,7 @@
           "id": "fake-msg-1",
           "type": "message",
           "role": "assistant",
+          "model": "example-model",
           "content": [
             {
               "type": "text",
@@ -112,6 +113,7 @@
           "id": "fake-msg-1",
           "type": "message",
           "role": "assistant",
+          "model": "example-model",
           "content": [
             {
               "type": "text",
@@ -156,7 +158,7 @@
                   "application/json"
                 ]
               },
-              "body": "{\"id\":\"fake-msg-1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"one\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":100,\"output_tokens\":50,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}",
+              "body": "{\"id\":\"fake-msg-1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"example-model\",\"content\":[{\"type\":\"text\",\"text\":\"one\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":100,\"output_tokens\":50,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}}",
               "state": "complete"
             }
           }

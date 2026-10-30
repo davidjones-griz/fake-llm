@@ -57,6 +57,7 @@
                   }
                 }
               ],
+              "modelVersion": "example-gemini",
               "fake_llm_seq": 1
             }
           },

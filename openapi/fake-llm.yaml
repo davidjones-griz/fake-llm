@@ -51,10 +51,13 @@ info:
     provider's API, and this document does not describe them field by field. The conformance
     cases in `conformance/cases` define them exactly, including the values fake-llm fixes: the
     token counts (unless the step sets `usage`), the response IDs (`fake-msg-<n>`, `fake-openai-<n>`, `fake_llm_seq`,
-    `resp_fake_<n>`, `msg_fake_<n>`, `fc_fake_<n>_<i>`), OpenAI's `model` (Chat Completions and
-    Responses), the thinking signature, the streamed-error filler text and generic error body, the
-    OpenAI, OpenAI Responses and Gemini generic stream error bodies, the lenient canned reply, and
-    the embeddings vectors and their usage estimate.
+    `resp_fake_<n>`, `msg_fake_<n>`, `fc_fake_<n>_<i>`), the thinking signature, the
+    streamed-error filler text and generic error body, the OpenAI, OpenAI Responses and Gemini
+    generic stream error bodies, the lenient canned reply, and the embeddings vectors and their
+    usage estimate. Every generation reply names the request's model: `model` on a buffered
+    Anthropic message and the stream's `message_start` and on OpenAI and Responses bodies, chunks
+    and events, and `modelVersion` on Gemini bodies and chunks; a request without a string `model`
+    gets `""`.
 
     **Text lengths** (`promptSample`, `prompt_preview`) are counted in UTF-16 code units, so a
     cut can fall inside a surrogate pair. `streamChunkChars` counts Unicode code points.

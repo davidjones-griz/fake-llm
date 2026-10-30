@@ -64,7 +64,7 @@ private val lenientJson = Json { ignoreUnknownKeys = true }
 
 internal fun parseAnthropicRequest(body: String): ParsedRequest {
     val obj = lenientJson.parseToJsonElement(body).jsonObject
-    val model = (obj["model"] as? JsonPrimitive)?.content ?: ""
+    val model = obj.stringField("model").orEmpty()
     val system = obj["system"]
     val systemShape =
         when (system) {
@@ -141,23 +141,26 @@ private fun StringBuilder.appendTexts(el: JsonElement?) {
 }
 
 /**
- * The buffered Anthropic message: the thinking block, the text block when [text] is set, then one
- * `tool_use` block per call. With tool calls, `stop_reason` is `tool_use`.
+ * The buffered Anthropic message for [step]: the thinking block, the text block when it has text,
+ * then one `tool_use` block per call. With tool calls, `stop_reason` is `tool_use`. [model] is the
+ * request's model, echoed as the API echoes the model that served the request.
  */
-@Suppress("LongParameterList") // the vendor-neutral reply fields of one step
 internal fun anthropicEnvelope(
-    text: String?,
-    stopReason: String,
+    step: Step,
     seq: Long,
+    model: String,
     cacheable: Boolean = true,
-    thinking: String? = null,
     toolCalls: List<SentToolCall> = emptyList(),
-    usage: TokenUsage = DEFAULT_USAGE,
-): String =
-    buildJsonObject {
+): String {
+    val text = step.text
+    val stopReason = step.stopReason
+    val usage = step.appliedUsage
+    val thinking = step.thinking
+    return buildJsonObject {
         put("id", "fake-msg-$seq")
         put("type", "message")
         put("role", "assistant")
+        put("model", model)
         put(
             "content",
             buildJsonArray {
@@ -201,6 +204,7 @@ internal fun anthropicEnvelope(
             },
         )
     }.toString()
+}
 
 internal const val FIXED_INPUT_TOKENS = 100
 internal const val FIXED_OUTPUT_TOKENS = 50

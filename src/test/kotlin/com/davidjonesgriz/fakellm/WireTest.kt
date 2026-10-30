@@ -90,7 +90,7 @@ class WireTest {
 
     @Test
     fun `envelope is a decodable anthropic response with one text block and fixed usage`() {
-        val env = anthropicEnvelope("OUT", stopReason = "max_tokens", seq = 7)
+        val env = anthropicEnvelope(Step(text = "OUT", stopReason = "max_tokens"), seq = 7, model = "example-model")
         assertTrue(env.contains(""""text": "OUT"""") || env.contains(""""text":"OUT""""))
         assertTrue(env.contains("max_tokens"))
         assertTrue(env.contains("input_tokens"))
@@ -115,7 +115,7 @@ class WireTest {
 
     @Test
     fun `buffered envelope usage carries non-zero cache tokens - the fake's non-zero-cache pin fixture`() {
-        val env = anthropicEnvelope("OUT", stopReason = "end_turn", seq = 1)
+        val env = anthropicEnvelope(Step(text = "OUT"), seq = 1, model = "example-model")
         val usage = Json.parseToJsonElement(env).jsonObject["usage"]!!.jsonObject
         val cacheCreation = (usage["cache_creation_input_tokens"] as JsonPrimitive).content.toInt()
         val cacheRead = (usage["cache_read_input_tokens"] as JsonPrimitive).content.toInt()
@@ -127,7 +127,7 @@ class WireTest {
 
     @Test
     fun `a thinking-carrying envelope emits a leading thinking block, then the text block`() {
-        val env = anthropicEnvelope("OUT", stopReason = "end_turn", seq = 1, thinking = "reasoning here")
+        val env = anthropicEnvelope(Step(text = "OUT", thinking = "reasoning here"), seq = 1, model = "example-model")
         val content = Json.parseToJsonElement(env).jsonObject["content"]!!.jsonArray
         assertEquals(2, content.size)
         assertEquals("thinking", (content[0].jsonObject["type"] as JsonPrimitive).content)
@@ -139,7 +139,7 @@ class WireTest {
 
     @Test
     fun `an envelope with no thinking is unchanged - a single text block, first and only`() {
-        val env = anthropicEnvelope("OUT", stopReason = "end_turn", seq = 1)
+        val env = anthropicEnvelope(Step(text = "OUT"), seq = 1, model = "example-model")
         val content = Json.parseToJsonElement(env).jsonObject["content"]!!.jsonArray
         assertEquals(1, content.size)
         assertEquals("text", (content[0].jsonObject["type"] as JsonPrimitive).content)
@@ -244,19 +244,19 @@ class WireTest {
                     ),
             )
         assertEquals(
-            """{"id":"fake-msg-1","type":"message","role":"assistant","content":[""" +
+            """{"id":"fake-msg-1","type":"message","role":"assistant","model":"example-model","content":[""" +
                 """{"type":"thinking","thinking":"Look.","signature":"fake-thinking-signature"},""" +
                 """{"type":"text","text":"Checking."},""" +
                 """{"type":"tool_use","id":"toolu_fake_1_1","name":"get_weather","input":{"city":"Paris"}},""" +
                 """{"type":"tool_use","id":"toolu_custom","name":"get_time","input":{}}],"stop_reason":"tool_use",""" +
                 """"usage":{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}""",
-            vendorEnvelope("anthropic", step, seq = 1, cacheable = false),
+            vendorEnvelope("anthropic", step, seq = 1, model = "example-model", cacheable = false),
         )
     }
 
     @Test
     fun `anthropic envelope without text has no text block`() {
-        val env = vendorEnvelope("anthropic", Step(toolCalls = listOf(ToolCall(name = "get_time"))), seq = 2)
+        val env = vendorEnvelope("anthropic", Step(toolCalls = listOf(ToolCall(name = "get_time"))), seq = 2, model = "example-model")
         val content = Json.parseToJsonElement(env).jsonObject["content"]!!.jsonArray
         assertEquals(
             listOf("""{"type":"tool_use","id":"toolu_fake_2_1","name":"get_time","input":{}}"""),
@@ -268,11 +268,11 @@ class WireTest {
     fun `openai envelope has null content and tool_calls with argument text, and finish_reason tool_calls`() {
         val step = Step(toolCalls = listOf(ToolCall(name = "get_time", rawArguments = """{"tz": Europe/Paris}""")))
         assertEquals(
-            """{"id":"fake-openai-1","object":"chat.completion","model":"fake-openai","choices":[{"index":0,""" +
+            """{"id":"fake-openai-1","object":"chat.completion","model":"example-gpt","choices":[{"index":0,""" +
                 """"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_fake_1_1","type":"function",""" +
                 """"function":{"name":"get_time","arguments":"{\"tz\": Europe/Paris}"}}]},"finish_reason":"tool_calls"}],""" +
                 """"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}}""",
-            vendorEnvelope("openai", step, seq = 1),
+            vendorEnvelope("openai", step, seq = 1, model = "example-gpt"),
         )
     }
 
@@ -291,8 +291,9 @@ class WireTest {
             """{"candidates":[{"content":{"role":"model","parts":[""" +
                 """{"functionCall":{"name":"get_weather","args":{"city":"Paris"}}},""" +
                 """{"functionCall":{"id":"t2","name":"get_time","args":{}}}]},"finishReason":"STOP"}],""" +
-                """"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":50,"totalTokenCount":150},"fake_llm_seq":1}""",
-            vendorEnvelope("gemini", step, seq = 1),
+                """"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":50,"totalTokenCount":150},""" +
+                """"modelVersion":"example-gemini","fake_llm_seq":1}""",
+            vendorEnvelope("gemini", step, seq = 1, model = "example-gemini"),
         )
     }
 

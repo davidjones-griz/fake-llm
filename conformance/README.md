@@ -146,8 +146,9 @@ them, exactly. That includes the values fake-llm fixes:
   `usage/` fix where a step's scripted counts go; the cache tokens don't change;
 - response IDs from the call number: `fake-msg-<n>`, `fake-openai-<n>`, Gemini's `fake_llm_seq`,
   and `resp_fake_<n>`, `msg_fake_<n>` and `fc_fake_<n>_<i>` on OpenAI Responses;
-- OpenAI's `"model": "fake-openai"` (Chat Completions and Responses), and Anthropic's buffered
-  reply having no `model`;
+- every reply naming the request's model: `model` on Anthropic (buffered and `message_start`) and
+  OpenAI (Chat Completions and Responses) bodies and chunks, and `modelVersion`, the model in the
+  path, on Gemini bodies and chunks;
 - the thinking signature `fake-thinking-signature`;
 - the streamed-error filler text (`Thinking this through before the connection drops. `, repeated)
   and the generic stream error body for an error step with a blank body, including the OpenAI

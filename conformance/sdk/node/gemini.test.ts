@@ -33,6 +33,7 @@ test("text", async (t) => {
   await f.load([{ text: "Billing." }]);
   const response = await generate();
   assert.equal(response.text, "Billing.");
+  assert.equal(response.modelVersion, "example-gemini");
   assert.equal(response.candidates?.length, 1);
   assert.equal(response.candidates?.[0]?.content?.role, "model");
   assert.equal(response.candidates?.[0]?.finishReason, FinishReason.STOP);

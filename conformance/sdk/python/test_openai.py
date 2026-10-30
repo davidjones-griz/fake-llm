@@ -36,7 +36,7 @@ def error_step(status, error, headers=None):
 def test_text(fake, openai_client):
     fake.load([{"text": "Billing."}])
     completion = create(openai_client)
-    assert (completion.id, completion.object, completion.model) == ("fake-openai-1", "chat.completion", "fake-openai")
+    assert (completion.id, completion.object, completion.model) == ("fake-openai-1", "chat.completion", "example-gpt")
     (choice,) = completion.choices
     assert choice.index == 0
     assert (choice.message.role, choice.message.content) == ("assistant", "Billing.")
@@ -128,7 +128,7 @@ def test_stream_text(fake, openai_client):
     chunks = list(stream(openai_client))
     assert content(chunks) == ["", "Streamin", "g text t", "hat is l", "ong enou", "gh.", None]
     for chunk in chunks:
-        assert (chunk.id, chunk.object, chunk.model, chunk.usage) == ("fake-openai-1", "chat.completion.chunk", "fake-openai", None)
+        assert (chunk.id, chunk.object, chunk.model, chunk.usage) == ("fake-openai-1", "chat.completion.chunk", "example-gpt", None)
     assert chunks[0].choices[0].delta.role == "assistant"
     assert chunks[-1].choices[0].finish_reason == "stop"
     assert fake.log() == [call(1, "text", 1)]

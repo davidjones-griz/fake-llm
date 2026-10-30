@@ -41,7 +41,7 @@
             "data": {
               "id": "fake-openai-1",
               "object": "chat.completion.chunk",
-              "model": "fake-openai",
+              "model": "example-gpt",
               "choices": [
                 {
                   "index": 0,
@@ -59,7 +59,7 @@
             "data": {
               "id": "fake-openai-1",
               "object": "chat.completion.chunk",
-              "model": "fake-openai",
+              "model": "example-gpt",
               "choices": [
                 {
                   "index": 0,
@@ -76,7 +76,7 @@
             "data": {
               "id": "fake-openai-1",
               "object": "chat.completion.chunk",
-              "model": "fake-openai",
+              "model": "example-gpt",
               "choices": [
                 {
                   "index": 0,
@@ -93,7 +93,7 @@
             "data": {
               "id": "fake-openai-1",
               "object": "chat.completion.chunk",
-              "model": "fake-openai",
+              "model": "example-gpt",
               "choices": [
                 {
                   "index": 0,
@@ -110,7 +110,7 @@
             "data": {
               "id": "fake-openai-1",
               "object": "chat.completion.chunk",
-              "model": "fake-openai",
+              "model": "example-gpt",
               "choices": [
                 {
                   "index": 0,
@@ -161,7 +161,7 @@
                   "text/event-stream"
                 ]
               },
-              "body": "data: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"fake-openai\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"fake-openai\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Mild and\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"fake-openai\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" dry tom\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"fake-openai\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"orrow.\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"fake-openai\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+              "body": "data: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"example-gpt\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"example-gpt\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Mild and\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"example-gpt\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" dry tom\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"example-gpt\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"orrow.\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"fake-openai-1\",\"object\":\"chat.completion.chunk\",\"model\":\"example-gpt\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
               "state": "complete"
             }
           }

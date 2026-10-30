@@ -33,7 +33,7 @@ test("text", async (t) => {
   const f = fake(server, t);
   await f.load([{ text: "Billing." }]);
   const r = await create();
-  assert.deepEqual([r.id, r.object, r.model, r.status], ["resp_fake_1", "response", "fake-openai", "completed"]);
+  assert.deepEqual([r.id, r.object, r.model, r.status], ["resp_fake_1", "response", "example-gpt", "completed"]);
   assert.equal(r.output_text, "Billing.");
   assert.deepEqual([r.usage?.input_tokens, r.usage?.output_tokens, r.usage?.total_tokens], [100, 50, 150]);
   assert.deepEqual(await f.log(), [call(1, "text", 1)]);

@@ -35,7 +35,7 @@ def types(events):
 def test_text(fake, openai_client):
     fake.load([{"text": "Billing."}])
     r = create(openai_client)
-    assert (r.id, r.object, r.model, r.status) == ("resp_fake_1", "response", "fake-openai", "completed")
+    assert (r.id, r.object, r.model, r.status) == ("resp_fake_1", "response", "example-gpt", "completed")
     assert r.output_text == "Billing."
     (item,) = r.output
     assert (item.type, item.id, item.role, item.status) == ("message", "msg_fake_1", "assistant", "completed")

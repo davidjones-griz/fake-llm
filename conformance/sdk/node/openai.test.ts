@@ -44,7 +44,7 @@ test("text", async (t) => {
   const f = fake(server, t);
   await f.load([{ text: "Billing." }]);
   const completion = await create();
-  assert.deepEqual([completion.id, completion.object, completion.model], ["fake-openai-1", "chat.completion", "fake-openai"]);
+  assert.deepEqual([completion.id, completion.object, completion.model], ["fake-openai-1", "chat.completion", "example-gpt"]);
   assert.equal(completion.choices.length, 1);
   const [choice] = completion.choices;
   assert.deepEqual([choice?.message.role, choice?.message.content, choice?.finish_reason], ["assistant", "Billing.", "stop"]);
@@ -85,7 +85,7 @@ test("stream text", async (t) => {
     ["", "Streamin", "g text t", "hat is l", "ong enou", "gh.", null],
   );
   assert.equal(chunks[0]?.choices[0]?.delta.role, "assistant");
-  assert.ok(chunks.every((c) => c.id === "fake-openai-1" && c.object === "chat.completion.chunk" && c.model === "fake-openai"));
+  assert.ok(chunks.every((c) => c.id === "fake-openai-1" && c.object === "chat.completion.chunk" && c.model === "example-gpt"));
   assert.deepEqual(
     chunks.map((c) => c.choices[0]?.finish_reason ?? null),
     [...Array<null>(chunks.length - 1).fill(null), "stop"],

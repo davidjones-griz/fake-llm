@@ -17,7 +17,7 @@ private val OPENAI_SYSTEM_ROLES = setOf("system", "developer")
 
 internal fun parseOpenAiRequest(body: String): ParsedRequest {
     val obj = openAiLenientJson.parseToJsonElement(body).jsonObject
-    val model = (obj["model"] as? JsonPrimitive)?.content ?: ""
+    val model = obj.stringField("model").orEmpty()
     val messages = obj["messages"] as? JsonArray ?: error("request has no messages array")
     val systemShape =
         if (messages.any { (it as? JsonObject)?.stringField("role") in OPENAI_SYSTEM_ROLES }) "blocks" else "absent"
@@ -74,20 +74,23 @@ private fun openAiToolResults(messages: List<JsonObject>): List<ToolResultRecord
 }
 
 /**
- * The buffered Chat Completions reply. With tool calls, `message.content` is [text] or null,
- * `message.tool_calls` lists them, and `finish_reason` is `tool_calls`.
+ * The buffered Chat Completions reply to [step], naming [model], the request's model. With tool
+ * calls, `message.content` is the step's text or null, `message.tool_calls` lists them, and
+ * `finish_reason` is `tool_calls`.
  */
 internal fun openAiEnvelope(
-    text: String?,
-    stopReason: String,
+    step: Step,
     seq: Long,
+    model: String,
     toolCalls: List<SentToolCall> = emptyList(),
-    usage: TokenUsage = DEFAULT_USAGE,
-): String =
-    buildJsonObject {
+): String {
+    val text = step.text
+    val stopReason = step.stopReason
+    val usage = step.appliedUsage
+    return buildJsonObject {
         put("id", "fake-openai-$seq")
         put("object", "chat.completion")
-        put("model", "fake-openai")
+        put("model", model)
         put(
             "choices",
             buildJsonArray {
@@ -118,6 +121,7 @@ internal fun openAiEnvelope(
             },
         )
     }.toString()
+}
 
 /** One entry of a buffered message's `tool_calls`. */
 private fun openAiToolCallJson(call: SentToolCall): JsonObject =

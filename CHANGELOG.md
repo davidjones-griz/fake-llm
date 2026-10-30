@@ -48,6 +48,11 @@ change the public API.
 
 ### Changed
 
+- Vendor replies name the request's model: OpenAI Chat Completions and Responses bodies and chunks
+  say the request's `model` instead of `fake-openai`, a buffered Anthropic message has `model`, and
+  Gemini bodies and stream chunks have `modelVersion`. A request without a model gets `""`.
+- A non-string `model` in an Anthropic, OpenAI or Responses request (such as `null` or a number) is
+  now read as `""`, in the call log and the 400 bodies as in the echo, instead of its JSON text.
 - The call log's `promptSample` and the 400 bodies' `prompt_preview` read more of the request: the
   string `text` of each part of an OpenAI Chat Completions message whose `content` is an array, the
   parts of a Gemini `systemInstruction` (or `system_instruction`), before `contents`, and the

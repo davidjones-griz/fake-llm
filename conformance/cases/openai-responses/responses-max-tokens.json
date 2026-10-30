@@ -37,7 +37,7 @@
           "incomplete_details": {
             "reason": "max_output_tokens"
           },
-          "model": "fake-openai",
+          "model": "example-gpt",
           "output": [
             {
               "id": "msg_fake_1",
