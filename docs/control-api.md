@@ -21,7 +21,7 @@ curl -s http://localhost:8080/control/calls \
   -H "authorization: Bearer $FAKE_LLM_CONTROL_TOKEN"
 ```
 
-From Kotlin or Java, [`FakeLlmClient`](https://github.com/davidjones-griz/fake-llm/blob/main/README.md#control-api-client) makes these calls and parses the responses, and the [pytest plugin](https://github.com/davidjones-griz/fake-llm/blob/main/README.md#pytest-plugin) has a Python client.
+From Kotlin or Java, [`FakeLlmClient`](library.md#control-api-client) makes these calls and parses the responses, and the [pytest plugin](pytest.md) has a Python client.
 
 ## Routes
 
@@ -95,7 +95,7 @@ With a scenario directory set, `*.json` names from that directory are merged in,
 
 ### `GET /control/calls`
 
-`GET /control/calls` returns the call log as a JSON array, in call order. `vendor` is `anthropic`, `openai`, `openai-responses` or `gemini`. `seq` is the call's number since the last load, reset or unload, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call arrived, before any wait. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](scenarios.md#tool-calls) describes them. `firstByteDelayMs` and `streamInterChunkDelayMs` are the delays the call's step applied: `streamInterChunkDelayMs` only when the response was an event stream, and both 0 when no step served the call. The CLI and the image also print each call's `seq`, vendor, model, outcome and step as a line on stdout (see [Configuration](https://github.com/davidjones-griz/fake-llm/blob/main/README.md#configuration)).
+`GET /control/calls` returns the call log as a JSON array, in call order. `vendor` is `anthropic`, `openai`, `openai-responses` or `gemini`. `seq` is the call's number since the last load, reset or unload, from 1. `step` is the step that served it, equal to `seq`, or `null` when no step did. `outcome` is `text`, `tool-calls` (a step with `toolCalls`) or `error:<status>` for a step, `default` for the lenient canned reply, and `no-more-steps` or `no-scenario` for the two 400s. `promptSample` is the last 500 characters of the combined prompt text. `timestampMs` is the wall-clock time when the call arrived, before any wait. `toolCalls` lists the id and name of each tool call the response carried, and `toolResults` each tool result the request sent back, both `[]` when there are none; [Tool calls](scenarios.md#tool-calls) describes them. `firstByteDelayMs` and `streamInterChunkDelayMs` are the delays the call's step applied: `streamInterChunkDelayMs` only when the response was an event stream, and both 0 when no step served the call. The CLI and the image also print each call's `seq`, vendor, model, outcome and step as a line on stdout (see [Configuration](https://github.com/davidjones-griz/fake-llm#configuration)).
 
 ```json
 [
