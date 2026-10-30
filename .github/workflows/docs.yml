@@ -1,5 +1,5 @@
 # Builds the documentation site on every pull request and push to main, runs the quickstart script
-# against an image built from the commit.
+# against an image built from the commit, and deploys the site to GitHub Pages from main.
 name: Docs
 
 on:
@@ -52,3 +52,20 @@ jobs:
           grep -q '"status":"ok"' "$RUNNER_TEMP/quickstart.out"
           grep -q '"type":"message"' "$RUNNER_TEMP/quickstart.out"
           grep -q '"vendor":"anthropic"' "$RUNNER_TEMP/quickstart.out"
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, quickstart]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: deployment
