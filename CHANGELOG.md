@@ -36,6 +36,9 @@ change the public API.
   older server).
 - `usage` on a step: the input and output token counts a reply reports, on every format, buffered
   and streamed (`TokenUsage` in Kotlin). Unset counts keep 100 and 50.
+- A Node SDK conformance suite in `conformance/sdk/node/` that drives the official
+  `@anthropic-ai/sdk`, `openai` and `@google/genai` packages, at pinned versions, against the fat
+  jar and the Docker image in CI, plus the daily run against their latest releases.
 
 ### Changed
 
