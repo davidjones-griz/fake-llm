@@ -1,0 +1,64 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "openai-embeddings-base64",
+  "description": "encoding_format base64 gives the same vector as little-endian float32 bytes, base64-encoded.",
+  "scenario": {
+    "name": "one-step",
+    "steps": [
+      {
+        "text": "only"
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/embeddings",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-embedding",
+          "input": "Hello",
+          "dimensions": 4,
+          "encoding_format": "base64"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "object": "list",
+          "data": [
+            {
+              "object": "embedding",
+              "index": 0,
+              "embedding": "Z/sYvhV5a79Pt6Y+eNAjvg=="
+            }
+          ],
+          "model": "example-embedding",
+          "usage": {
+            "prompt_tokens": 2,
+            "total_tokens": 2
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": []
+      }
+    }
+  ]
+}

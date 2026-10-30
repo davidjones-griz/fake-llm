@@ -292,3 +292,31 @@ def test_scripted_usage(fake, openai_client):
     fake.load([{"text": "Counted.", "usage": {"inputTokens": 1200, "outputTokens": 340}}])
     usage = create(openai_client).usage
     assert (usage.prompt_tokens, usage.completion_tokens, usage.total_tokens) == (1200, 340, 1540)
+
+
+def test_embeddings_default_call(fake, openai_client):
+    fake.load([{"text": "unused"}])
+    # The SDK asks for base64 when encoding_format is not set, and decodes it to float32 values.
+    r = openai_client.embeddings.create(model="example-embedding", input="Hello")
+    (item,) = r.data
+    assert (item.index, len(item.embedding), r.model) == (0, 1536, "example-embedding")
+    assert abs(sum(x * x for x in item.embedding) - 1) < 1e-5
+    assert (r.usage.prompt_tokens, r.usage.total_tokens) == (2, 2)
+    assert fake.log() == []
+
+
+def test_embeddings_float_equals_default(fake, openai_client):
+    fake.load([{"text": "unused"}])
+    default = openai_client.embeddings.create(model="example-embedding", input=["a", "b"])
+    floats = openai_client.embeddings.create(model="example-embedding", input=["a", "b"], encoding_format="float")
+    assert [d.embedding for d in floats.data] == [d.embedding for d in default.data]
+    assert fake.log() == []
+
+
+def test_embeddings_dimensions(fake, openai_client):
+    fake.load([{"text": "unused"}])
+    r = openai_client.embeddings.create(model="example-embedding", input=["same", "same", "other"], dimensions=8)
+    vectors = [d.embedding for d in r.data]
+    assert [len(v) for v in vectors] == [8, 8, 8]
+    assert vectors[0] == vectors[1] and vectors[0] != vectors[2]
+    assert fake.log() == []
