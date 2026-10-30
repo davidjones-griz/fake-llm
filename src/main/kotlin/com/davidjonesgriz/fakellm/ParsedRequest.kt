@@ -194,6 +194,7 @@ internal fun anthropicEnvelope(
             },
         )
         put("stop_reason", if (toolCalls.isEmpty()) stopReason else "tool_use")
+        put("stop_sequence", JsonNull)
         put(
             "usage",
             buildJsonObject {

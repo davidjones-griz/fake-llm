@@ -47,6 +47,7 @@
             }
           ],
           "stop_reason": "max_tokens",
+          "stop_sequence": null,
           "usage": {
             "input_tokens": 100,
             "output_tokens": 50,
