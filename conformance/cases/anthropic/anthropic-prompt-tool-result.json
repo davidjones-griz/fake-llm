@@ -1,0 +1,114 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "anthropic-prompt-tool-result",
+  "description": "A tool_result block's content adds its text to the prompt, as an OpenAI tool message's content does.",
+  "scenario": {
+    "name": "anthropic-prompt-tool-result",
+    "steps": [
+      {
+        "text": "Noted."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Weather in Paris?"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "toolu_1",
+                  "name": "get_weather",
+                  "input": {
+                    "city": "Paris"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "toolu_1",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "18 degrees"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "$type": "object"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 3,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Weather in Paris?\n18 degrees\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [
+              {
+                "id": "toolu_1",
+                "name": "get_weather",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "18 degrees"
+                  }
+                ],
+                "isError": false
+              }
+            ],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
+          }
+        ]
+      }
+    }
+  ]
+}

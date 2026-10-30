@@ -1,0 +1,83 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "gemini-prompt-system-instruction",
+  "description": "systemInstruction's part texts come first in the prompt, and set systemShape blocks.",
+  "scenario": {
+    "name": "gemini-prompt-system-instruction",
+    "steps": [
+      {
+        "text": "Noted."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/gemini/v1beta/models/example-gemini:generateContent",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "systemInstruction": {
+            "parts": [
+              {
+                "text": "Answer in one word."
+              }
+            ]
+          },
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Hello"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "$type": "object"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "gemini",
+            "model": "example-gemini",
+            "systemShape": "blocks",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "Answer in one word.\nHello\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0
+          }
+        ]
+      }
+    }
+  ]
+}

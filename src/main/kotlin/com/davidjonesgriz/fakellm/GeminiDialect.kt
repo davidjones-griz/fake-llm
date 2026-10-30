@@ -2,8 +2,8 @@ package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -19,24 +19,33 @@ internal fun parseGeminiRequest(
 ): ParsedRequest {
     val obj = geminiLenientJson.parseToJsonElement(body).jsonObject
     val contents = obj["contents"] as? JsonArray ?: error("request has no contents array")
+    // The REST API accepts the proto field name too, as Google's own curl examples use.
+    val systemInstruction = obj.valueOrNull("systemInstruction") ?: obj.valueOrNull("system_instruction")
     val text =
         buildString {
-            contents.forEach { c ->
-                val parts = (c as? JsonObject)?.get("parts") as? JsonArray
-                parts?.forEach { p ->
-                    val t = (p as? JsonObject)?.get("text") as? JsonPrimitive
-                    if (t != null) append(t.content).append('\n')
-                }
-            }
+            appendPartTexts(systemInstruction)
+            contents.forEach { appendPartTexts(it) }
         }
     return ParsedRequest(
         model = modelFromPath,
-        systemShape = "absent",
+        systemShape =
+            when (systemInstruction) {
+                null -> "absent"
+                is JsonObject -> "blocks"
+                else -> "unknown"
+            },
         promptText = text,
         messageCount = contents.size,
         stream = stream,
         toolResults = geminiToolResults(contents),
     )
+}
+
+/** Each string `text` of a `Content` object's `parts`, each followed by a newline. */
+private fun StringBuilder.appendPartTexts(content: JsonElement?) {
+    ((content as? JsonObject)?.get("parts") as? JsonArray)?.filterIsInstance<JsonObject>()?.forEach { part ->
+        part.stringField("text")?.let { append(it).append('\n') }
+    }
 }
 
 /** Every `functionResponse` part in [contents], in order. */

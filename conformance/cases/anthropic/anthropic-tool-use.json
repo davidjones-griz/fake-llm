@@ -225,7 +225,7 @@
             "timestampMs": {
               "$type": "integer"
             },
-            "promptSample": "Hello\nChecking.\n",
+            "promptSample": "Hello\nChecking.\n18 degrees\nunknown timezone\n",
             "step": 2,
             "toolCalls": [],
             "toolResults": [

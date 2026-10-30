@@ -685,11 +685,14 @@ components:
             The last 500 UTF-16 code units of the combined prompt text: each text piece of the
             request, in order, each followed by a newline. Anthropic: `system` when it is a string
             or an array of text blocks, then each message `content` that is a string or an array
-            of text blocks (other blocks contribute nothing). OpenAI: each message `content` that
-            is a JSON string, including a system message (array content is skipped). Gemini: each
-            `contents[].parts[].text`. OpenAI Responses: `instructions` when it is a string, then
-            `input` when it is a string, or for each `input` item a message's string `content` or the
-            string `text` of its content parts, and a `function_call_output`'s string `output`.
+            of text blocks, where a `tool_result` block adds its own `content` the same way (other
+            blocks contribute nothing). OpenAI: each message `content` that is a JSON string, or the
+            string `text` of each part when it is an array, whatever the message's role. Gemini: the
+            string `text` of each part of `systemInstruction`, or `system_instruction` when that is
+            missing or `null`, then of each `contents[].parts[]`. OpenAI Responses: `instructions`
+            when it is a string, then `input` when it is a string, or for each `input` item a
+            message's string `content` or the string `text` of its content parts, and a
+            `function_call_output`'s string `output`.
         toolCalls:
           type: array
           items:
@@ -822,9 +825,11 @@ components:
         The shape of the request's system prompt. Anthropic: `absent` when `system` is missing or
         `null`, `string` when it is a JSON string, `blocks` when it is an array, `unknown` for any
         other value (an object, a number or a boolean). OpenAI: `blocks` when a message has role
-        `system`, else `absent`. Gemini: always `absent` (`systemInstruction` is not read). OpenAI
-        Responses: `string` when `instructions` is a string, `unknown` for any other non-null value;
-        without `instructions`, `blocks` when an `input` item has role `system` or `developer`, else
+        `system` or `developer`, else `absent`. Gemini, for `systemInstruction`, or
+        `system_instruction` when that is missing or `null`: `absent` when it is missing or `null`,
+        `blocks` when it is an object, `unknown` for any other value. OpenAI Responses: `string`
+        when `instructions` is a string, `unknown` for any other non-null value; without
+        `instructions`, `blocks` when an `input` item has role `system` or `developer`, else
         `absent`.
     MessageError:
       type: object

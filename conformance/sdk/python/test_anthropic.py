@@ -217,7 +217,7 @@ def test_tool_loop(fake, anthropic_client):
     assert (second.stop_reason, second.id) == ("end_turn", "fake-msg-2")
     assert fake.log() == [call(1, "tool-calls", 1), call(2, "text", 2)]
     record = fake.calls()[1]
-    assert record["messageCount"] == 3
+    assert (record["messageCount"], record["promptSample"]) == (3, "Hello\n18 degrees\n")
     assert record["toolResults"] == [{"id": "toolu_fake_1_1", "name": "get_weather", "content": "18 degrees", "isError": False}]
 
 

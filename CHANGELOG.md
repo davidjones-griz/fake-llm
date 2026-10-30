@@ -39,6 +39,13 @@ change the public API.
 
 ### Changed
 
+- The call log's `promptSample` and the 400 bodies' `prompt_preview` read more of the request: the
+  string `text` of each part of an OpenAI Chat Completions message whose `content` is an array, the
+  parts of a Gemini `systemInstruction` (or `system_instruction`), before `contents`, and the
+  content of an Anthropic `tool_result` block. `systemShape` is `blocks` for an OpenAI `developer`
+  message and for a Gemini `systemInstruction` object, and `unknown` for a Gemini
+  `systemInstruction` that is not an object. A Gemini part whose `text` is not a string adds
+  nothing.
 - From Java, `startFakeLlmServer` is a static method of `FakeLlm` instead of `FakeLlmAppKt`, and
   `main` is in `FakeLlmMain`, now the fat jar's `Main-Class`. Kotlin source needs no change, but
   code compiled against an earlier version must be recompiled, and `fake-llm-junit-jupiter` must

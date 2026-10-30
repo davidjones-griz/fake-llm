@@ -48,6 +48,14 @@ def test_text(fake, gemini_client):
     assert (record["messageCount"], record["promptSample"]) == (1, "Hello\n")
 
 
+def test_system_instruction(fake, gemini_client):
+    fake.load([{"text": "Hi."}])
+    config = types.GenerateContentConfig(system_instruction="Answer in one word.")
+    assert gemini_client.models.generate_content(model="example-gemini", contents="Hello", config=config).text == "Hi."
+    record = fake.calls()[0]
+    assert (record["systemShape"], record["messageCount"], record["promptSample"]) == ("blocks", 1, "Answer in one word.\nHello\n")
+
+
 def test_max_tokens(fake, gemini_client):
     fake.load([{"text": "The summary stops in the mid", "stopReason": "max_tokens"}])
     assert generate(gemini_client).candidates[0].finish_reason == types.FinishReason.MAX_TOKENS
