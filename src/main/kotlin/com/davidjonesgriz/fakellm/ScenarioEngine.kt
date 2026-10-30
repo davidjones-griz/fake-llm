@@ -240,7 +240,7 @@ public class ScenarioEngine(
         } else {
             FakeResponse(
                 HTTP_OK,
-                vendorEnvelope(vendor, step, r.seq, req.hasCacheBreakpoint),
+                vendorEnvelope(vendor, step, r.seq, req.model, req.hasCacheBreakpoint),
                 firstByteDelayMs = step.firstByteDelayMs,
             )
         }
@@ -412,19 +412,20 @@ private fun callRecord(
         streamInterChunkDelayMs = step?.let { appliedInterChunkDelayMs(it, req.stream) } ?: 0,
     )
 
-/** The buffered reply to call [seq] from [step], a reply step, in [vendor]'s format. */
+/** The buffered reply to call [seq] from [step], a reply step, in [vendor]'s format, naming [model], the request's model. */
 internal fun vendorEnvelope(
     vendor: String,
     step: Step,
     seq: Long,
+    model: String,
     cacheable: Boolean = true,
 ): String {
     val toolCalls = sentToolCalls(vendor, step, seq)
     return when (vendor) {
-        "openai" -> openAiEnvelope(step.text, step.stopReason, seq, toolCalls, step.appliedUsage)
-        RESPONSES_VENDOR -> responsesEnvelope(step.text, step.stopReason, seq, toolCalls, step.appliedUsage)
-        "gemini" -> geminiEnvelope(step.text, step.stopReason, seq, toolCalls, step.appliedUsage)
-        else -> anthropicEnvelope(step.text, step.stopReason, seq, cacheable, step.thinking, toolCalls, step.appliedUsage)
+        "openai" -> openAiEnvelope(step, seq, model, toolCalls)
+        RESPONSES_VENDOR -> responsesEnvelope(step, seq, model, toolCalls)
+        "gemini" -> geminiEnvelope(step, seq, model, toolCalls)
+        else -> anthropicEnvelope(step, seq, model, cacheable, toolCalls)
     }
 }
 

@@ -58,18 +58,20 @@ private fun geminiToolResults(contents: JsonArray): List<ToolResultRecord> =
         }
 
 /**
- * The buffered `generateContent` reply: a text part when [text] is set, then one `functionCall`
- * part per tool call, whose `id` is sent only when scripted. With tool calls, `finishReason` is
- * `STOP`.
+ * The buffered `generateContent` reply to [step], with `modelVersion` [model], the model in the
+ * request's path: a text part when the step has text, then one `functionCall` part per tool call,
+ * whose `id` is sent only when scripted. With tool calls, `finishReason` is `STOP`.
  */
 internal fun geminiEnvelope(
-    text: String?,
-    stopReason: String,
+    step: Step,
     seq: Long,
+    model: String,
     toolCalls: List<SentToolCall> = emptyList(),
-    usage: TokenUsage = DEFAULT_USAGE,
-): String =
-    buildJsonObject {
+): String {
+    val text = step.text
+    val stopReason = step.stopReason
+    val usage = step.appliedUsage
+    return buildJsonObject {
         put(
             "candidates",
             buildJsonArray {
@@ -102,8 +104,10 @@ internal fun geminiEnvelope(
                 put("totalTokenCount", usage.totalTokens)
             },
         )
+        put("modelVersion", model)
         put("fake_llm_seq", seq)
     }.toString()
+}
 
 internal fun geminiFunctionCallPart(call: SentToolCall): JsonObject =
     buildJsonObject {

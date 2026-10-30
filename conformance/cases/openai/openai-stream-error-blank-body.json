@@ -44,7 +44,7 @@
             "data": {
               "id": "fake-openai-1",
               "object": "chat.completion.chunk",
-              "model": "fake-openai",
+              "model": "example-gpt",
               "choices": [
                 {
                   "index": 0,
@@ -62,7 +62,7 @@
             "data": {
               "id": "fake-openai-1",
               "object": "chat.completion.chunk",
-              "model": "fake-openai",
+              "model": "example-gpt",
               "choices": [
                 {
                   "index": 0,

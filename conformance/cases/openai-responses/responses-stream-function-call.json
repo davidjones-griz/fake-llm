@@ -49,7 +49,7 @@
                 "status": "in_progress",
                 "error": null,
                 "incomplete_details": null,
-                "model": "fake-openai",
+                "model": "example-gpt",
                 "output": [],
                 "parallel_tool_calls": true,
                 "tool_choice": "auto",
@@ -69,7 +69,7 @@
                 "status": "in_progress",
                 "error": null,
                 "incomplete_details": null,
-                "model": "fake-openai",
+                "model": "example-gpt",
                 "output": [],
                 "parallel_tool_calls": true,
                 "tool_choice": "auto",
@@ -253,7 +253,7 @@
                 "status": "completed",
                 "error": null,
                 "incomplete_details": null,
-                "model": "fake-openai",
+                "model": "example-gpt",
                 "output": [
                   {
                     "id": "msg_fake_1",

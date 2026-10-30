@@ -38,7 +38,7 @@
           "status": "completed",
           "error": null,
           "incomplete_details": null,
-          "model": "fake-openai",
+          "model": "example-gpt",
           "output": [
             {
               "id": "msg_fake_1",

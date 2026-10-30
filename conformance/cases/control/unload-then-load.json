@@ -41,6 +41,7 @@
           "id": "fake-msg-1",
           "type": "message",
           "role": "assistant",
+          "model": "example-model",
           "content": [
             {
               "type": "text",
@@ -138,6 +139,7 @@
           "id": "fake-msg-1",
           "type": "message",
           "role": "assistant",
+          "model": "example-model",
           "content": [
             {
               "type": "text",

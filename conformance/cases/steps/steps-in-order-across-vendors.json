@@ -44,6 +44,7 @@
           "id": "fake-msg-1",
           "type": "message",
           "role": "assistant",
+          "model": "example-model",
           "content": [
             {
               "type": "text",
@@ -85,7 +86,7 @@
         "body": {
           "id": "fake-openai-2",
           "object": "chat.completion",
-          "model": "fake-openai",
+          "model": "example-gpt",
           "choices": [
             {
               "index": 0,
@@ -148,6 +149,7 @@
             "candidatesTokenCount": 50,
             "totalTokenCount": 150
           },
+          "modelVersion": "example-gemini",
           "fake_llm_seq": 3
         }
       }

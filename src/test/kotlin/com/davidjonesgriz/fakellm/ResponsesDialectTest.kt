@@ -18,7 +18,7 @@ class ResponsesDialectTest {
     ): String {
         val incomplete = if (status == "incomplete") """{"reason":"max_output_tokens"}""" else "null"
         return """{"id":"resp_fake_$seq","object":"response","status":"$status","error":null,"incomplete_details":$incomplete,""" +
-            """"model":"fake-openai","output":[$output],"parallel_tool_calls":true,"tool_choice":"auto","tools":[],$usage}"""
+            """"model":"example-gpt","output":[$output],"parallel_tool_calls":true,"tool_choice":"auto","tools":[],$usage}"""
     }
 
     private fun message(
@@ -128,14 +128,14 @@ class ResponsesDialectTest {
 
     @Test
     fun `the responses envelope is a completed response with one message item and fixed usage`() {
-        assertEquals(response("completed", message("Billing.")), responsesEnvelope("Billing.", "end_turn", 1))
+        assertEquals(response("completed", message("Billing.")), responsesEnvelope(Step(text = "Billing."), 1, "example-gpt"))
     }
 
     @Test
     fun `max_tokens makes the response and its message item incomplete with reason max_output_tokens`() {
         assertEquals(
             response("incomplete", message("cut off", "incomplete", seq = 2), seq = 2),
-            responsesEnvelope("cut off", "max_tokens", 2),
+            responsesEnvelope(Step(text = "cut off", stopReason = "max_tokens"), 2, "example-gpt"),
         )
     }
 
@@ -159,7 +159,7 @@ class ResponsesDialectTest {
                     """{"id":"fc_fake_1_2","type":"function_call","status":"completed","call_id":"call_custom","name":"get_time",""" +
                     """"arguments":"{\"tz\": Europe/Paris}"}""",
             ),
-            vendorEnvelope(RESPONSES_VENDOR, step, seq = 1),
+            vendorEnvelope(RESPONSES_VENDOR, step, seq = 1, model = "example-gpt"),
         )
     }
 
@@ -172,7 +172,7 @@ class ResponsesDialectTest {
                 """{"id":"fc_fake_3_1","type":"function_call","status":"completed","call_id":"call_fake_3_1","name":"get_time","arguments":"{}"}""",
                 seq = 3,
             ),
-            vendorEnvelope(RESPONSES_VENDOR, step, seq = 3),
+            vendorEnvelope(RESPONSES_VENDOR, step, seq = 3, model = "example-gpt"),
         )
     }
 }

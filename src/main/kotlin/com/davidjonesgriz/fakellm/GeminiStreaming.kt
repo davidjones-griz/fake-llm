@@ -26,10 +26,11 @@ internal fun geminiAltSse(rawQuery: String?): Boolean = rawQuery?.split('&')?.co
 /**
  * One streamed `GenerateContentResponse` with [part] as its only part, in the buffered body's key
  * order. A non-null [finishReason] marks the last chunk: it adds `finishReason` to the candidate
- * and `usageMetadata` before `fake_llm_seq`.
+ * and `usageMetadata` before `modelVersion` ([model], the request's) and `fake_llm_seq`.
  */
 internal fun geminiChunkJson(
     seq: Long,
+    model: String,
     part: JsonObject,
     finishReason: String?,
     usage: TokenUsage = DEFAULT_USAGE,
@@ -62,6 +63,7 @@ internal fun geminiChunkJson(
                 },
             )
         }
+        put("modelVersion", model)
         put("fake_llm_seq", seq)
     }.toString()
 
@@ -110,7 +112,7 @@ internal fun streamGeminiGenerateContent(
     try {
         parts.forEachIndexed { i, part ->
             if (i < texts.size && step.streamInterChunkDelayMs > 0) Thread.sleep(step.streamInterChunkDelayMs)
-            writeSseData(out, geminiChunkJson(seq, part, finishReason?.takeIf { i == parts.lastIndex }, step.appliedUsage))
+            writeSseData(out, geminiChunkJson(seq, req.model, part, finishReason?.takeIf { i == parts.lastIndex }, step.appliedUsage))
         }
         if (error != null) writeSseData(out, error.body.ifBlank { GENERIC_GEMINI_STREAM_ERROR_BODY })
     } finally {

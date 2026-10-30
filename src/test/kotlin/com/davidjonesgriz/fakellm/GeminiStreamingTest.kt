@@ -11,10 +11,10 @@ class GeminiStreamingTest {
     private val text = buildJsonObject { put("text", "Mild and") }
 
     @Test
-    fun `a gemini chunk carries one part and no finishReason or usageMetadata`() {
+    fun `a gemini chunk carries one part and the request model, and no finishReason or usageMetadata`() {
         assertEquals(
-            """{"candidates":[{"content":{"role":"model","parts":[{"text":"Mild and"}]}}],"fake_llm_seq":3}""",
-            geminiChunkJson(3, text, null),
+            """{"candidates":[{"content":{"role":"model","parts":[{"text":"Mild and"}]}}],"modelVersion":"example-gemini","fake_llm_seq":3}""",
+            geminiChunkJson(3, "example-gemini", text, null),
         )
     }
 
@@ -24,8 +24,8 @@ class GeminiStreamingTest {
         listOf("STOP", "MAX_TOKENS").forEach { reason ->
             assertEquals(
                 """{"candidates":[{"content":{"role":"model","parts":[{"text":"Mild and"}]},"finishReason":"$reason"}],""" +
-                    """$usage,"fake_llm_seq":1}""",
-                geminiChunkJson(1, text, reason),
+                    """$usage,"modelVersion":"example-gemini","fake_llm_seq":1}""",
+                geminiChunkJson(1, "example-gemini", text, reason),
             )
         }
     }

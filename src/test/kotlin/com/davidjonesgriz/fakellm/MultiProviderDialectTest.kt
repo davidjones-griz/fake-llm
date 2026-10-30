@@ -126,7 +126,7 @@ class MultiProviderDialectTest {
         usage: Boolean = false,
         seq: Int = 1,
     ): String =
-        """{"id":"fake-openai-$seq","object":"chat.completion.chunk","model":"fake-openai",""" +
+        """{"id":"fake-openai-$seq","object":"chat.completion.chunk","model":"example-gpt",""" +
             """"choices":[{"index":0,"delta":$delta,"finish_reason":${finishReason?.let { "\"$it\"" } ?: "null"}}]""" +
             (if (usage) ""","usage":null}""" else "}")
 
@@ -192,7 +192,7 @@ class MultiProviderDialectTest {
                     chunk(role, usage = true),
                     chunk(content("Hi."), usage = true),
                     chunk("{}", "stop", usage = true),
-                    """{"id":"fake-openai-1","object":"chat.completion.chunk","model":"fake-openai","choices":[],""" +
+                    """{"id":"fake-openai-1","object":"chat.completion.chunk","model":"example-gpt","choices":[],""" +
                         """"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}}""",
                     "[DONE]",
                 ),
@@ -421,7 +421,7 @@ class MultiProviderDialectTest {
                     chunk(arguments(1, "urope/Pa"), usage = true),
                     chunk(arguments(1, "ris}"), usage = true),
                     chunk("{}", "tool_calls", usage = true),
-                    """{"id":"fake-openai-1","object":"chat.completion.chunk","model":"fake-openai","choices":[],""" +
+                    """{"id":"fake-openai-1","object":"chat.completion.chunk","model":"example-gpt","choices":[],""" +
                         """"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150}}""",
                     "[DONE]",
                 ),
@@ -526,7 +526,8 @@ class MultiProviderDialectTest {
             } else {
                 ""
             }
-        return """{"candidates":[{"content":{"role":"model","parts":[$part]}$finish}],$usage"fake_llm_seq":$seq}"""
+        return """{"candidates":[{"content":{"role":"model","parts":[$part]}$finish}],$usage""" +
+            """"modelVersion":"example-gemini","fake_llm_seq":$seq}"""
     }
 
     private fun geminiText(text: String) = """{"text":${JsonPrimitive(text)}}"""

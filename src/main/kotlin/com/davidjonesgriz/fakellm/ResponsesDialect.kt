@@ -34,7 +34,7 @@ internal fun parseResponsesRequest(body: String): ParsedRequest {
     val input = obj["input"]
     val items = (input as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
     return ParsedRequest(
-        model = (obj["model"] as? JsonPrimitive)?.content ?: "",
+        model = obj.stringField("model").orEmpty(),
         systemShape = responsesSystemShape(obj["instructions"], items),
         promptText = responsesPromptText(obj["instructions"], input, items),
         messageCount =
@@ -118,28 +118,29 @@ private fun responsesToolResults(items: List<JsonObject>): List<ToolResultRecord
 }
 
 /**
- * The buffered `Response` for call [seq]: a message item when [text] is set, then one
- * `function_call` item per tool call. `max_tokens` makes it `incomplete` with
- * `max_output_tokens`; anything else is `completed`.
+ * The buffered `Response` to [step] for call [seq], naming [model], the request's model: a message
+ * item when the step has text, then one `function_call` item per tool call. `max_tokens` makes it
+ * `incomplete` with `max_output_tokens`; anything else is `completed`.
  */
 internal fun responsesEnvelope(
-    text: String?,
-    stopReason: String,
+    step: Step,
     seq: Long,
+    model: String,
     toolCalls: List<SentToolCall> = emptyList(),
-    usage: TokenUsage = DEFAULT_USAGE,
 ): String {
-    val status = if (stopReason == "max_tokens") "incomplete" else "completed"
-    return responsesResponseObject(seq, status, responsesOutput(text, stopReason, seq, toolCalls), usage).toString()
+    val status = if (step.stopReason == "max_tokens") "incomplete" else "completed"
+    val output = responsesOutput(step.text, step.stopReason, seq, toolCalls)
+    return responsesResponseObject(seq, model, status, output, step.appliedUsage).toString()
 }
 
 /**
- * The `Response` object in the API's key order. `incomplete_details` is `max_output_tokens` when
+ * The `Response` object in the API's key order, naming [model]. `incomplete_details` is `max_output_tokens` when
  * [status] is `incomplete`, and null otherwise. When [usage] is null, `usage` is null, as on the
  * in-progress response a stream starts with.
  */
 internal fun responsesResponseObject(
     seq: Long,
+    model: String,
     status: String,
     output: JsonArray,
     usage: TokenUsage?,
@@ -150,7 +151,7 @@ internal fun responsesResponseObject(
         put("status", status)
         put("error", JsonNull)
         put("incomplete_details", if (status == "incomplete") buildJsonObject { put("reason", "max_output_tokens") } else JsonNull)
-        put("model", "fake-openai")
+        put("model", model)
         put("output", output)
         put("parallel_tool_calls", true)
         put("tool_choice", "auto")

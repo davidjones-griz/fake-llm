@@ -36,7 +36,7 @@ test("text", async (t) => {
   const f = fake(server, t);
   await f.load([{ text: "Billing questions go to the billing team." }]);
   const message = await create();
-  assert.deepEqual([message.id, message.type, message.role], ["fake-msg-1", "message", "assistant"]);
+  assert.deepEqual([message.id, message.type, message.role, message.model], ["fake-msg-1", "message", "assistant", "example-model"]);
   assert.deepEqual(
     message.content.map((b) => [b.type, b.type === "text" ? b.text : null]),
     [["text", "Billing questions go to the billing team."]],

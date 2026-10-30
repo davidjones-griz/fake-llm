@@ -38,6 +38,7 @@ def test_text(fake, gemini_client):
     fake.load([{"text": "Billing."}])
     response = generate(gemini_client)
     assert response.text == "Billing."
+    assert response.model_version == "example-gemini"
     (candidate,) = response.candidates
     assert candidate.content.role == "model"
     assert candidate.finish_reason == types.FinishReason.STOP

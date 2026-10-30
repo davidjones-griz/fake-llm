@@ -57,6 +57,7 @@
                   }
                 }
               ],
+              "modelVersion": "example-gemini",
               "fake_llm_seq": 1
             }
           },
@@ -75,6 +76,7 @@
                   }
                 }
               ],
+              "modelVersion": "example-gemini",
               "fake_llm_seq": 1
             }
           },
@@ -125,7 +127,7 @@
                   "text/event-stream"
                 ]
               },
-              "body": "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Thinking t\"}]}}],\"fake_llm_seq\":1}\n\ndata: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"his throug\"}]}}],\"fake_llm_seq\":1}\n\ndata: {\"error\":{\"code\":500,\"message\":\"server error\",\"status\":\"INTERNAL\"}}\n\n",
+              "body": "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Thinking t\"}]}}],\"modelVersion\":\"example-gemini\",\"fake_llm_seq\":1}\n\ndata: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"his throug\"}]}}],\"modelVersion\":\"example-gemini\",\"fake_llm_seq\":1}\n\ndata: {\"error\":{\"code\":500,\"message\":\"server error\",\"status\":\"INTERNAL\"}}\n\n",
               "state": "complete"
             }
           }

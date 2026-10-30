@@ -43,7 +43,7 @@ def error_step(status, body, headers=None):
 def test_text(fake, anthropic_client):
     fake.load([{"text": "Billing questions go to the billing team."}])
     message = create(anthropic_client)
-    assert (message.id, message.type, message.role) == ("fake-msg-1", "message", "assistant")
+    assert (message.id, message.type, message.role, message.model) == ("fake-msg-1", "message", "assistant", "example-model")
     assert [(block.type, block.text) for block in message.content] == [("text", "Billing questions go to the billing team.")]
     assert message.stop_reason == "end_turn"
     usage = message.usage

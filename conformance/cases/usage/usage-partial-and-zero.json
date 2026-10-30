@@ -46,7 +46,7 @@
         "body": {
           "id": "fake-openai-1",
           "object": "chat.completion",
-          "model": "fake-openai",
+          "model": "example-gpt",
           "choices": [
             {
               "index": 0,
@@ -90,7 +90,7 @@
         "body": {
           "id": "fake-openai-2",
           "object": "chat.completion",
-          "model": "fake-openai",
+          "model": "example-gpt",
           "choices": [
             {
               "index": 0,

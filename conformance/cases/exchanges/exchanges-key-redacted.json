@@ -55,6 +55,7 @@
             "candidatesTokenCount": 50,
             "totalTokenCount": 150
           },
+          "modelVersion": "example-gemini",
           "fake_llm_seq": 1
         }
       }
@@ -87,7 +88,7 @@
                   "application/json"
                 ]
               },
-              "body": "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi.\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":100,\"candidatesTokenCount\":50,\"totalTokenCount\":150},\"fake_llm_seq\":1}",
+              "body": "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi.\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":100,\"candidatesTokenCount\":50,\"totalTokenCount\":150},\"modelVersion\":\"example-gemini\",\"fake_llm_seq\":1}",
               "state": "complete"
             }
           }

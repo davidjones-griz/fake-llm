@@ -36,7 +36,7 @@ class ResponsesRouteTest {
     ): String {
         val incomplete = if (status == "incomplete") """{"reason":"max_output_tokens"}""" else "null"
         return """{"id":"resp_fake_$seq","object":"response","status":"$status","error":null,"incomplete_details":$incomplete,""" +
-            """"model":"fake-openai","output":[$output],"parallel_tool_calls":true,"tool_choice":"auto","tools":[],""" +
+            """"model":"example-gpt","output":[$output],"parallel_tool_calls":true,"tool_choice":"auto","tools":[],""" +
             """"usage":${if (withUsage) usage else "null"}}"""
     }
 

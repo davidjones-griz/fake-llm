@@ -59,6 +59,7 @@
             "candidatesTokenCount": 340,
             "totalTokenCount": 1540
           },
+          "modelVersion": "example-gemini",
           "fake_llm_seq": 1
         }
       }
