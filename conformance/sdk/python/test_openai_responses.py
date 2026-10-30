@@ -74,11 +74,26 @@ def test_max_tokens(fake, openai_client):
     assert fake.log() == [call(1, "text", 1)]
 
 
-def test_thinking_ignored(fake, openai_client):
-    fake.load([{"text": "Billing.", "thinking": "hidden"}])
+def test_reasoning_item(fake, openai_client):
+    fake.load([{"text": "Billing.", "thinking": "The user asks about an invoice."}])
     r = create(openai_client)
-    assert len(r.output) == 1 and r.output_text == "Billing."
+    assert [item.type for item in r.output] == ["reasoning", "message"]
+    assert r.output[0].id == "rs_fake_1"
+    assert [s.text for s in r.output[0].summary] == ["The user asks about an invoice."]
+    assert r.output_text == "Billing."
+    assert r.usage.output_tokens_details.reasoning_tokens == 0
     assert fake.log() == [call(1, "text", 1)]
+
+
+def test_reasoning_item_sent_back(fake, openai_client):
+    fake.load([{"text": "Billing.", "thinking": "The user asks about an invoice."}, {"text": "Paid."}])
+    first = create(openai_client)
+    second = create(openai_client, input=[{"role": "user", "content": "Hello"}, *first.output, {"role": "user", "content": "And now?"}])
+    assert (second.id, second.output_text) == ("resp_fake_2", "Paid.")
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]
+    # The reasoning item counts as an input item and adds no prompt text.
+    rec = fake.calls()[1]
+    assert (rec["messageCount"], rec["promptSample"]) == (4, "Hello\nBilling.\nAnd now?\n")
 
 
 def test_error_not_retried(fake, openai_client):
@@ -181,6 +196,19 @@ def test_stream_helper_final_response(fake, openai_client):
         final = s.get_final_response()
     assert deltas == ["Bill", "ing."]
     assert (final.id, final.status, final.output_text) == ("resp_fake_1", "completed", "Billing.")
+    assert fake.log() == [call(1, "text", 1)]
+
+
+def test_stream_reasoning_summary(fake, openai_client):
+    fake.load([{"text": "Billing.", "thinking": "The user asks about an invoice.", "streamChunkChars": 8}])
+    with openai_client.responses.stream(model="example-gpt", input="Hello") as s:
+        events = list(s)
+        final = s.get_final_response()
+    deltas = [e.delta for e in events if e.type == "response.reasoning_summary_text.delta"]
+    assert "".join(deltas) == "The user asks about an invoice." and len(deltas) > 1
+    assert [item.type for item in final.output] == ["reasoning", "message"]
+    assert [s.text for s in final.output[0].summary] == ["The user asks about an invoice."]
+    assert final.output_text == "Billing."
     assert fake.log() == [call(1, "text", 1)]
 
 

@@ -59,6 +59,7 @@ public data class Scenario(
 public data class Step(
     /** Assistant text copied into the vendor response. */
     val text: String? = null,
+    /** Anthropic thinking block; OpenAI Responses reasoning item. Ignored by OpenAI Chat Completions and Gemini. */
     val thinking: String? = null,
     /**
      * `stop_reason` for a reply. `"max_tokens"` reports that the reply was truncated. On a step with

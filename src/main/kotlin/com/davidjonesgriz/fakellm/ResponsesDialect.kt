@@ -118,9 +118,10 @@ private fun responsesToolResults(items: List<JsonObject>): List<ToolResultRecord
 }
 
 /**
- * The buffered `Response` to [step] for call [seq], naming [model], the request's model: a message
- * item when the step has text, then one `function_call` item per tool call. `max_tokens` makes it
- * `incomplete` with `max_output_tokens`; anything else is `completed`.
+ * The buffered `Response` to [step] for call [seq], naming [model], the request's model: a
+ * `reasoning` item when the step has thinking, a message item when it has text, then one
+ * `function_call` item per tool call. `max_tokens` makes it `incomplete` with
+ * `max_output_tokens`; anything else is `completed`.
  */
 internal fun responsesEnvelope(
     step: Step,
@@ -129,7 +130,7 @@ internal fun responsesEnvelope(
     toolCalls: List<SentToolCall> = emptyList(),
 ): String {
     val status = if (step.stopReason == "max_tokens") "incomplete" else "completed"
-    val output = responsesOutput(step.text, step.stopReason, seq, toolCalls)
+    val output = responsesOutput(step.text, step.stopReason, seq, toolCalls, step.thinking)
     return responsesResponseObject(seq, model, status, output, step.appliedUsage).toString()
 }
 
@@ -172,14 +173,19 @@ internal fun responsesResponseObject(
         }
     }
 
-/** The `output` items: the message (when [text] is set), then the function calls `fc_fake_<seq>_<n>`. */
+/**
+ * The `output` items: the reasoning item `rs_fake_<seq>` (when [thinking] is set), the message (when
+ * [text] is set), then the function calls `fc_fake_<seq>_<n>`.
+ */
 internal fun responsesOutput(
     text: String?,
     stopReason: String,
     seq: Long,
     toolCalls: List<SentToolCall>,
+    thinking: String? = null,
 ): JsonArray =
     buildJsonArray {
+        if (thinking != null) add(responsesReasoningItem(seq, thinking))
         if (text != null) add(responsesMessageItem(seq, if (stopReason == "max_tokens") "incomplete" else "completed", text))
         toolCalls.forEachIndexed { i, call ->
             add(responsesFunctionCallItem("fc_fake_${seq}_${i + 1}", call, "completed", call.argumentText))
