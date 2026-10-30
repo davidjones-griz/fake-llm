@@ -247,7 +247,7 @@ jobs:
           python-version-file: conformance/sdk/python/.python-version
           cache: pip
           cache-dependency-path: conformance/sdk/python/requirements.txt
-      # The SDK suite's hash-pinned lock has the example's dependencies (anthropic, httpx, pytest).
+      # The Python SDK suite's hash-pinned lock has the example's dependencies (anthropic, httpx, pytest).
       # The example's own install step is unpinned, for copying, so it is not run here.
       - name: Install the test dependencies
         run: python -m pip install --require-hashes -r conformance/sdk/python/requirements.txt
@@ -323,8 +323,9 @@ jobs:
         if: always()
         run: docker ps -aq --filter ancestor=fake-llm:ci | xargs -r docker rm -f
 
-  # Runs the HTTP conformance suite (conformance/cases) and the SDK suite (conformance/sdk/python,
-  # the official Python SDKs) against the fat jar and the Docker image, both built from this commit.
+  # Runs the HTTP conformance suite (conformance/cases) and the SDK suites (conformance/sdk/python
+  # and conformance/sdk/node, the official Python and Node SDKs) against the fat jar and the Docker
+  # image, both built from this commit.
   # Nothing should be skipped with a command target, so a skip fails.
   conformance:
     runs-on: ubuntu-latest
@@ -369,7 +370,7 @@ jobs:
           path: conformance/runner/build/reports/tests/test
           if-no-files-found: warn
           retention-days: 14
-      # The SDK suite. Set up even when an HTTP-suite run failed, so its results are still reported.
+      # The Python SDK suite. Set up even when an HTTP-suite run failed, so its results are still reported.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         id: setup-python
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
@@ -377,27 +378,62 @@ jobs:
           python-version-file: conformance/sdk/python/.python-version
           cache: pip
           cache-dependency-path: conformance/sdk/python/requirements.txt
-      - name: Install the SDK suite
+      - name: Install the Python SDK suite
         id: sdk-install
         if: ${{ !cancelled() && steps.setup-python.outcome == 'success' }}
         run: python -m pip install --require-hashes -r conformance/sdk/python/requirements.txt
-      - name: Run the SDK suite against the fat jar
+      - name: Run the Python SDK suite against the fat jar
         if: ${{ !cancelled() && steps.sdk-install.outcome == 'success' }}
         env:
           FAKE_LLM_COMMAND: java -jar build/libs/fake-llm-all.jar
         run: python -m pytest conformance/sdk/python --junitxml=conformance/sdk/python/reports/fat-jar.xml
       # Runs even when the fat-jar run failed, so one run reports both.
-      - name: Run the SDK suite against the Docker image
+      - name: Run the Python SDK suite against the Docker image
         if: ${{ !cancelled() && steps.sdk-install.outcome == 'success' }}
         env:
           # $PORT is expanded by the suite's sh -c, once per server it starts.
           FAKE_LLM_COMMAND: docker run --rm -e PORT -e FAKE_LLM_LENIENT -e FAKE_LLM_CONTROL_TOKEN -p "$PORT:$PORT" fake-llm:ci
         run: python -m pytest conformance/sdk/python --junitxml=conformance/sdk/python/reports/docker.xml
+      # The Node SDK suite. Set up even when an earlier run failed, so its results are still reported.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        id: setup-node
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        with:
+          node-version-file: conformance/sdk/node/.node-version
+          cache: npm
+          cache-dependency-path: conformance/sdk/node/package-lock.json
+      # --ignore-scripts: @google/genai's preinstall and protobufjs's postinstall only print a
+      # message, and the suite needs no install script.
+      - name: Install and type-check the Node SDK suite
+        id: node-install
+        if: ${{ !cancelled() && steps.setup-node.outcome == 'success' }}
+        working-directory: conformance/sdk/node
+        run: |
+          npm ci --ignore-scripts
+          npm run typecheck
+      - name: Run the Node SDK suite against the fat jar
+        if: ${{ !cancelled() && steps.node-install.outcome == 'success' }}
+        working-directory: conformance/sdk/node
+        env:
+          FAKE_LLM_COMMAND: java -jar ${{ github.workspace }}/build/libs/fake-llm-all.jar
+          FAKE_LLM_REPORT: fat-jar
+        run: npm test
+      # Runs even when the fat-jar run failed, so one run reports both.
+      - name: Run the Node SDK suite against the Docker image
+        if: ${{ !cancelled() && steps.node-install.outcome == 'success' }}
+        working-directory: conformance/sdk/node
+        env:
+          # $PORT is expanded by the suite's sh -c, once per server it starts.
+          FAKE_LLM_COMMAND: docker run --rm -e PORT -e FAKE_LLM_LENIENT -e FAKE_LLM_CONTROL_TOKEN -p "$PORT:$PORT" fake-llm:ci
+          FAKE_LLM_REPORT: docker
+        run: npm test
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
           name: sdk-conformance-reports
-          path: conformance/sdk/python/reports/
+          path: |
+            conformance/sdk/python/reports/
+            conformance/sdk/node/reports/
           if-no-files-found: warn
           retention-days: 14
       # A container is the docker CLI's child only through the daemon, so a killed run can leave one.
