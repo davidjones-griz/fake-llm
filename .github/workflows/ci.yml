@@ -146,6 +146,32 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the image
         run: docker build -t fake-llm:ci .
+      - name: Check the image's health check
+        run: |
+          set -eu
+          # The image declares a health check on GET /health.
+          docker inspect --format '{{json .Config.Healthcheck.Test}}' fake-llm:ci | grep -F '/health'
+          await_healthy() {
+            deadline=$((SECONDS + 60))
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              status=$(docker inspect -f '{{.State.Health.Status}}' "$1")
+              [ "$status" = healthy ] && return 0
+              [ "$status" = unhealthy ] && break
+              # A server that exited stays "starting"; stop waiting.
+              [ "$(docker inspect -f '{{.State.Running}}' "$1")" = true ] || break
+              sleep 1
+            done
+            docker inspect -f '{{json .State.Health}}' "$1"
+            docker logs "$1"
+            return 1
+          }
+          trap 'docker rm -f hc-default hc-port >/dev/null 2>&1 || true' EXIT
+          # Default port.
+          docker run -d --name hc-default fake-llm:ci
+          await_healthy hc-default
+          # PORT moves the server and the probe together.
+          docker run -d --name hc-port -e PORT=9090 fake-llm:ci
+          await_healthy hc-port
       - name: Run, check /health, /openapi and the call log, stop
         run: |
           set -eu
