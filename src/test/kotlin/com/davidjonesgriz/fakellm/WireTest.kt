@@ -325,7 +325,7 @@ class WireTest {
             ),
             req.toolResults,
         )
-        assertEquals("Hello\nChecking.\n", req.promptText)
+        assertEquals("Hello\nChecking.\n18 degrees\nunknown timezone\ntoday\n", req.promptText)
     }
 
     @Test

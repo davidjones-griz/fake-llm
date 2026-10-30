@@ -128,10 +128,11 @@ private fun StringBuilder.appendTexts(el: JsonElement?) {
             if (el.isString) append(el.content).append('\n')
         }
 
+        // A block's string `text`; a `tool_result` block adds its own `content` the same way.
         is JsonArray -> {
-            el.forEach { block ->
-                val t = (block as? JsonObject)?.get("text") as? JsonPrimitive
-                if (t != null && t.isString) append(t.content).append('\n')
+            el.filterIsInstance<JsonObject>().forEach { block ->
+                block.stringField("text")?.let { append(it).append('\n') }
+                if (block.stringField("type") == "tool_result") appendTexts(block["content"])
             }
         }
 

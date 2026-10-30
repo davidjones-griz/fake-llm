@@ -69,4 +69,17 @@ class PromptTextTest {
         assertEquals("blocks", fallback.systemShape)
         assertEquals("S\n", fallback.promptText)
     }
+
+    @Test
+    fun `an anthropic tool_result adds its string content or its text blocks`() {
+        val req =
+            parseAnthropicRequest(
+                """{"model":"m","messages":[{"role":"user","content":[
+                  {"type":"tool_result","tool_use_id":"a","content":"18 degrees"},
+                  {"type":"tool_result","tool_use_id":"b","content":[{"type":"text","text":"sunny"},{"type":"image","source":{}}]},
+                  {"type":"tool_result","tool_use_id":"c"},
+                  {"type":"text","text":"Thanks."}]}]}""",
+            )
+        assertEquals("18 degrees\nsunny\nThanks.\n", req.promptText)
+    }
 }
