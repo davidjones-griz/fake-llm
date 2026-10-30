@@ -30,4 +30,43 @@ class PromptTextTest {
         assertEquals("blocks", system.systemShape)
         assertEquals("Be brief.\n", system.promptText)
     }
+
+    @Test
+    fun `gemini systemInstruction comes first and sets systemShape, under either field name`() {
+        val camel =
+            parseGeminiRequest(
+                """{"systemInstruction":{"role":"user","parts":[{"text":"Be brief."},{"text":"Use metric."}]},
+                   "contents":[{"role":"user","parts":[{"text":"Hi"}]}]}""",
+                modelFromPath = "g",
+            )
+        assertEquals("Be brief.\nUse metric.\nHi\n", camel.promptText)
+        assertEquals("blocks", camel.systemShape)
+        val snake =
+            parseGeminiRequest(
+                """{"system_instruction":{"parts":[{"text":"Be brief."}]},"contents":[{"parts":[{"text":"Hi"}]}]}""",
+                modelFromPath = "g",
+            )
+        assertEquals("Be brief.\nHi\n", snake.promptText)
+        assertEquals("blocks", snake.systemShape)
+    }
+
+    @Test
+    fun `a gemini systemInstruction that is not an object is unknown, and only string part text counts`() {
+        val req =
+            parseGeminiRequest(
+                """{"systemInstruction":"Be brief.","contents":[{"parts":[{"text":"Hi"},{"text":7},{"inlineData":{}}]}]}""",
+                modelFromPath = "g",
+            )
+        assertEquals("unknown", req.systemShape)
+        assertEquals("Hi\n", req.promptText)
+        val none = parseGeminiRequest("""{"systemInstruction":null,"contents":[]}""", modelFromPath = "g")
+        assertEquals("absent", none.systemShape)
+        val fallback =
+            parseGeminiRequest(
+                """{"systemInstruction":null,"system_instruction":{"parts":[{"text":"S"}]},"contents":[]}""",
+                modelFromPath = "g",
+            )
+        assertEquals("blocks", fallback.systemShape)
+        assertEquals("S\n", fallback.promptText)
+    }
 }
