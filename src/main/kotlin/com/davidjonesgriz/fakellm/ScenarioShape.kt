@@ -22,7 +22,8 @@ import kotlinx.serialization.json.JsonPrimitive
  * The check is stricter than kotlinx in one way, as the OpenAPI spec says: an integer is a JSON
  * number written without quotes, a fraction or an exponent, within the field's range.
  *
- * A [JsonObject] field accepts any JSON object; its content is not checked.
+ * A [JsonObject] field accepts any JSON object, and a [JsonElement] field any JSON value, `null`
+ * included; their content is not checked.
  */
 internal object ScenarioShape {
     /** Throws [IllegalArgumentException] naming the first shape problem in [element], if there is one. */
@@ -41,6 +42,10 @@ internal object ScenarioShape {
         path: String,
     ): String? =
         when {
+            descriptor.serialName.removeSuffix("?") == JSON_ELEMENT_SERIAL_NAME -> {
+                null
+            }
+
             element is JsonNull -> {
                 if (descriptor.isNullable) null else "$path: must not be null"
             }
@@ -116,17 +121,12 @@ internal object ScenarioShape {
         path: String,
     ): String? {
         val primitive = element as? JsonPrimitive
-        val valid =
-            when (kind) {
-                PrimitiveKind.STRING -> primitive?.isString == true
-                PrimitiveKind.INT -> primitive?.isString == false && primitive.content.toIntOrNull() != null
-                PrimitiveKind.LONG -> primitive?.isString == false && primitive.content.toLongOrNull() != null
-                else -> error("scenario field kind $kind at $path is not supported by the shape check")
-            }
         return when {
-            valid -> null
+            isValid(primitive, kind, path) -> null
 
             kind == PrimitiveKind.STRING -> expected("a string", element, path)
+
+            kind == PrimitiveKind.BOOLEAN -> expected("a boolean", element, path)
 
             primitive?.isString == false &&
                 INTEGER_LITERAL.matches(
@@ -204,7 +204,26 @@ internal object ScenarioShape {
 
     /** The serial name of [JsonObject]'s descriptor, whose content the check does not follow. */
     private val JSON_OBJECT_SERIAL_NAME = JsonObject.serializer().descriptor.serialName
+
+    /** The serial name of [JsonElement]'s descriptor: a field that takes any JSON value. */
+    private val JSON_ELEMENT_SERIAL_NAME = JsonElement.serializer().descriptor.serialName
 }
 
 /** [name] for a path, with `'` escaped, since paths quote names in `'`. */
 private fun quoted(name: String): String = name.replace("'", "\\'")
+
+/** Whether [primitive] is a value of the scalar [kind]. */
+private fun isValid(
+    primitive: JsonPrimitive?,
+    kind: SerialKind,
+    path: String,
+): Boolean {
+    val literal = primitive?.takeUnless { it.isString }?.content
+    return when (kind) {
+        PrimitiveKind.STRING -> primitive?.isString == true
+        PrimitiveKind.INT -> literal?.toIntOrNull() != null
+        PrimitiveKind.LONG -> literal?.toLongOrNull() != null
+        PrimitiveKind.BOOLEAN -> literal == "true" || literal == "false"
+        else -> error("scenario field kind $kind at $path is not supported by the shape check")
+    }
+}

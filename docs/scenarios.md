@@ -246,6 +246,18 @@ curl -s -X POST http://localhost:8080/control/scenario \
 
 Sending both `name` and `scenario`, or neither, is HTTP 400 `invalid-request`. A name that finds no scenario is `unknown-scenario`, and an illegal name or a scenario the decoder rejects is `invalid-scenario`, with the reason in `message`, such as `{"fake_llm_error":"invalid-scenario","message":"step 2: $.steps[1]: unknown field 'stopReasn'"}`.
 
+## Parallel calls
+
+A step can carry a `match`, and a parallel step holds several responses that calls use in any order.
+
+### Overlap
+
+Consecutive parallel steps with `"overlap": true` form one group.
+
+### Match keys
+
+Each key of a [match](#match-fields) reads one fact of the request.
+
 ## Fields
 
 Types are JSON types. Integers are plain JSON integers. A field with no default is optional unless it says required.
@@ -262,7 +274,7 @@ A top-level `$schema` key is allowed and ignored; see [Scenario schema and `vali
 
 ### Step fields
 
-Each step is a reply (`text`, `toolCalls`, or both) or an `error`.
+Each step is a reply (`text`, `toolCalls`, or both) or an `error`, optionally with a `match`; or a parallel step, whose only key is `parallel`.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -277,6 +289,8 @@ Each step is a reply (`text`, `toolCalls`, or both) or an `error`.
 | `firstByteDelayMs` | integer, 0 to 600000 | 0 | Milliseconds to wait before any response bytes, status and headers included. Default 0. From 0 to 600000 (10 minutes). Every generation route: buffered and streamed replies and error steps. The call is numbered and logged when it arrives, before the wait. Use it to test client timeouts and slow-first-token handling. See [Latency and timeouts](#latency-and-timeouts). |
 | `toolCalls` | array of [ToolCall](#toolcall-fields), at least one, or null | none | Tool calls the reply makes, in order, after any `text`. See [Tool calls](#tool-calls). |
 | `usage` | [TokenUsage](#tokenusage-fields) or null | none (100 input, 50 output) | Token counts the reply reports. Legal only on a reply step. Every format, buffered and streamed, reports them where it reports usage; totals are the sum. The Anthropic cache figures don't change. |
+| `match` | [Match](#match-fields) or null | none | Only a call that satisfies it takes this step. On a plain step, a call that doesn't takes nothing and gets the `no-match` 400, and the step stays next. See [Parallel calls](#parallel-calls). |
+| `parallel` | [ParallelSection](#parallelsection-fields) or null | none | Makes this a parallel step: one position holding several responses, used in any order. A parallel step has no other key. See [Parallel calls](#parallel-calls). |
 
 ### ErrorStep fields
 
@@ -301,3 +315,91 @@ Each step is a reply (`text`, `toolCalls`, or both) or an `error`.
 | --- | --- | --- | --- |
 | `inputTokens` | integer, 0 to 2147483647 | 100 | The input token count the reply reports. |
 | `outputTokens` | integer, 0 to 2147483647 | 50 | The output token count the reply reports. |
+
+### ParallelSection fields
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `steps` | array of steps, at least one | required | The responses. Each is a plain step (a reply or an `error`, with any delays) with an optional `match`. A parallel step can't hold another. |
+| `overlap` | boolean | `false` | Joins this section with the consecutive sections after it that also set it, into one group searched together. See [Overlap](#overlap). |
+
+### Match fields
+
+Every key that is set must hold, and at least one must be set. [Match keys](#match-keys) says what each reads on each route.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `route` | string or null | none | `anthropic`, `openai` (Chat Completions), `openai-responses` or `gemini`, as the call log's `vendor` names it. |
+| `model` | string or null | none | The request's model, exactly. |
+| `stream` | boolean or null | none | Whether the request asked for a stream. |
+| `system` | [TextMatch](#textmatch-fields) or null | none | The system prompt's text. |
+| `lastUser` | [TextMatch](#textmatch-fields) or null | none | The text of the last user message that has text. |
+| `prompt` | [TextMatch](#textmatch-fields) or null | none | The request's combined prompt text, of which a call record's `promptSample` is the end. |
+| `message` | [MessageMatch](#messagematch-fields) or null | none | One message, by index or by role. |
+| `messageCount` | integer, 0 or more, or null | none | The number of messages. |
+| `hasSystem` | boolean or null | none | Whether the request has a system prompt. |
+| `toolResult` | [ToolResultMatch](#toolresultmatch-fields) or null | none | A tool result the request sends back, from any turn. |
+| `tools` | [ToolsMatch](#toolsmatch-fields) or null | none | The declared tools and the tool choice. |
+| `body` | [BodyMatch](#bodymatch-fields) or null | none | A value in the request body. |
+| `header` | [HeaderMatch](#headermatch-fields) or null | none | A request header. |
+
+### TextMatch fields
+
+Exactly one of the three, case-sensitive.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `contains` | string or null | none | The text contains this. |
+| `equals` | string or null | none | The text is exactly this. |
+| `regex` | string or null | none | This Java regular expression matches somewhere in the text; `^` and `$` anchor it. A pattern that doesn't compile is rejected when the scenario loads. |
+
+### MessageMatch fields
+
+Exactly one of `index` and `role`, and exactly one of `contains`, `equals` and `regex`.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `index` | integer or null | none | The message's position, from 0. A negative index counts from the end, so `-1` is the last. |
+| `role` | string or null | none | The last message with this role, as the request spells it (`assistant`, Gemini `model`). |
+| `contains` | string or null | none | The message's text contains this. |
+| `equals` | string or null | none | The message's text is exactly this. |
+| `regex` | string or null | none | This regular expression matches somewhere in the message's text. |
+
+### ToolResultMatch fields
+
+Some tool result in the request must satisfy every key that is set; at least one must be set.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `id` | string or null | none | The id of the tool call the result answers. |
+| `name` | string or null | none | The tool's name. |
+| `content` | [TextMatch](#textmatch-fields) or null | none | The result's text, or its compact JSON when it is not a string. |
+| `isError` | boolean or null | none | Whether the result reports an error: Anthropic `is_error`; always false on the other routes. |
+
+### ToolsMatch fields
+
+At least one must be set.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `declares` | string or null | none | The name of a tool the request declares. |
+| `choice` | string or null | none | The tool choice, normalized: `auto`, `none`, `required`, `tool` or `other`. See [Match keys](#match-keys). |
+| `choiceTool` | string, not empty, or null | none | The name of the one tool the request forces. It implies `choice` `tool`. |
+
+### BodyMatch fields
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `path` | string | required | `$` followed by one or more `.name`, `['name']` or `[n]` segments. A negative `n` counts from the end; inside quotes, `\'` and `\\` are the only escapes. There are no wildcards or filters. |
+| `equals` | any JSON value | required | The value at `path`, compared as JSON, numbers by value. `null` matches a `null` value. A path that isn't there never matches. |
+
+### HeaderMatch fields
+
+`name`, and exactly one of `contains`, `equals` and `regex`.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `name` | string | required | The header's name, in any case. |
+| `contains` | string or null | none | A value of the header contains this. |
+| `equals` | string or null | none | A value of the header is exactly this. |
+| `regex` | string or null | none | This regular expression matches somewhere in a value of the header. |

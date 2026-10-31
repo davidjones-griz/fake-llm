@@ -212,6 +212,130 @@ internal val invalidScenarios =
         "stopSequence without stopReason stop_sequence" to """{"name":"x","steps":[{"text":"t","stopSequence":"END"}]}""",
         "an empty stopSequence" to """{"name":"x","steps":[{"text":"t","stopReason":"stop_sequence","stopSequence":""}]}""",
         "outputTokens past Int" to """{"name":"x","steps":[{"text":"t","usage":{"outputTokens":3000000000}}]}""",
+        "a parallel step inside a parallel step" to
+            """{"name":"x","steps":[{"parallel":{"steps":[{"parallel":{"steps":[{"text":"a"}]}}]}}]}""",
+        "a parallel step with a sibling key" to
+            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}]},"text":"t"}]}""",
+        "a parallel step with an explicit default beside it" to
+            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}]},"stopReason":"end_turn"}]}""",
+        "a parallel step with a null sibling" to
+            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}]},"text":null}]}""",
+        "match on a parallel step" to
+            """{"name":"x","steps":[{"match":{"model":"m"},"parallel":{"steps":[{"text":"a"}]}}]}""",
+        "a null parallel and nothing else" to
+            """{"name":"x","steps":[{"parallel":null}]}""",
+        "an empty parallel steps list" to
+            """{"name":"x","steps":[{"parallel":{"steps":[]}}]}""",
+        "a parallel section without steps" to
+            """{"name":"x","steps":[{"parallel":{"overlap":true}}]}""",
+        "an unknown field in a parallel section" to
+            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}],"x":1}}]}""",
+        "overlap as a string" to
+            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}],"overlap":"yes"}}]}""",
+        "an inner step with neither a reply nor an error" to
+            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"},{}]}}]}""",
+        "an empty match" to
+            """{"name":"x","steps":[{"match":{},"text":"t"}]}""",
+        "a match whose only key is null" to
+            """{"name":"x","steps":[{"match":{"model":null},"text":"t"}]}""",
+        "an unknown key in a match" to
+            """{"name":"x","steps":[{"match":{"modle":"m"},"text":"t"}]}""",
+        "a text match with two operators" to
+            """{"name":"x","steps":[{"match":{"lastUser":{"contains":"a","equals":"b"}},"text":"t"}]}""",
+        "a text match with no operator" to
+            """{"name":"x","steps":[{"match":{"lastUser":{}},"text":"t"}]}""",
+        "a text match whose only operator is null" to
+            """{"name":"x","steps":[{"match":{"system":{"contains":null}},"text":"t"}]}""",
+        "a message match with index and role" to
+            """{"name":"x","steps":[{"match":{"message":{"index":0,"role":"user","contains":"a"}},"text":"t"}]}""",
+        "a message match with neither index nor role" to
+            """{"name":"x","steps":[{"match":{"message":{"contains":"a"}},"text":"t"}]}""",
+        "a message match with no text operator" to
+            """{"name":"x","steps":[{"match":{"message":{"index":0}},"text":"t"}]}""",
+        "a quoted message index" to
+            """{"name":"x","steps":[{"match":{"message":{"index":"0","contains":"a"}},"text":"t"}]}""",
+        "an unknown route" to
+            """{"name":"x","steps":[{"match":{"route":"bedrock"},"text":"t"}]}""",
+        "stream as a string" to
+            """{"name":"x","steps":[{"match":{"stream":"true"},"text":"t"}]}""",
+        "a negative messageCount" to
+            """{"name":"x","steps":[{"match":{"messageCount":-1},"text":"t"}]}""",
+        "a body path without $" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"metadata.user","equals":1}},"text":"t"}]}""",
+        "a body path that is only $" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$","equals":1}},"text":"t"}]}""",
+        "a body path with a wildcard" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$.a[*]","equals":1}},"text":"t"}]}""",
+        "a body path with an unclosed quote" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$['a]","equals":1}},"text":"t"}]}""",
+        "a body match without equals" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$.a"}},"text":"t"}]}""",
+        "an empty tools match" to
+            """{"name":"x","steps":[{"match":{"tools":{}},"text":"t"}]}""",
+        "an unknown tool choice" to
+            """{"name":"x","steps":[{"match":{"tools":{"choice":"maybe"}},"text":"t"}]}""",
+        "choiceTool with choice auto" to
+            """{"name":"x","steps":[{"match":{"tools":{"choice":"auto","choiceTool":"f"}},"text":"t"}]}""",
+        "an empty choiceTool" to
+            """{"name":"x","steps":[{"match":{"tools":{"choiceTool":""}},"text":"t"}]}""",
+        "an empty toolResult match" to
+            """{"name":"x","steps":[{"match":{"toolResult":{}},"text":"t"}]}""",
+        "a toolResult match whose only key is null" to
+            """{"name":"x","steps":[{"match":{"toolResult":{"id":null}},"text":"t"}]}""",
+        "an empty header name" to
+            """{"name":"x","steps":[{"match":{"header":{"name":"","contains":"a"}},"text":"t"}]}""",
+        "a header name with a space" to
+            """{"name":"x","steps":[{"match":{"header":{"name":"x trace","contains":"a"}},"text":"t"}]}""",
+        "a header match with no operator" to
+            """{"name":"x","steps":[{"match":{"header":{"name":"x-trace"}},"text":"t"}]}""",
+    )
+
+/**
+ * Scenarios with parallel steps and matches that the decoder, `fake-llm validate`, the scenario
+ * schemas and the engine must all accept, including explicit nulls the decoder reads as absent.
+ */
+internal val validParallelScenarios =
+    listOf(
+        "the issue's fan-out and merge" to
+            """{"name":"summarize-three-then-merge","steps":[{"parallel":{"steps":[
+              {"match":{"lastUser":{"contains":"doc-a"}},"text":"Summary of A."},
+              {"match":{"lastUser":{"contains":"doc-b"}},"text":"Summary of B."},
+              {"match":{"lastUser":{"contains":"doc-c"}},"text":"Summary of C."}]}},
+              {"match":{"system":{"contains":"Merge"}},"text":"A, B and C, combined."}]}""",
+        "the issue's 429 and retry" to
+            """{"name":"parallel-with-a-429-retry","steps":[{"parallel":{"steps":[
+              {"match":{"lastUser":{"contains":"doc-a"}},"error":{"status":429,"body":"{\"type\":\"error\"}","headers":{"retry-after":"1"}}},
+              {"match":{"lastUser":{"contains":"doc-a"}},"text":"Summary of A."},
+              {"match":{"lastUser":{"contains":"doc-b"}},"text":"Summary of B."}]}}]}""",
+        "a nested fan-out in an overlap group" to
+            """{"name":"nested","steps":[
+              {"parallel":{"overlap":true,"steps":[{"match":{"lastUser":{"equals":"plan a"}},"text":"A"},
+                {"match":{"lastUser":{"equals":"plan b"}},"text":"B"}]}},
+              {"parallel":{"overlap":true,"steps":[{"match":{"lastUser":{"equals":"a1"}},"text":"A1"},
+                {"match":{"lastUser":{"equals":"a2"}},"text":"A2"}]}},
+              {"parallel":{"overlap":true,"steps":[{"match":{"lastUser":{"equals":"b1"}},"text":"B1"}]}},
+              {"text":"merged"}]}""",
+        "every match key" to
+            """{"name":"keys","steps":[{"match":{"route":"anthropic","model":"m","stream":false,
+              "system":{"contains":"s"},"lastUser":{"equals":"u"},"prompt":{"regex":"^s"},
+              "message":{"index":-1,"contains":"u"},"messageCount":1,"hasSystem":true,
+              "toolResult":{"id":"t1","name":"f","content":{"contains":"x"},"isError":false},
+              "tools":{"declares":"f","choice":"tool","choiceTool":"f"},
+              "body":{"path":"$.metadata['user \\'id'][-1].a","equals":{"a":[1,null]}},
+              "header":{"name":"x-trace","contains":"a"}},"text":"t"}]}""",
+        "explicit nulls the decoder reads as absent" to
+            """{"name":"nulls","steps":[
+              {"match":{"lastUser":{"contains":"a","equals":null,"regex":null},"model":null},"text":"t"},
+              {"parallel":{"overlap":false,"steps":[{"text":"a","match":null,"parallel":null}]}},
+              {"match":{"message":{"role":"user","index":null,"equals":"x"}},"text":"t"},
+              {"match":{"toolResult":{"id":"x","name":null},"tools":{"choice":"auto","choiceTool":null}},"text":"t"},
+              {"match":{"body":{"path":"$.a","equals":null}},"text":"t"},
+              {"parallel":null,"text":"t"},
+              {"match":{"tools":{"choiceTool":"f"}},"text":"t"},
+              {"match":{"header":{"name":"X-Trace","regex":"a+","contains":null}},"text":"t"}]}""",
+        "a lone overlap section and one with no matches" to
+            """{"name":"lone","steps":[{"parallel":{"overlap":true,"steps":[{"text":"x"},{"text":"y"}]}},
+              {"parallel":{"steps":[{"text":"z"}]}}]}""",
     )
 
 /** Every directory of scenario files in the repository, relative to the root project. */

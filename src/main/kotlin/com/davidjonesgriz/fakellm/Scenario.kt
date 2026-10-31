@@ -50,10 +50,12 @@ public data class Scenario(
 
 /**
  * One step of a [Scenario]: a reply ([text], [toolCalls] or both, optionally with [thinking] and
- * [usage]) or a scripted [error].
+ * [usage]) or a scripted [error], optionally with a [match]; or a [parallel] step, which sets nothing
+ * else.
  *
  * @throws IllegalArgumentException when a value is invalid, including when a step sets both or
- *   neither of a reply and [error]. The message text is diagnostic, not part of the API.
+ *   neither of a reply and [error], or a parallel step sets anything else. The message text is
+ *   diagnostic, not part of the API.
  */
 @Serializable
 public data class Step(
@@ -117,8 +119,24 @@ public data class Step(
      * have no such field and ignore it.
      */
     val stopSequence: String? = null,
+    /** Only a call that satisfies it takes this step; a call that doesn't takes nothing, and the step stays next. */
+    val match: Match? = null,
+    /** Makes this a parallel step: several responses, used in any order. A parallel step sets no other field. */
+    val parallel: ParallelSection? = null,
 ) {
     init {
+        if (parallel != null) requireOnlyParallel() else requireReplyOrError()
+    }
+
+    private fun requireOnlyParallel() {
+        val untouched =
+            match == null && text == null && toolCalls == null && error == null && thinking == null && usage == null &&
+                stopSequence == null && stopReason == "end_turn" && streamChunkChars == DEFAULT_STREAM_CHUNK_CHARS &&
+                streamInterChunkDelayMs == 0L && firstByteDelayMs == 0L && streamErrorAfterChunks == null
+        require(untouched) { "a parallel step sets nothing but parallel" }
+    }
+
+    private fun requireReplyOrError() {
         require(((text != null) || (toolCalls != null)) xor (error != null)) {
             "a step must set either error or a reply: text, toolCalls or both"
         }
@@ -288,12 +306,10 @@ internal object ScenarioLoader {
     internal fun decode(element: JsonElement): Scenario {
         val root = withoutSchemaKey(element)
         ((root as? JsonObject)?.get("steps") as? JsonArray)?.forEachIndexed { i, step ->
-            try {
-                ScenarioShape.require(step, Step.serializer().descriptor, "$.steps[$i]")
-                json.decodeFromJsonElement<Step>(step)
-            } catch (e: IllegalArgumentException) {
-                throw IllegalArgumentException("step ${i + 1}: ${ScenarioShape.decodeFailure(e)}", e)
+            parallelSteps(step, i)?.forEachIndexed { j, inner ->
+                decodeStep(json, inner, "step ${i + 1}.${j + 1}", "$.steps[$i].parallel.steps[$j]")
             }
+            decodeStep(json, step, "step ${i + 1}", "$.steps[$i]")
         }
         ScenarioShape.require(root, Scenario.serializer().descriptor, "$")
         return try {
@@ -366,6 +382,43 @@ internal object ScenarioLoader {
             .filter { it.isNotEmpty() && !it.startsWith("#") }
 
     private val defaultLoader: ClassLoader = ScenarioLoader::class.java.classLoader
+}
+
+/** Checks and decodes one step on its own, so a problem is reported with its [label] (`step 2` or `step 2.3`). */
+private fun decodeStep(
+    json: Json,
+    step: JsonElement,
+    label: String,
+    path: String,
+) {
+    try {
+        ScenarioShape.require(step, Step.serializer().descriptor, path)
+        json.decodeFromJsonElement<Step>(step)
+    } catch (e: IllegalArgumentException) {
+        throw IllegalArgumentException("$label: ${ScenarioShape.decodeFailure(e)}", e)
+    }
+}
+
+/**
+ * The inner steps of [step], the scenario's step [i], when it is a parallel step, after the two
+ * rules that need the step's path: a parallel step has no other key, and none of its steps is a
+ * parallel step. A `parallel` of `null` is absent, as everywhere in the format.
+ */
+private fun parallelSteps(
+    step: JsonElement,
+    i: Int,
+): JsonArray? {
+    val obj = step as? JsonObject
+    val parallel = obj?.valueOrNull("parallel")
+    val other = obj?.keys?.firstOrNull { it != "parallel" }
+    require(parallel == null || other == null) { "step ${i + 1}: $.steps[$i]: a parallel step has only the key 'parallel', got '$other'" }
+    val inner = ((parallel as? JsonObject)?.get("steps") as? JsonArray)
+    inner?.forEachIndexed { j, s ->
+        require((s as? JsonObject)?.valueOrNull("parallel") == null) {
+            "step ${i + 1}.${j + 1}: $.steps[$i].parallel.steps[$j].parallel: a parallel step cannot contain another parallel step"
+        }
+    }
+    return inner
 }
 
 /** The key a scenario file uses to name its JSON Schema, for editors. */

@@ -1310,9 +1310,14 @@ components:
       type: object
       description: |
         One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking` and
-        `usage`), or a scripted `error`. A step sets exactly one of a reply and `error`.
+        `usage`), or a scripted `error`, optionally with a `match`; or a parallel step, an object
+        whose only key is `parallel`. A step sets exactly one of a reply, `error` and `parallel`.
       additionalProperties: false
       oneOf:
+        - required: [parallel]
+          properties:
+            parallel:
+              type: object
         - anyOf:
             - required: [text]
               properties:
@@ -1327,6 +1332,13 @@ components:
             error:
               type: object
       allOf:
+        - if:
+            required: [parallel]
+            properties:
+              parallel:
+                type: object
+          then:
+            maxProperties: 1
         - if:
             required: [thinking]
             properties:
@@ -1462,6 +1474,299 @@ components:
             The stop sequence that ended the reply, sent as Anthropic's `stop_sequence` (buffered,
             and in the stream's `message_delta`). Only with `stopReason` `stop_sequence`. Other
             formats ignore it.
+        match:
+          oneOf:
+            - $ref: "#/components/schemas/Match"
+            - type: "null"
+          description: |
+            Only a call that satisfies it takes this step. On a plain step, a call that doesn't
+            takes nothing and gets the `no-match` 400, and the step stays next.
+        parallel:
+          oneOf:
+            - $ref: "#/components/schemas/ParallelSection"
+            - type: "null"
+          description: |
+            Makes this a parallel step: one position in the scenario holding several responses,
+            used in any order. A parallel step has no other key.
+    ParallelSection:
+      type: object
+      description: |
+        The responses of a parallel step. A call takes the first unused step whose `match` it
+        satisfies, in listed order; a step with no `match` matches any call. The scenario moves past
+        the section once every step in it is used.
+      additionalProperties: false
+      required: [steps]
+      properties:
+        steps:
+          type: array
+          minItems: 1
+          items:
+            allOf:
+              - $ref: "#/components/schemas/Step"
+              - not:
+                  required: [parallel]
+                  properties:
+                    parallel:
+                      type: object
+          description: The responses, each a plain step with an optional `match`. A parallel step can't hold another.
+        overlap:
+          type: boolean
+          default: false
+          description: |
+            Joins this section with the consecutive sections after it that also set it, into one
+            group whose unused steps a call searches together, first match in listed order. The group
+            ends at the first step that is not such a section.
+    Match:
+      type: object
+      description: |
+        What a call must look like for a step to answer it. Every key that is set must hold, and at
+        least one must be set.
+      additionalProperties: false
+      anyOf:
+        - required: [route]
+          properties: {route: {type: string}}
+        - required: [model]
+          properties: {model: {type: string}}
+        - required: [stream]
+          properties: {stream: {type: boolean}}
+        - required: [system]
+          properties: {system: {type: object}}
+        - required: [lastUser]
+          properties: {lastUser: {type: object}}
+        - required: [prompt]
+          properties: {prompt: {type: object}}
+        - required: [message]
+          properties: {message: {type: object}}
+        - required: [messageCount]
+          properties: {messageCount: {type: integer}}
+        - required: [hasSystem]
+          properties: {hasSystem: {type: boolean}}
+        - required: [toolResult]
+          properties: {toolResult: {type: object}}
+        - required: [tools]
+          properties: {tools: {type: object}}
+        - required: [body]
+          properties: {body: {type: object}}
+        - required: [header]
+          properties: {header: {type: object}}
+      properties:
+        route:
+          type: [string, "null"]
+          enum: [anthropic, openai, openai-responses, gemini, null]
+          description: The route, as the call log's `vendor` names it.
+        model:
+          type: [string, "null"]
+          description: The request's model, exactly.
+        stream:
+          type: [boolean, "null"]
+          description: Whether the request asked for a stream.
+        system:
+          oneOf:
+            - $ref: "#/components/schemas/TextMatch"
+            - type: "null"
+          description: The system prompt's text.
+        lastUser:
+          oneOf:
+            - $ref: "#/components/schemas/TextMatch"
+            - type: "null"
+          description: The text of the last user message that has text.
+        prompt:
+          oneOf:
+            - $ref: "#/components/schemas/TextMatch"
+            - type: "null"
+          description: The request's combined prompt text, of which a call record's `promptSample` is the end.
+        message:
+          oneOf:
+            - $ref: "#/components/schemas/MessageMatch"
+            - type: "null"
+          description: One message, by index or by role.
+        messageCount:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 2147483647
+          description: The number of messages.
+        hasSystem:
+          type: [boolean, "null"]
+          description: Whether the request has a system prompt.
+        toolResult:
+          oneOf:
+            - $ref: "#/components/schemas/ToolResultMatch"
+            - type: "null"
+          description: A tool result the request sends back, from any turn.
+        tools:
+          oneOf:
+            - $ref: "#/components/schemas/ToolsMatch"
+            - type: "null"
+          description: The declared tools and the tool choice.
+        body:
+          oneOf:
+            - $ref: "#/components/schemas/BodyMatch"
+            - type: "null"
+          description: A value in the request body.
+        header:
+          oneOf:
+            - $ref: "#/components/schemas/HeaderMatch"
+            - type: "null"
+          description: A request header.
+    TextMatch:
+      type: object
+      description: |
+        A rule on a text: exactly one of `contains`, `equals` and `regex`, case-sensitive. `regex`
+        is a Java regular expression that may match anywhere; `^` and `$` anchor it.
+      additionalProperties: false
+      oneOf:
+        - required: [contains]
+          properties: {contains: {type: string}}
+        - required: [equals]
+          properties: {equals: {type: string}}
+        - required: [regex]
+          properties: {regex: {type: string}}
+      properties:
+        contains:
+          type: [string, "null"]
+          description: The text contains this.
+        equals:
+          type: [string, "null"]
+          description: The text is exactly this.
+        regex:
+          type: [string, "null"]
+          description: This regular expression matches somewhere in the text.
+    MessageMatch:
+      type: object
+      description: |
+        A rule on one message, chosen by exactly one of `index` and `role`, with exactly one of
+        `contains`, `equals` and `regex` on its text.
+      additionalProperties: false
+      allOf:
+        - oneOf:
+            - required: [index]
+              properties: {index: {type: integer}}
+            - required: [role]
+              properties: {role: {type: string}}
+        - oneOf:
+            - required: [contains]
+              properties: {contains: {type: string}}
+            - required: [equals]
+              properties: {equals: {type: string}}
+            - required: [regex]
+              properties: {regex: {type: string}}
+      properties:
+        index:
+          type: [integer, "null"]
+          minimum: -2147483648
+          maximum: 2147483647
+          description: The message's position, from 0; a negative index counts from the end, so -1 is the last.
+        role:
+          type: [string, "null"]
+          description: The last message with this role, as the request spells it (`assistant`, Gemini `model`).
+        contains:
+          type: [string, "null"]
+          description: The message's text contains this.
+        equals:
+          type: [string, "null"]
+          description: The message's text is exactly this.
+        regex:
+          type: [string, "null"]
+          description: This regular expression matches somewhere in the message's text.
+    ToolResultMatch:
+      type: object
+      description: A rule on the request's tool results; some result must satisfy every key that is set.
+      additionalProperties: false
+      anyOf:
+        - required: [id]
+          properties: {id: {type: string}}
+        - required: [name]
+          properties: {name: {type: string}}
+        - required: [content]
+          properties: {content: {type: object}}
+        - required: [isError]
+          properties: {isError: {type: boolean}}
+      properties:
+        id:
+          type: [string, "null"]
+          description: The id of the tool call the result answers.
+        name:
+          type: [string, "null"]
+          description: The tool's name.
+        content:
+          oneOf:
+            - $ref: "#/components/schemas/TextMatch"
+            - type: "null"
+          description: The result's text, or its compact JSON when it is not a string.
+        isError:
+          type: [boolean, "null"]
+          description: Whether the result reports an error (Anthropic `is_error`; false on the other routes).
+    ToolsMatch:
+      type: object
+      description: A rule on the request's declared tools and its tool choice.
+      additionalProperties: false
+      anyOf:
+        - required: [declares]
+          properties: {declares: {type: string}}
+        - required: [choice]
+          properties: {choice: {type: string}}
+        - required: [choiceTool]
+          properties: {choiceTool: {type: string}}
+      allOf:
+        - if:
+            required: [choiceTool]
+            properties: {choiceTool: {type: string}}
+          then:
+            properties:
+              choice:
+                enum: [tool, null]
+      properties:
+        declares:
+          type: [string, "null"]
+          description: The name of a tool the request declares.
+        choice:
+          type: [string, "null"]
+          enum: [auto, none, required, tool, other, null]
+          description: The tool choice, normalized across the routes.
+        choiceTool:
+          type: [string, "null"]
+          minLength: 1
+          description: The name of the one tool the request forces; implies `choice` `tool`.
+    BodyMatch:
+      type: object
+      description: A rule on the request body.
+      additionalProperties: false
+      required: [path, equals]
+      properties:
+        path:
+          type: string
+          pattern: '^\$(?:\.[A-Za-z_][A-Za-z0-9_-]*|\[''(?:[^''\\]|\\[''\\])*''\]|\[-?[0-9]{1,9}\])+$'
+          description: |
+            `$` followed by one or more `.name`, `['name']` or `[n]` segments; a negative `n` counts
+            from the end, and `\'` and `\\` are the only escapes inside quotes.
+        equals:
+          description: The value at `path`, compared as JSON (numbers by value). Any JSON value, `null` included.
+    HeaderMatch:
+      type: object
+      description: A rule on a request header; some value of the header must satisfy the text rule.
+      additionalProperties: false
+      required: [name]
+      oneOf:
+        - required: [contains]
+          properties: {contains: {type: string}}
+        - required: [equals]
+          properties: {equals: {type: string}}
+        - required: [regex]
+          properties: {regex: {type: string}}
+      properties:
+        name:
+          type: string
+          pattern: '^[!#$%&''*+.^_`|~0-9A-Za-z-]+$'
+          description: The header's name, in any case.
+        contains:
+          type: [string, "null"]
+          description: A value of the header contains this.
+        equals:
+          type: [string, "null"]
+          description: A value of the header is exactly this.
+        regex:
+          type: [string, "null"]
+          description: This regular expression matches somewhere in a value of the header.
     ToolCall:
       type: object
       description: One scripted tool call.
