@@ -1,9 +1,9 @@
 package com.davidjonesgriz.fakellm
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObjectBuilder
-import kotlinx.serialization.json.put
 import java.nio.file.Path
 
 /** What the HTTP layer sends back for one faked vendor call. */
@@ -31,7 +31,8 @@ public data class CallRecord internal constructor(
     val messageCount: Int,
     /**
      * `"text"`, `"tool-calls"` (a step with [Step.toolCalls] served it), `"error:<status>"`,
-     * `"default"`, `"no-scenario"`, or `"no-more-steps"`.
+     * `"default"`, `"no-scenario"`, `"no-more-steps"`, or `"no-match"` (the call matched none of the
+     * steps it could have taken).
      */
     val outcome: String,
     val timestampMs: Long,
@@ -41,8 +42,10 @@ public data class CallRecord internal constructor(
      */
     val promptSample: String,
     /**
-     * The 1-based step that served the call, equal to [seq] whenever it is not null. Null when no
-     * step served it: [outcome] is `"default"`, `"no-scenario"` or `"no-more-steps"`.
+     * The 1-based step that served the call; for a scenario with no `match` and no parallel step,
+     * equal to [seq] whenever it is not null. A parallel step's number when one of its steps served
+     * the call (see [innerStep]). Null when no step served it: [outcome] is `"default"`,
+     * `"no-scenario"`, `"no-more-steps"` or `"no-match"`.
      */
     val step: Int? = null,
     /** The tool calls the call's response carried, in order. Empty for any other response. */
@@ -59,6 +62,14 @@ public data class CallRecord internal constructor(
      * request, and a reply or an error with [Step.streamErrorAfterChunks]); 0 otherwise.
      */
     val streamInterChunkDelayMs: Long = 0,
+    /**
+     * The 1-based step within the parallel [step] that served the call; null for a plain step and
+     * when no step served it. Left out of the JSON when null, so a scenario with no parallel step
+     * writes the same call log as before.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val innerStep: Int? = null,
 )
 
 /** One tool call a response carried, as [CallRecord.toolCalls] records it. */
@@ -110,9 +121,12 @@ internal data class Resolution(
 /**
  * Serves the loaded scenario's steps in call order and records each call in the call log.
  *
- * After [load], [loadInline], [reset] or [unload], the next call is call 1. Call N gets step N of
- * the loaded scenario. A call after the last step gets HTTP 400 (`no-more-steps`), in strict and
- * lenient mode. With no scenario loaded, a call gets HTTP 400 (`no-scenario`), or the
+ * After [load], [loadInline], [reset] or [unload], the next call is call 1. In a scenario with no
+ * `match` and no parallel step, call N gets step N. A step with a [Step.match] answers only a call
+ * that satisfies it; a parallel step's steps answer calls in any order, each call taking the first
+ * unused one it matches, and the scenario moves past it once all are used. A call that matches none
+ * of the steps it could take gets HTTP 400 (`no-match`). A call after the last step gets HTTP 400
+ * (`no-more-steps`), in strict and lenient mode. With no scenario loaded, a call gets HTTP 400 (`no-scenario`), or the
  * canned reply when [lenient] is true. Every call takes a number and one log entry, whatever it is
  * answered with.
  *
@@ -148,6 +162,9 @@ public class ScenarioEngine(
     private val lock = Any()
     private var scenario: Scenario? = null
     private var callCount = 0L
+
+    /** Where the loaded scenario has got to. */
+    private var position = Position()
     private var log = mutableListOf<CallRecord>()
     private var exchangeLog = mutableListOf<Pair<Long, ExchangeCapture>>()
 
@@ -199,6 +216,7 @@ public class ScenarioEngine(
         synchronized(lock) {
             scenario = s
             callCount = 0
+            position = Position()
             log = mutableListOf()
             exchangeLog = mutableListOf()
         }
@@ -208,10 +226,11 @@ public class ScenarioEngine(
     public fun currentScenarioName(): String? = synchronized(lock) { scenario?.name }
 
     /**
-     * The 1-based numbers of the loaded scenario's steps that no call has used since the last load,
-     * reset or unload, in order: a snapshot, read under the same lock as [calls]. Steps are used in
-     * order, so these are always the last ones. Empty when no scenario is loaded or every step has
-     * served a call. From Java, `getUnusedSteps()`.
+     * The 1-based numbers of the loaded scenario's steps that are not used up since the last load,
+     * reset or unload, in order: a snapshot, read under the same lock as [calls]. A parallel step is
+     * used up once every one of its steps is, so a partly used one is listed. In a scenario with no
+     * `match` and no parallel step these are always the last steps. Empty when no scenario is loaded
+     * or every step has served a call. From Java, `getUnusedSteps()`.
      */
     public val unusedSteps: List<Int>
         get() = progress.unusedSteps
@@ -220,8 +239,7 @@ public class ScenarioEngine(
     internal val progress: ScenarioProgress
         get() =
             synchronized(lock) {
-                val steps = scenario?.steps?.size
-                ScenarioProgress(scenario?.name, steps, unusedTail(callCount, steps ?: 0))
+                ScenarioProgress(scenario?.name, scenario?.steps?.size, scenario?.let { position.unused(it) }.orEmpty())
             }
 
     /** A snapshot of the call log, in call order. */
@@ -259,9 +277,13 @@ public class ScenarioEngine(
      * whichever transport renders it. The 400s are error steps with [Step.streamErrorAfterChunks]
      * unset, so every streaming path sends its JSON and writes no SSE bytes.
      *
-     * Throws [IllegalArgumentException] when the next step has a tool call with
+     * The call takes the first unused step at the scenario's position whose match it satisfies: the
+     * step at [pos], or the steps of the parallel step there, or of the whole overlap group there.
+     * Taking the last of them moves the position past them.
+     *
+     * Throws [IllegalArgumentException] when the chosen step has a tool call with
      * [ToolCall.rawArguments] that [vendor]'s reply can't carry (a buffered Anthropic or a Gemini
-     * request). The request then takes no number and no log entry, and the step stays next.
+     * request). The request then takes no number and no log entry, and the step stays unused.
      *
      * It returns before any wait the step sets, so a call is numbered and logged when it arrives.
      * [capture] is the request's exchange recorder; it joins the exchange log with the call's number.
@@ -272,68 +294,52 @@ public class ScenarioEngine(
         capture: ExchangeCapture? = null,
     ): Resolution {
         var logged: CallRecord? = null
-        val (n, loaded, served) =
+        val served =
             synchronized(lock) {
                 val s = scenario
-                rawArgumentsProblem(vendor, req, s?.steps?.getOrNull(callCount.toInt()), callCount + 1)?.let {
-                    throw RequestException(ErrorCode.UNSUPPORTED_STEP, it)
+                val choice = position.choose(s, vendor, req)
+                choice.chosen?.let { chosen ->
+                    rawArgumentsProblem(
+                        vendor,
+                        req,
+                        chosen.step,
+                        chosen.label,
+                    )?.let { throw RequestException(ErrorCode.UNSUPPORTED_STEP, it) }
                 }
                 val n = ++callCount
-                val step = s?.steps?.takeIf { n <= it.size }?.get((n - 1).toInt())
-                val outcome =
-                    when {
-                        step == null -> {
-                            if (s != null) {
-                                "no-more-steps"
-                            } else if (lenient) {
-                                "default"
-                            } else {
-                                "no-scenario"
-                            }
-                        }
-
-                        step.error != null -> {
-                            "error:${step.error.status}"
-                        }
-
-                        step.toolCalls != null -> {
-                            "tool-calls"
-                        }
-
-                        else -> {
-                            "text"
-                        }
-                    }
-                val record = callRecord(n, vendor, req, outcome, step)
+                choice.chosen?.let { position.take(it, choice.window) }
+                val record = callRecord(n, vendor, req, outcomeOf(choice, s, lenient), choice.chosen)
                 log.add(record)
                 logged = record
                 capture?.let { exchangeLog.add(n to it) }
-                Triple(n, s, step)
+                Served(n, s, choice)
             }
         logged?.let { record -> onCall?.invoke(record) }
-        val step =
-            served ?: when {
-                loaded != null -> errorStep(noMoreStepsBody(loaded, n, vendor, req))
-                lenient -> Step(text = CANNED_ASSISTANT_TEXT)
-                else -> errorStep(noScenarioBody(n, vendor, req))
-            }
-        return Resolution(seq = n, step = step)
+        return Resolution(seq = served.seq, step = served.choice.chosen?.step ?: unservedStep(served, vendor, req, lenient))
     }
 }
 
+/** What [ScenarioEngine.resolve] decided under the lock, for building the response after it. */
+internal data class Served(
+    val seq: Long,
+    val scenario: Scenario?,
+    val choice: Choice,
+)
+
 /**
- * Why [step], the next step, can't answer a [vendor] request: one of its tool calls sets
+ * Why [step], the step a call chose, can't answer a [vendor] request: one of its tool calls sets
  * [ToolCall.rawArguments], which a buffered Anthropic `tool_use.input` and a Gemini
- * `functionCall.args` can't carry, since both must be JSON objects. Null when it can.
+ * `functionCall.args` can't carry, since both must be JSON objects. Null when it can. [label] names
+ * the step, `step N` or `step N.M`.
  */
 private fun rawArgumentsProblem(
     vendor: String,
     req: ParsedRequest,
-    step: Step?,
-    stepNumber: Long,
+    step: Step,
+    label: String,
 ): String? {
-    val i = step?.toolCalls?.indexOfFirst { it.rawArguments != null } ?: -1
-    val prefix = "step $stepNumber: tool call ${i + 1} sets rawArguments"
+    val i = step.toolCalls?.indexOfFirst { it.rawArguments != null } ?: -1
+    val prefix = "$label: tool call ${i + 1} sets rawArguments"
     return when {
         i < 0 -> {
             null
@@ -354,63 +360,16 @@ private fun rawArgumentsProblem(
     }
 }
 
-/** Steps `min(calls, steps) + 1..steps`: the ones no call has used. */
-private fun unusedTail(
-    calls: Long,
-    steps: Int,
-): List<Int> = (minOf(calls, steps.toLong()).toInt() + 1..steps).toList()
-
-private fun errorStep(body: String): Step = Step(error = ErrorStep(status = HTTP_BAD_REQUEST, body = body))
-
-private fun noScenarioBody(
-    n: Long,
-    vendor: String,
-    req: ParsedRequest,
-): String =
-    errorBody(
-        ErrorCode.NO_SCENARIO,
-        "no scenario loaded: call $n has no step to answer it. Load a scenario with POST /control/scenario, " +
-            "or start the server with --lenient for a canned reply.",
-    ) { putCallFields(n, vendor, req) }
-
-private fun noMoreStepsBody(
-    s: Scenario,
-    n: Long,
-    vendor: String,
-    req: ParsedRequest,
-): String =
-    errorBody(
-        ErrorCode.NO_MORE_STEPS,
-        "no more steps: call $n came after the last step of scenario '${s.name}', which has ${s.steps.size} " +
-            (if (s.steps.size == 1) "step" else "steps") + ". The last step does not repeat.",
-    ) {
-        put("scenario", s.name)
-        put("steps", s.steps.size)
-        putCallFields(n, vendor, req)
-    }
-
-private fun JsonObjectBuilder.putCallFields(
-    n: Long,
-    vendor: String,
-    req: ParsedRequest,
-) {
-    put("seq", n)
-    put("vendor", vendor)
-    put("model", req.model)
-    put("system_shape", req.systemShape)
-    put("message_count", req.messageCount)
-    put("prompt_preview", req.promptText.take(PROMPT_PREVIEW_CHARS))
-}
-
-/** The log entry for call [n], served by [step] (null when no step served it). */
+/** The log entry for call [n], served by [chosen] (null when no step served it). */
 private fun callRecord(
     n: Long,
     vendor: String,
     req: ParsedRequest,
     outcome: String,
-    step: Step?,
-): CallRecord =
-    CallRecord(
+    chosen: Candidate?,
+): CallRecord {
+    val step = chosen?.step
+    return CallRecord(
         seq = n,
         vendor = vendor,
         model = req.model,
@@ -419,12 +378,14 @@ private fun callRecord(
         outcome = outcome,
         timestampMs = System.currentTimeMillis(),
         promptSample = req.promptText.takeLast(PROMPT_SAMPLE_CHARS),
-        step = if (step != null) n.toInt() else null,
+        step = chosen?.top?.plus(1),
         toolCalls = step?.let { sentToolCalls(vendor, it, n) }.orEmpty().map { ToolCallRecord(it.id, it.name) },
         toolResults = req.toolResults,
         firstByteDelayMs = step?.firstByteDelayMs ?: 0,
         streamInterChunkDelayMs = step?.let { appliedInterChunkDelayMs(it, req.stream) } ?: 0,
+        innerStep = chosen?.inner?.plus(1),
     )
+}
 
 /** The buffered reply to call [seq] from [step], a reply step, in [vendor]'s format, naming [model], the request's model. */
 internal fun vendorEnvelope(
@@ -445,11 +406,6 @@ internal fun vendorEnvelope(
 
 internal const val HTTP_OK = 200
 internal const val CANNED_ASSISTANT_TEXT = "This is a canned response from fake-llm."
-
-private const val HTTP_BAD_REQUEST = 400
-
-/** Characters of prompt text kept, from the start, on a 400 body's `prompt_preview`. */
-private const val PROMPT_PREVIEW_CHARS = 200
 
 /** Characters of prompt text kept, from the end, on [CallRecord.promptSample]. */
 private const val PROMPT_SAMPLE_CHARS = 500

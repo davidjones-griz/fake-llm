@@ -34,6 +34,7 @@ public final class com/davidjonesgriz/fakellm/CallRecord {
 	public final fun component11 ()Ljava/util/List;
 	public final fun component12 ()J
 	public final fun component13 ()J
+	public final fun component14 ()Ljava/lang/Integer;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Ljava/lang/String;
@@ -44,6 +45,7 @@ public final class com/davidjonesgriz/fakellm/CallRecord {
 	public final fun component9 ()Ljava/lang/Integer;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getFirstByteDelayMs ()J
+	public final fun getInnerStep ()Ljava/lang/Integer;
 	public final fun getMessageCount ()I
 	public final fun getModel ()Ljava/lang/String;
 	public final fun getOutcome ()Ljava/lang/String;

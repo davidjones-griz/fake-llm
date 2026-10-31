@@ -173,6 +173,109 @@ class FakeLlmServerTest {
     }
 
     @Test
+    fun `parallel calls on every route each get the inner step their own prompt matches`() {
+        val docs = (1..8).map { "doc-$it" }
+        val routes = listOf("anthropic", "openai", RESPONSES_VENDOR, "gemini")
+        val section =
+            Step(
+                parallel =
+                    ParallelSection(
+                        docs.mapIndexed { i, doc ->
+                            Step(text = "summary of $doc", match = Match(route = routes[i % 4], lastUser = TextMatch(equalTo = doc)))
+                        },
+                    ),
+            )
+        val engine = ScenarioEngine()
+        withServer(engine) { client, _ ->
+            repeat(25) { round ->
+                engine.loadInline(Scenario(name = "fan-out", steps = listOf(section, Step(text = "merged"))))
+                val pool = Executors.newFixedThreadPool(docs.size)
+                val start = CountDownLatch(1)
+                val replies =
+                    try {
+                        docs
+                            .withIndex()
+                            .shuffled(java.util.Random(round.toLong()))
+                            .map { (i, doc) ->
+                                pool.submit<Pair<String, String>> {
+                                    start.await()
+                                    doc to replyText(client, routes[i % 4], doc)
+                                }
+                            }.also { start.countDown() }
+                            .map { it.get(15, TimeUnit.SECONDS) }
+                    } finally {
+                        pool.shutdownNow()
+                    }
+                replies.forEach { (doc, text) -> assertEquals("summary of $doc", text, "round $round") }
+                assertEquals(listOf(2), engine.unusedSteps, "round $round")
+                assertEquals((1..8).toSet(), engine.calls().map { it.innerStep }.toSet(), "round $round")
+                assertEquals("merged", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("merge")).body()))
+            }
+        }
+    }
+
+    /** The reply text a [route] call with the user prompt [prompt] gets. */
+    private fun replyText(
+        client: TestClient,
+        route: String,
+        prompt: String,
+    ): String {
+        val p = JsonPrimitive(prompt)
+        return when (route) {
+            "anthropic" -> {
+                anthropicText(client.post("/anthropic/v1/messages", anthropicBody(prompt)).body())
+            }
+
+            "openai" -> {
+                val body = client.post("/openai/v1/chat/completions", """{"model":"m","messages":[{"role":"user","content":$p}]}""").body()
+                Json
+                    .parseToJsonElement(body)
+                    .jsonObject
+                    .getValue("choices")
+                    .jsonArray[0]
+                    .jsonObject
+                    .getValue("message")
+                    .jsonObject
+                    .getValue("content")
+                    .jsonPrimitive.content
+            }
+
+            RESPONSES_VENDOR -> {
+                val body = client.post("/openai/v1/responses", responsesBody(prompt)).body()
+                Json
+                    .parseToJsonElement(body)
+                    .jsonObject
+                    .getValue("output")
+                    .jsonArray
+                    .single()
+                    .jsonObject
+                    .getValue("content")
+                    .jsonArray[0]
+                    .jsonObject
+                    .getValue("text")
+                    .jsonPrimitive.content
+            }
+
+            else -> {
+                val body = client.post("/gemini/v1beta/models/m:generateContent", """{"contents":[{"parts":[{"text":$p}]}]}""").body()
+                Json
+                    .parseToJsonElement(body)
+                    .jsonObject
+                    .getValue("candidates")
+                    .jsonArray[0]
+                    .jsonObject
+                    .getValue("content")
+                    .jsonObject
+                    .getValue("parts")
+                    .jsonArray[0]
+                    .jsonObject
+                    .getValue("text")
+                    .jsonPrimitive.content
+            }
+        }
+    }
+
+    @Test
     fun `calls that arrive together each get the step matching their own number`() {
         val size = 20
         withServer { client, _ ->

@@ -15,6 +15,7 @@ internal enum class ErrorCode(
 ) {
     NO_MORE_STEPS("no-more-steps"),
     NO_SCENARIO("no-scenario"),
+    NO_MATCH("no-match"),
     INVALID_JSON("invalid-json"),
     INVALID_REQUEST("invalid-request"),
     UNSUPPORTED_STEP("unsupported-step"),
