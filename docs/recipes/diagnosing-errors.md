@@ -1,6 +1,6 @@
-# Diagnosing the no-scenario and no-more-steps errors
+# Diagnosing the no-scenario, no-more-steps and no-match errors
 
-fake-llm answers a call that has no step with HTTP 400 and a JSON body: `fake_llm_error` is a code that says which case it is, and `message` says why. There are two cases, and both usually mean the test and the app disagree about how many calls the app makes. These examples use the bundled scenario `hello`, which has one step:
+fake-llm answers a call that has no step with HTTP 400 and a JSON body: `fake_llm_error` is a code that says which case it is, and `message` says why. There are three cases. The first two usually mean the test and the app disagree about how many calls the app makes; the third, `no-match`, comes from a scenario for calls made in parallel. These examples use the bundled scenario `hello`, which has one step:
 
 ```json
 --8<-- "src/main/resources/com/davidjonesgriz/fakellm/scenarios/hello.json"
@@ -41,6 +41,22 @@ With no scenario loaded, a call gets the same body without `scenario` and `steps
 - The scenario was unloaded, for example by the pytest plugin before each test, and this test has no `fake_llm_scenario` marker.
 
 A server started with `--lenient` or `FAKE_LLM_LENIENT=true` answers this case with a canned reply instead. Lenient mode is for trying fake-llm by hand; a test is clearer with an explicit scenario. A call after the last step is a 400 in either mode.
+
+## no-match
+
+A call that matched none of the steps it could have taken gets `"fake_llm_error": "no-match"`, with the call fields and a message listing those steps and their rules:
+
+```json
+{"fake_llm_error":"no-match","message":"no match: call 3 matched none of the unused steps it could have taken: step 1.2 (lastUser contains \"doc-b\")","seq":3,"vendor":"anthropic","model":"example-model","system_shape":"absent","message_count":1,"prompt_preview":"Summarize doc-z\n"}
+```
+
+It comes only from a scenario with a [match or a parallel step](../scenarios.md#parallel-calls). Common causes:
+
+- The call came earlier than the scenario expects: the step it matches is after a parallel step that isn't used up yet, or after a plain step with a `match` that is still next.
+- A rule doesn't say what the test author meant: compare the call's `prompt_preview`, or its entry in `GET /control/exchanges`, with the rules in the message.
+- Two calls match the same step, so the second finds it used.
+
+The call takes a number and an entry in the call log, with outcome `no-match`, and uses nothing.
 
 ## Other 400s
 

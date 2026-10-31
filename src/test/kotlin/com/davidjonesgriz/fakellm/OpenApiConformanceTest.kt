@@ -90,6 +90,11 @@ class OpenApiConformanceTest {
     }
 
     @Test
+    fun `the Scenario schema accepts every valid parallel scenario`() {
+        validParallelScenarios.forEach { (why, body) -> assertEquals(emptyList(), validate(SCENARIO, body), why) }
+    }
+
+    @Test
     fun `the Scenario schema and the server's decoder both accept explicit nulls`() {
         val withNulls =
             """{"name":"nulls","steps":[
@@ -511,7 +516,22 @@ class OpenApiConformanceTest {
         const val SCENARIO = "#/components/schemas/Scenario"
         const val TOKEN = "spec-token"
         val HTTP_METHODS = setOf("get", "put", "post", "delete", "options", "head", "patch", "trace")
-        val REQUEST_SCHEMAS = listOf("LoadRequest", "Scenario", "Step", "ErrorStep", "TokenUsage")
+        val REQUEST_SCHEMAS =
+            listOf(
+                "LoadRequest",
+                "Scenario",
+                "Step",
+                "ErrorStep",
+                "TokenUsage",
+                "ParallelSection",
+                "Match",
+                "TextMatch",
+                "MessageMatch",
+                "ToolResultMatch",
+                "ToolsMatch",
+                "BodyMatch",
+                "HeaderMatch",
+            )
 
         const val HTTP_OK = 200
         const val HTTP_BAD_REQUEST = 400

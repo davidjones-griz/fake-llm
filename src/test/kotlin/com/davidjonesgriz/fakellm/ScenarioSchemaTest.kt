@@ -90,6 +90,11 @@ class ScenarioSchemaTest {
     }
 
     @Test
+    fun `the schema accepts every valid parallel scenario`() {
+        validParallelScenarios.forEach { (why, body) -> assertEquals(emptyList(), errors(body), why) }
+    }
+
+    @Test
     fun `the schema accepts a top-level $schema and explicit nulls on nullable fields`() {
         val valid =
             """{"${'$'}schema":"${ScenarioSchemaGenerator.ID}","name":"x","steps":[
@@ -192,6 +197,14 @@ class ScenarioSchemaTest {
             listOf(
                 Scenario.serializer().descriptor,
                 Step.serializer().descriptor,
+                ParallelSection.serializer().descriptor,
+                Match.serializer().descriptor,
+                TextMatch.serializer().descriptor,
+                MessageMatch.serializer().descriptor,
+                ToolResultMatch.serializer().descriptor,
+                ToolsMatch.serializer().descriptor,
+                BodyMatch.serializer().descriptor,
+                HeaderMatch.serializer().descriptor,
                 ToolCall.serializer().descriptor,
                 ErrorStep.serializer().descriptor,
                 TokenUsage.serializer().descriptor,
@@ -227,9 +240,13 @@ class ScenarioSchemaTest {
         property: JsonElement,
         schemas: JsonObject,
     ): List<String> {
+        // A JsonElement field takes any JSON value, null included: the spec says so with an empty schema.
+        if (model.serialName.removeSuffix("?") == JsonElement.serializer().descriptor.serialName) {
+            val constraints = property.jsonObject - "description"
+            return listOfNotNull("$where: the model takes any JSON value, the spec $constraints".takeIf { constraints.isNotEmpty() })
+        }
         val (types, nullable) = jsonTypes(property, schemas)
-        val modelType =
-            MODEL_TYPES[model.kind] ?: return listOf("$where: the model's kind ${model.kind} is not one the shape check supports")
+        val modelType = MODEL_TYPES[model.kind] ?: "a kind the shape check does not support (${model.kind})"
         return listOfNotNull(
             "$where: the model has $modelType, the spec ${types.joinToString()}".takeIf { types != setOf(modelType) },
             "$where: nullable in the model ${model.isNullable}, in the spec $nullable".takeIf { model.isNullable != nullable },
@@ -283,6 +300,7 @@ class ScenarioSchemaTest {
                 PrimitiveKind.STRING to "string",
                 PrimitiveKind.INT to "integer",
                 PrimitiveKind.LONG to "integer",
+                PrimitiveKind.BOOLEAN to "boolean",
                 StructureKind.CLASS to "object",
                 StructureKind.LIST to "array",
                 StructureKind.MAP to "object",

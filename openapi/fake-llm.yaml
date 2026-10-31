@@ -30,9 +30,9 @@ info:
 
     **fake-llm's errors.** Every error fake-llm sends itself has `fake_llm_error`, a stable code,
     and `message`, which says why. The 400s are `NoMoreStepsError` (`no-more-steps`),
-    `NoScenarioError` (`no-scenario`) and `RequestError` (`invalid-json`, `invalid-request`,
-    `unsupported-step`, `unknown-scenario`, `invalid-scenario` and `exception`); the first two also
-    carry the call's fields. The others are `UnauthorizedError` (401, `unauthorized`), `NoRouteError`
+    `NoScenarioError` (`no-scenario`), `NoMatchError` (`no-match`) and `RequestError`
+    (`invalid-json`, `invalid-request`, `unsupported-step`, `unknown-scenario`, `invalid-scenario`
+    and `exception`); the first three also carry the call's fields. The others are `UnauthorizedError` (401, `unauthorized`), `NoRouteError`
     (404, `no-route`), `NotImplementedError` (501, `not-implemented`) and `OpenApiMissingError`
     (500, `openapi-missing`). A step's scripted error is outside these schemas, whatever its status.
 
@@ -40,14 +40,18 @@ info:
     generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini
     `generateContent` and `streamGenerateContent`) that does not get `RequestError` is a call:
     it takes the next call number (`seq`, from 1) and one call-log entry, and one exchange-log
-    entry (`GET /control/exchanges`) with its request and response, and call N after a load or
-    reset gets step N, on any generation route. Calls
-    are numbered in arrival order. A call is numbered and logged before any wait its step sets
+    entry (`GET /control/exchanges`) with its request and response. In a scenario with no `match`
+    and no parallel step, call N after a load or reset gets step N, on any generation route. Calls
+    are numbered in arrival order. A step with a `match` answers only a call that satisfies it. A
+    parallel step holds several steps that calls take in any order, each call the first unused one
+    it matches, and the scenario moves past it once all are used; consecutive parallel steps with
+    `overlap` form one group, searched together. A call that matches none of the steps it could
+    take gets `NoMatchError` and uses nothing. A call is numbered and logged before any wait its step sets
     (`firstByteDelayMs`), so a delayed call can finish after a later one. A call after the
     last step gets `NoMoreStepsError`; the last step does not repeat. A request that gets
     `RequestError`, a 404 and the Batches 501 are not calls. That includes a request whose next
     step has a tool call with `rawArguments` that its format can't carry (a buffered Anthropic
-    request, or a Gemini request). That step is not used, and the next call gets it. A Gemini
+    request, or a Gemini request). That step is not used, and stays available to the next call. A Gemini
     `streamGenerateContent` request without `alt=sse` is not a call either. The embeddings routes
     are not calls either: they answer from the request alone, whether or not a scenario is loaded,
     in strict and lenient mode, and take no step and no log entry. Token counting
@@ -826,12 +830,13 @@ components:
       description: |
         fake-llm's own 400s, not the provider's. A call after the loaded scenario's last step gets
         `NoMoreStepsError`, in strict and lenient mode. A call when no scenario is loaded gets
-        `NoScenarioError` in strict mode (the default); lenient mode serves the canned reply. On
+        `NoScenarioError` in strict mode (the default); lenient mode serves the canned reply. A
+        call that matches none of the steps it could take gets `NoMatchError`, in either mode. On
         the Anthropic and OpenAI routes with `"stream": true`, the OpenAI Responses route with
-        `"stream": true`, and on Gemini `streamGenerateContent`, both are JSON, with no SSE bytes. A request body that is not valid
+        `"stream": true`, and on Gemini `streamGenerateContent`, all three are JSON, with no SSE bytes. A request body that is not valid
         JSON gets `RequestError` `invalid-json`, and one that lacks the `messages` (Anthropic,
         OpenAI) or `contents` (Gemini) array gets `invalid-request`; on OpenAI Responses, only a
-        body that is not a JSON object is rejected. A request whose next step has a tool call with
+        body that is not a JSON object is rejected. A request whose chosen step has a tool call with
         `rawArguments` its format can't carry gets `unsupported-step`. A step's scripted
         error is outside these schemas, even when its status is 400: see `ScriptedError`.
       content:
@@ -840,6 +845,7 @@ components:
             oneOf:
               - $ref: "#/components/schemas/NoScenarioError"
               - $ref: "#/components/schemas/NoMoreStepsError"
+              - $ref: "#/components/schemas/NoMatchError"
               - $ref: "#/components/schemas/RequestError"
     ScriptedError:
       description: |
@@ -874,9 +880,11 @@ components:
             minimum: 1
             maximum: 2147483647
           description: |
-            The 1-based numbers of the loaded scenario's steps that no call has used since the last
-            load, reset or unload, in order: always the last ones. Empty when none is loaded or every
-            step has served a call. A test can assert it is empty to check the app made every
+            The 1-based numbers of the loaded scenario's steps that are not used up since the last
+            load, reset or unload, in order. A parallel step is used up once every one of its steps
+            is, so a partly used one is listed. In a scenario with no `match` and no parallel step
+            these are always the last steps. Empty when none is loaded or every step has served a
+            call. A test can assert it is empty to check the app made every
             scripted call.
         version:
           type: string
@@ -964,8 +972,17 @@ components:
           minimum: 1
           maximum: 2147483647
           description: |
-            The 1-based step that served the call: equal to `seq` whenever it is not null. Null
-            when no step served it (`outcome` is `default`, `no-scenario` or `no-more-steps`).
+            The 1-based step that served the call; in a scenario with no `match` and no parallel
+            step, equal to `seq` whenever it is not null. For a parallel step's step, the parallel
+            step's number, with `innerStep`. Null when no step served it (`outcome` is `default`,
+            `no-scenario`, `no-more-steps` or `no-match`).
+        innerStep:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: |
+            The 1-based step within the parallel `step` that served the call. Present only then:
+            absent for a plain step and for a call no step served.
         vendor:
           type: string
           enum: [anthropic, openai, openai-responses, gemini]
@@ -984,11 +1001,12 @@ components:
             0 when `input` is absent or neither a string nor an array.
         outcome:
           type: string
-          pattern: "^(text|tool-calls|default|no-scenario|no-more-steps|error:[1-5][0-9]{2})$"
+          pattern: "^(text|tool-calls|default|no-scenario|no-more-steps|no-match|error:[1-5][0-9]{2})$"
           description: |
             `text` or `error:<status>` (a step served it), `tool-calls` (a step with `toolCalls`
             served it), `default` (the lenient canned reply),
-            `no-scenario` (`NoScenarioError`) or `no-more-steps` (`NoMoreStepsError`).
+            `no-scenario` (`NoScenarioError`), `no-more-steps` (`NoMoreStepsError`) or `no-match`
+            (`NoMatchError`).
         timestampMs:
           type: integer
           minimum: 0
@@ -1196,10 +1214,10 @@ components:
         or `contents` array, an invalid `cache_control`, an embeddings rule, a Gemini
         `streamGenerateContent` request without `alt=sse` whatever its body, or a
         `POST /control/scenario` body with an unknown field, without exactly one of `name` and
-        `scenario`, or with a `name` that is not a non-blank string). `unsupported-step`: the next step has a
-        tool call with `rawArguments` that this request's format can't carry (a buffered
-        Anthropic request, or a Gemini request); that step is not used, and the next call gets
-        it. `unknown-scenario`: a load by name found no such scenario. `invalid-scenario`: a
+        `scenario`, or with a `name` that is not a non-blank string). `unsupported-step`: the step the call
+        chose (`step N`, or `step N.M` in a parallel step) has a tool call with `rawArguments` that
+        this request's format can't carry (a buffered Anthropic request, or a Gemini request);
+        that step stays unused. `unknown-scenario`: a load by name found no such scenario. `invalid-scenario`: a
         scenario failed to load (an illegal name, a scenario that doesn't decode or validate, or
         a file whose declared name differs). `exception`: any other failure.
       required: [fake_llm_error, message]
@@ -1220,6 +1238,30 @@ components:
         fake_llm_error:
           type: string
           const: no-scenario
+        message:
+          $ref: "#/components/schemas/ErrorMessage"
+        seq:
+          $ref: "#/components/schemas/CallNumber"
+        vendor:
+          $ref: "#/components/schemas/Vendor"
+        model:
+          type: string
+        system_shape:
+          $ref: "#/components/schemas/RequestSystemShape"
+        message_count:
+          $ref: "#/components/schemas/MessageCount"
+        prompt_preview:
+          $ref: "#/components/schemas/PromptPreview"
+    NoMatchError:
+      type: object
+      description: |
+        A call that matched none of the unused steps it could have taken. Its `message` lists them
+        with their rules. The call takes a number and a call-log entry, and uses nothing.
+      required: [fake_llm_error, message, seq, vendor, model, system_shape, message_count, prompt_preview]
+      properties:
+        fake_llm_error:
+          type: string
+          const: no-match
         message:
           $ref: "#/components/schemas/ErrorMessage"
         seq:
@@ -1286,7 +1328,8 @@ components:
     Scenario:
       type: object
       description: |
-        One named behaviour: an ordered list of steps. After a load or reset, call N gets step N.
+        One named behaviour: an ordered list of steps. After a load or reset, call N gets step N, in a
+        scenario with no `match` and no parallel step.
         A call after the last step gets `NoMoreStepsError`.
       required: [name, steps]
       additionalProperties: false
@@ -1310,9 +1353,14 @@ components:
       type: object
       description: |
         One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking` and
-        `usage`), or a scripted `error`. A step sets exactly one of a reply and `error`.
+        `usage`), or a scripted `error`, optionally with a `match`; or a parallel step, an object
+        whose only key is `parallel`. A step sets exactly one of a reply, `error` and `parallel`.
       additionalProperties: false
       oneOf:
+        - required: [parallel]
+          properties:
+            parallel:
+              type: object
         - anyOf:
             - required: [text]
               properties:
@@ -1327,6 +1375,13 @@ components:
             error:
               type: object
       allOf:
+        - if:
+            required: [parallel]
+            properties:
+              parallel:
+                type: object
+          then:
+            maxProperties: 1
         - if:
             required: [thinking]
             properties:
@@ -1462,6 +1517,302 @@ components:
             The stop sequence that ended the reply, sent as Anthropic's `stop_sequence` (buffered,
             and in the stream's `message_delta`). Only with `stopReason` `stop_sequence`. Other
             formats ignore it.
+        match:
+          oneOf:
+            - $ref: "#/components/schemas/Match"
+            - type: "null"
+          description: |
+            Only a call that satisfies it takes this step. On a plain step, a call that doesn't
+            takes nothing and gets the `no-match` 400, and the step stays next; in a parallel step,
+            the call looks at the section's other steps.
+        parallel:
+          oneOf:
+            - $ref: "#/components/schemas/ParallelSection"
+            - type: "null"
+          description: |
+            Makes this a parallel step: one position in the scenario holding several responses,
+            used in any order. A parallel step has no other key.
+    ParallelSection:
+      type: object
+      description: |
+        The responses of a parallel step. A call takes the first unused step whose `match` it
+        satisfies, in listed order; a step with no `match` matches any call. The scenario moves past
+        the section once every step in it is used.
+      additionalProperties: false
+      required: [steps]
+      properties:
+        steps:
+          type: array
+          minItems: 1
+          items:
+            allOf:
+              - $ref: "#/components/schemas/Step"
+              - not:
+                  required: [parallel]
+                  properties:
+                    parallel:
+                      type: object
+          description: The responses, each a plain step with an optional `match`. A parallel step can't hold another.
+        overlap:
+          type: boolean
+          default: false
+          description: |
+            Joins this section with the consecutive sections after it that also set it, into one
+            group whose unused steps a call searches together, first match in listed order. The group
+            ends at the first step that is not such a section.
+    Match:
+      type: object
+      description: |
+        What a call must look like for a step to answer it. Every key that is set must hold, and at
+        least one must be set.
+      additionalProperties: false
+      anyOf:
+        - required: [route]
+          properties: {route: {type: string}}
+        - required: [model]
+          properties: {model: {type: string}}
+        - required: [stream]
+          properties: {stream: {type: boolean}}
+        - required: [system]
+          properties: {system: {type: object}}
+        - required: [lastUser]
+          properties: {lastUser: {type: object}}
+        - required: [prompt]
+          properties: {prompt: {type: object}}
+        - required: [message]
+          properties: {message: {type: object}}
+        - required: [messageCount]
+          properties: {messageCount: {type: integer}}
+        - required: [hasSystem]
+          properties: {hasSystem: {type: boolean}}
+        - required: [toolResult]
+          properties: {toolResult: {type: object}}
+        - required: [tools]
+          properties: {tools: {type: object}}
+        - required: [body]
+          properties: {body: {type: object}}
+        - required: [header]
+          properties: {header: {type: object}}
+      properties:
+        route:
+          type: [string, "null"]
+          enum: [anthropic, openai, openai-responses, gemini, null]
+          description: The route, as the call log's `vendor` names it.
+        model:
+          type: [string, "null"]
+          description: The request's model, exactly.
+        stream:
+          type: [boolean, "null"]
+          description: Whether the request asked for a stream.
+        system:
+          oneOf:
+            - $ref: "#/components/schemas/TextMatch"
+            - type: "null"
+          description: The system prompt's text.
+        lastUser:
+          oneOf:
+            - $ref: "#/components/schemas/TextMatch"
+            - type: "null"
+          description: The text of the last user message that has text.
+        prompt:
+          oneOf:
+            - $ref: "#/components/schemas/TextMatch"
+            - type: "null"
+          description: The request's combined prompt text, of which a call record's `promptSample` is the end.
+        message:
+          oneOf:
+            - $ref: "#/components/schemas/MessageMatch"
+            - type: "null"
+          description: One message, by index or by role.
+        messageCount:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 2147483647
+          description: The number of messages.
+        hasSystem:
+          type: [boolean, "null"]
+          description: Whether the request has a system prompt.
+        toolResult:
+          oneOf:
+            - $ref: "#/components/schemas/ToolResultMatch"
+            - type: "null"
+          description: A tool result the request sends back, from any turn.
+        tools:
+          oneOf:
+            - $ref: "#/components/schemas/ToolsMatch"
+            - type: "null"
+          description: The declared tools and the tool choice.
+        body:
+          oneOf:
+            - $ref: "#/components/schemas/BodyMatch"
+            - type: "null"
+          description: A value in the request body.
+        header:
+          oneOf:
+            - $ref: "#/components/schemas/HeaderMatch"
+            - type: "null"
+          description: A request header.
+    TextMatch:
+      type: object
+      description: |
+        A rule on a text: exactly one of `contains`, `equals` and `regex`, case-sensitive. `regex`
+        is a Java regular expression that may match anywhere; `^` and `$` anchor it.
+      additionalProperties: false
+      oneOf:
+        - required: [contains]
+          properties: {contains: {type: string}}
+        - required: [equals]
+          properties: {equals: {type: string}}
+        - required: [regex]
+          properties: {regex: {type: string}}
+      properties:
+        contains:
+          type: [string, "null"]
+          description: The text contains this.
+        equals:
+          type: [string, "null"]
+          description: The text is exactly this.
+        regex:
+          type: [string, "null"]
+          description: This regular expression matches somewhere in the text.
+    MessageMatch:
+      type: object
+      description: |
+        A rule on one message, chosen by exactly one of `index` and `role`, with exactly one of
+        `contains`, `equals` and `regex` on its text.
+      additionalProperties: false
+      allOf:
+        - oneOf:
+            - required: [index]
+              properties: {index: {type: integer}}
+            - required: [role]
+              properties: {role: {type: string}}
+        - oneOf:
+            - required: [contains]
+              properties: {contains: {type: string}}
+            - required: [equals]
+              properties: {equals: {type: string}}
+            - required: [regex]
+              properties: {regex: {type: string}}
+      properties:
+        index:
+          type: [integer, "null"]
+          minimum: -2147483648
+          maximum: 2147483647
+          description: The message's position, from 0; a negative index counts from the end, so -1 is the last.
+        role:
+          type: [string, "null"]
+          description: The last message with this role, as the request spells it (`assistant`, Gemini `model`).
+        contains:
+          type: [string, "null"]
+          description: The message's text contains this.
+        equals:
+          type: [string, "null"]
+          description: The message's text is exactly this.
+        regex:
+          type: [string, "null"]
+          description: This regular expression matches somewhere in the message's text.
+    ToolResultMatch:
+      type: object
+      description: A rule on the request's tool results; some result must satisfy every key that is set.
+      additionalProperties: false
+      anyOf:
+        - required: [id]
+          properties: {id: {type: string}}
+        - required: [name]
+          properties: {name: {type: string}}
+        - required: [content]
+          properties: {content: {type: object}}
+        - required: [isError]
+          properties: {isError: {type: boolean}}
+      properties:
+        id:
+          type: [string, "null"]
+          description: The id of the tool call the result answers.
+        name:
+          type: [string, "null"]
+          description: The tool's name.
+        content:
+          oneOf:
+            - $ref: "#/components/schemas/TextMatch"
+            - type: "null"
+          description: The result's text, or its compact JSON when it is not a string.
+        isError:
+          type: [boolean, "null"]
+          description: Whether the result reports an error (Anthropic `is_error`; false on the other routes).
+    ToolsMatch:
+      type: object
+      description: A rule on the request's declared tools and its tool choice.
+      additionalProperties: false
+      anyOf:
+        - required: [declares]
+          properties: {declares: {type: string}}
+        - required: [choice]
+          properties: {choice: {type: string}}
+        - required: [choiceTool]
+          properties: {choiceTool: {type: string}}
+      allOf:
+        - if:
+            required: [choiceTool]
+            properties: {choiceTool: {type: string}}
+          then:
+            properties:
+              choice:
+                enum: [tool, null]
+      properties:
+        declares:
+          type: [string, "null"]
+          description: The name of a tool the request declares.
+        choice:
+          type: [string, "null"]
+          enum: [auto, none, required, tool, other, null]
+          description: The tool choice, normalized across the routes.
+        choiceTool:
+          type: [string, "null"]
+          minLength: 1
+          description: The name of the one tool the request forces; implies `choice` `tool`.
+    BodyMatch:
+      type: object
+      description: A rule on the request body.
+      additionalProperties: false
+      required: [path, equals]
+      properties:
+        path:
+          type: string
+          pattern: '^\$(?:\.[A-Za-z_][A-Za-z0-9_-]*|\[''(?:[^''\\]|\\[''\\])*''\]|\[-?[0-9]{1,9}\])+$'
+          description: |
+            `$` followed by one or more `.name`, `['name']` or `[n]` segments. A `.name` is a letter
+            or `_` followed by letters, digits, `_` or `-`; any other key needs `['…']`. `n` has at
+            most 9 digits, and a negative `n` counts from the end. `\'` and `\\` are the only
+            escapes inside quotes.
+        equals:
+          description: The value at `path`, compared as JSON (numbers by value). Any JSON value, `null` included.
+    HeaderMatch:
+      type: object
+      description: A rule on a request header; some value of the header must satisfy the text rule.
+      additionalProperties: false
+      required: [name]
+      oneOf:
+        - required: [contains]
+          properties: {contains: {type: string}}
+        - required: [equals]
+          properties: {equals: {type: string}}
+        - required: [regex]
+          properties: {regex: {type: string}}
+      properties:
+        name:
+          type: string
+          pattern: '^[!#$%&''*+.^_`|~0-9A-Za-z-]+$'
+          description: The header's name, in any case.
+        contains:
+          type: [string, "null"]
+          description: A value of the header contains this.
+        equals:
+          type: [string, "null"]
+          description: A value of the header is exactly this.
+        regex:
+          type: [string, "null"]
+          description: This regular expression matches somewhere in a value of the header.
     ToolCall:
       type: object
       description: One scripted tool call.
@@ -1486,8 +1837,8 @@ components:
           type: [string, "null"]
           description: |
             The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI formats (Chat
-            Completions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step
-            has it gets the `unsupported-step` 400 (`RequestError`), and the step is not used.
+            Completions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose chosen step
+            has it gets the `unsupported-step` 400 (`RequestError`), and the step stays unused.
         id:
           type: [string, "null"]
           minLength: 1

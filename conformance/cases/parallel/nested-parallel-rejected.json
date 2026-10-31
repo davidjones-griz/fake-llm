@@ -1,0 +1,51 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "nested-parallel-rejected",
+  "description": "A parallel step inside a parallel step is rejected with invalid-scenario.",
+  "scenario": "hello",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenario": {
+            "name": "bad",
+            "steps": [
+              {
+                "parallel": {
+                  "steps": [
+                    {
+                      "parallel": {
+                        "steps": [
+                          {
+                            "text": "a"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "invalid-scenario",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

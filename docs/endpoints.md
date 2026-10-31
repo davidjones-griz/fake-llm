@@ -1,6 +1,6 @@
 # Endpoints
 
-fake-llm serves the vendor routes below. Each generation route answers from the loaded scenario: call N, on any route, gets step N (see the [scenario reference](scenarios.md)). Embeddings, token counting and the model lists are not calls: they answer from the request alone. The control routes, `/health` and `/openapi` are on the [control API](control-api.md) page, and the OpenAPI document, [openapi/fake-llm.yaml](https://github.com/davidjones-griz/fake-llm/blob/main/openapi/fake-llm.yaml), lists every route with a link to the provider's own reference.
+fake-llm serves the vendor routes below. Each generation route answers from the loaded scenario: call N, on any route, gets step N, or the step its [match](scenarios.md#parallel-calls) picks (see the [scenario reference](scenarios.md)). Embeddings, token counting and the model lists are not calls: they answer from the request alone. The control routes, `/health` and `/openapi` are on the [control API](control-api.md) page, and the OpenAPI document, [openapi/fake-llm.yaml](https://github.com/davidjones-griz/fake-llm/blob/main/openapi/fake-llm.yaml), lists every route with a link to the provider's own reference.
 
 Every generation reply names the request's model, as the providers do: `model` on a buffered Anthropic message and the stream's `message_start`, on OpenAI Chat Completions and Responses bodies, chunks and stream events, and `modelVersion` on Gemini bodies and chunks. A request without a string `model` gets `""` back.
 
@@ -24,15 +24,16 @@ Every error fake-llm sends itself, whatever its status, has the same structure: 
 | --- | --- |
 | `fake_llm_error` | The error code, from the table below. It is part of the contract, so a test can assert on it. A body that has it is fake-llm's own error, not a step's scripted error. |
 | `message` | Why the request failed, for a person to read. It is a diagnostic, not part of the contract, and its wording can change. |
-| other fields | `no-more-steps` and `no-scenario` also carry the call's fields; see [Scenario files](scenarios.md#scenario-files). |
+| other fields | `no-more-steps`, `no-scenario` and `no-match` also carry the call's fields; see [Scenario files](scenarios.md#scenario-files). |
 
 | Code | Status | When | A call? |
 | --- | --- | --- | --- |
 | `no-more-steps` | 400 | A call after the loaded scenario's last step, in strict and lenient mode. The body also has `scenario`, `steps`, `seq`, `vendor`, `model`, `system_shape`, `message_count` and `prompt_preview`. | Yes |
 | `no-scenario` | 400 | A call with no scenario loaded, in strict mode (lenient mode serves the canned reply). The body has the same call fields as `no-more-steps`, without `scenario` and `steps`. | Yes |
+| `no-match` | 400 | A call that matched none of the unused steps it could have taken (see [Parallel calls](scenarios.md#parallel-calls)), in strict and lenient mode. It uses nothing. The body has the same call fields as `no-scenario`, and the message lists the steps with their rules. | Yes |
 | `invalid-json` | 400 | The request body is not JSON, or not a JSON object, on any route that reads a body. | No |
 | `invalid-request` | 400 | Valid JSON the route rejects: no `messages` or `contents` array, an invalid `cache_control`, a Gemini `streamGenerateContent` request without `alt=sse`, an embeddings request outside the rules, a count_tokens body the Messages route rejects, or a `POST /control/scenario` body that has an unknown field, lacks exactly one of `name` and `scenario`, or has a `name` that is not a non-blank string or a `scenario` that is not an object. | No |
-| `unsupported-step` | 400 | The next step has a tool call with `rawArguments` that the request's format can't carry: a buffered Anthropic request, or a Gemini request. The step stays next. | No |
+| `unsupported-step` | 400 | The step the call chose has a tool call with `rawArguments` that the request's format can't carry: a buffered Anthropic request, or a Gemini request. The step stays unused. | No |
 | `unknown-scenario` | 400 | A load by name found no such scenario. | No |
 | `invalid-scenario` | 400 | A scenario failed to load: an illegal name, a scenario that doesn't decode or validate, or a file whose declared name differs from its file name. | No |
 | `exception` | 400 | Any other failure. | No |

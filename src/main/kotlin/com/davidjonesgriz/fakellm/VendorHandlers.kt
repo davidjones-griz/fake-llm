@@ -7,7 +7,7 @@ internal fun handleMessages(
     engine: ScenarioEngine,
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
-    val parsed = parseAnthropicRequest(body)
+    val parsed = parseAnthropicRequest(body).withHeaders(ex)
     if (parsed.stream) {
         streamAnthropicMessages(ex, engine, parsed)
     } else {
@@ -20,7 +20,7 @@ internal fun handleOpenAi(
     engine: ScenarioEngine,
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
-    val parsed = parseOpenAiRequest(body)
+    val parsed = parseOpenAiRequest(body).withHeaders(ex)
     if (parsed.stream) {
         streamOpenAiChatCompletion(ex, engine, parsed)
     } else {
@@ -36,7 +36,7 @@ internal fun handleGemini(
     val body = ex.requestBody.readBytes().decodeToString()
     val streamed = path.endsWith(":streamGenerateContent")
     require(!streamed || geminiAltSse(ex.requestURI.rawQuery)) { GEMINI_STREAM_NEEDS_ALT_SSE }
-    val parsed = parseGeminiRequest(body, geminiModelFromPath(path), stream = streamed)
+    val parsed = parseGeminiRequest(body, geminiModelFromPath(path), stream = streamed).withHeaders(ex)
     if (streamed) {
         streamGeminiGenerateContent(ex, engine, parsed)
     } else {

@@ -46,8 +46,9 @@ class FakeLlmClientError(Exception):
 class Health:
     """``GET /health``: the loaded scenario's name, or None, and whether the server is lenient.
 
-    ``steps`` is the scenario's step count, None with none loaded, and ``unused_steps`` the steps no call
-    has used since the last load, reset or unload, [] with none loaded. Both are None from a server older
+    ``steps`` is the scenario's step count, None with none loaded, and ``unused_steps`` the steps not used
+    up since the last load, reset or unload (a parallel step until every step in it is used), [] with none
+    loaded. Both are None from a server older
     than 0.6.0.
     """
 
@@ -92,6 +93,9 @@ class CallRecord:
     tool_results: list[ToolResultRecord] = field(default_factory=list)
     first_byte_delay_ms: int = 0
     stream_inter_chunk_delay_ms: int = 0
+    inner_step: int | None = None
+    """The step within the parallel ``step`` that served the call; None for a plain step, an unserved call
+    and a server older than 0.7.0."""
 
 
 class FakeLlmClient:
@@ -207,6 +211,7 @@ def _call_record(entry: dict[str, Any]) -> CallRecord:
         ],
         first_byte_delay_ms=entry.get("firstByteDelayMs", 0),
         stream_inter_chunk_delay_ms=entry.get("streamInterChunkDelayMs", 0),
+        inner_step=entry.get("innerStep"),
     )
 
 

@@ -185,8 +185,9 @@ public data class FakeLlmHealth internal constructor(
     /** The loaded scenario's step count; null with none loaded, or from a server older than this release. */
     val steps: Int? = null,
     /**
-     * The 1-based numbers of the steps no call has used since the last load, reset or unload; empty
-     * with no scenario loaded. Null from a server older than this release.
+     * The 1-based numbers of the steps not used up since the last load, reset or unload (a parallel
+     * step until every step in it is used); empty with no scenario loaded. Null from a server older
+     * than this release.
      */
     val unusedSteps: List<Int>? = null,
     /** The server's version, such as `0.5.0`; null from a server older than this release, which does not report it. */

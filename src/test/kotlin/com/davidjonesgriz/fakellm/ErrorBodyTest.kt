@@ -69,6 +69,20 @@ class ErrorBodyTest {
     }
 
     @Test
+    fun `no-match carries the call fields and lists the steps the call could have taken`() {
+        val doc = { d: String -> Step(text = d, match = Match(lastUser = TextMatch(contains = d))) }
+        withServer(engineWith(Step(parallel = ParallelSection(listOf(doc("doc-a"), doc("doc-b")))))) { client, _ ->
+            val body = errorBody(client.post("/anthropic/v1/messages", anthropicBody("doc-z")), "no-match")
+            assertEquals(listOf("fake_llm_error", "message") + callFields, body.keys.toList())
+            assertEquals(
+                """no match: call 1 matched none of the unused steps it could have taken: step 1.1 (lastUser contains "doc-a"), """ +
+                    """step 1.2 (lastUser contains "doc-b")""",
+                message(body),
+            )
+        }
+    }
+
+    @Test
     fun `invalid-json is a body that is not JSON, or not a JSON object, on any route that reads one`() {
         withServer { client, _ ->
             listOf(

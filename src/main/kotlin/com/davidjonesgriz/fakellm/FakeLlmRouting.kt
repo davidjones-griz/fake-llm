@@ -232,7 +232,7 @@ internal fun respond(
 
 internal fun jsonString(s: String?): String = if (s == null) "null" else JsonPrimitive(s).toString()
 
-private val logJson = Json { encodeDefaults = true }
+internal val logJson = Json { encodeDefaults = true }
 
 /** This build's version, from the `fake-llm.version` resource the build writes; `unknown` if it is missing. */
 internal val fakeLlmVersion: String by lazy {

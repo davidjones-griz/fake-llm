@@ -1,0 +1,193 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "first-match-in-listed-order",
+  "description": "Of two steps that match doc-a, the first doc-a call takes the one listed first (a 429) and its retry the next; doc-b takes its own step in between.",
+  "scenario": {
+    "name": "parallel-with-a-429-retry",
+    "steps": [
+      {
+        "parallel": {
+          "steps": [
+            {
+              "match": {
+                "lastUser": {
+                  "contains": "doc-a"
+                }
+              },
+              "error": {
+                "status": 429,
+                "body": "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}",
+                "headers": {
+                  "retry-after": "1"
+                }
+              }
+            },
+            {
+              "match": {
+                "lastUser": {
+                  "contains": "doc-a"
+                }
+              },
+              "text": "Summary of A."
+            },
+            {
+              "match": {
+                "lastUser": {
+                  "contains": "doc-b"
+                }
+              },
+              "text": "Summary of B."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarize doc-a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json",
+          "retry-after": "1"
+        },
+        "body": {
+          "type": "error",
+          "error": {
+            "type": "rate_limit_error",
+            "message": "slow down"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarize doc-b"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-2",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "Summary of B."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarize doc-a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-3",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "Summary of A."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "parallel-with-a-429-retry",
+          "lenient": false,
+          "steps": 1,
+          "unusedSteps": [],
+          "version": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

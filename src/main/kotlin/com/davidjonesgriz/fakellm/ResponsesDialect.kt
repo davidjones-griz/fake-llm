@@ -33,6 +33,15 @@ internal fun parseResponsesRequest(body: String): ParsedRequest {
     val obj = parseRequestObject(responsesLenientJson, body)
     val input = obj["input"]
     val items = (input as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
+    val messages =
+        when (input) {
+            is JsonArray -> requestMessages(input)
+            is JsonPrimitive -> if (input.isString) listOf(RequestMessage("user", input.content)) else emptyList()
+            else -> emptyList()
+        }
+    val instructions = (obj["instructions"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+    val toolNames = namesIn(obj["tools"])
+    val choice = openAiToolChoice(obj["tool_choice"], toolNames) { it.stringField("name") }
     return ParsedRequest(
         model = obj.stringField("model").orEmpty(),
         systemShape = responsesSystemShape(obj["instructions"], items),
@@ -45,6 +54,12 @@ internal fun parseResponsesRequest(body: String): ParsedRequest {
             },
         stream = (obj["stream"] as? JsonPrimitive)?.content?.toBoolean() ?: false,
         toolResults = responsesToolResults(items),
+        systemText = instructions ?: messages.filter { it.role in setOf("system", "developer") }.joinToString("\n") { it.text },
+        messages = messages,
+        toolNames = toolNames,
+        toolChoice = choice.choice,
+        toolChoiceName = choice.name,
+        body = obj,
     )
 }
 

@@ -20,7 +20,7 @@ internal fun handleOpenAiResponses(
     engine: ScenarioEngine,
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
-    val parsed = parseResponsesRequest(body)
+    val parsed = parseResponsesRequest(body).withHeaders(ex)
     if (parsed.stream) {
         streamOpenAiResponse(ex, engine, parsed)
     } else {

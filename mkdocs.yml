@@ -49,4 +49,4 @@ nav:
       - Truncated output (max_tokens): recipes/max-tokens.md
       - Malformed JSON output: recipes/malformed-json.md
       - Mid-stream failures: recipes/mid-stream-failure.md
-      - Diagnosing the no-scenario and no-more-steps errors: recipes/diagnosing-errors.md
+      - Diagnosing the no-scenario, no-more-steps and no-match errors: recipes/diagnosing-errors.md
