@@ -45,14 +45,14 @@ internal fun route(
             respond(
                 ex,
                 HTTP_UNAUTHORIZED,
-                """{"fake_llm_error":"unauthorized: missing or invalid Authorization: Bearer <token>"}""",
+                errorBody(ErrorCode.UNAUTHORIZED, UNAUTHORIZED_MESSAGE),
                 headers = mapOf("WWW-Authenticate" to "Bearer"),
             )
             return@runCatching
         }
         val handled = controlRoute(ex, engine) || embeddingRoute(ex) || infoRoute(ex) || vendorRoute(ex, engine)
         if (!handled) {
-            respond(ex, HTTP_NOT_FOUND, """{"fake_llm_error":"no route: ${ex.requestMethod} ${ex.requestURI.path}"}""")
+            respond(ex, HTTP_NOT_FOUND, errorBody(ErrorCode.NO_ROUTE, "no route: ${ex.requestMethod} ${ex.requestURI.path}"))
         }
     }.onFailure { e ->
         if ((e is IOException || e is InterruptedException) && ex.responseCode != -1) {
@@ -145,7 +145,7 @@ private fun vendorRoute(
             respond(
                 ex,
                 HTTP_NOT_IMPLEMENTED,
-                """{"fake_llm_error":"the Anthropic Batches API is not implemented"}""",
+                errorBody(ErrorCode.NOT_IMPLEMENTED, "the Anthropic Batches API is not implemented"),
             )
         }
 
@@ -251,13 +251,22 @@ private val bundledOpenApiSpec: String? by lazy {
         )?.use { it.readBytes().decodeToString() }
 }
 
-/** `GET /openapi`: the bundled document, or HTTP 500 when the jar was built without it. */
+/** `GET /openapi`: the bundled document, or the `openapi-missing` 500 when the jar was built without it. */
 internal fun openApiResponse(spec: String?): Triple<Int, String, String> =
     if (spec != null) {
         Triple(HTTP_OK, "application/yaml", spec)
     } else {
-        Triple(HTTP_INTERNAL_ERROR, "application/json", """{"fake_llm_error":"the OpenAPI document is not bundled in this build"}""")
+        Triple(
+            HTTP_INTERNAL_ERROR,
+            "application/json",
+            errorBody(ErrorCode.OPENAPI_MISSING, "the OpenAPI document is not bundled in this build"),
+        )
     }
+
+/** The `unauthorized` 401's message: what was wrong, then how to fix it. It never includes the token. */
+internal const val UNAUTHORIZED_MESSAGE =
+    "unauthorized: missing or invalid Authorization header. Send Authorization: Bearer <token> on every " +
+        "/control/ request, where <token> is the server's FAKE_LLM_CONTROL_TOKEN."
 
 private const val HTTP_BAD_REQUEST = 400
 private const val HTTP_UNAUTHORIZED = 401

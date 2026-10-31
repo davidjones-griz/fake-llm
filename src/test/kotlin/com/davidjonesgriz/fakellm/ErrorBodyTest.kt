@@ -10,16 +10,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** Every 400 fake-llm sends itself: `fake_llm_error`, a stable code, then `message`, then the code's own fields. */
+/** Every error fake-llm sends itself: `fake_llm_error`, a stable code, then `message`, then the code's own fields. */
 class ErrorBodyTest {
     private val callFields = listOf("seq", "vendor", "model", "system_shape", "message_count", "prompt_preview")
 
-    /** The 400 body, after checking its code, that the code and message come first, and that the message is not blank. */
+    /** The error body, after checking its status and code, that the code and message come first, and that the message is not blank. */
     private fun errorBody(
         response: HttpResponse<String>,
         code: String,
+        status: Int = 400,
     ): JsonObject {
-        assertEquals(400, response.statusCode(), response.body())
+        assertEquals(status, response.statusCode(), response.body())
         assertEquals(listOf("application/json"), response.headers().allValues("content-type"))
         val body = Json.parseToJsonElement(response.body()).jsonObject
         assertEquals(listOf("fake_llm_error", "message"), body.keys.take(2), response.body())
@@ -134,6 +135,59 @@ class ErrorBodyTest {
             errorBody(client.post("/control/scenario", """{"scenario":{"name":"x","steps":[]}}"""), "invalid-scenario")
             errorBody(client.post("/control/scenario", """{"scenario":{"name":"x","steps":[{"txt":"a"}]}}"""), "invalid-scenario")
         }
+    }
+
+    @Test
+    fun `unauthorized is a control request without the configured token, and says how to send it`() {
+        withServer(controlToken = "secret-token") { client, _ ->
+            listOf(null, "Bearer wrong", "bearer secret-token").forEach { authorization ->
+                val response = client.get("/control/calls", authorization)
+                val body = errorBody(response, "unauthorized", status = 401)
+                assertEquals(listOf("fake_llm_error", "message"), body.keys.toList())
+                assertEquals(UNAUTHORIZED_MESSAGE, message(body))
+                assertTrue("FAKE_LLM_CONTROL_TOKEN" in message(body) && "secret-token" !in message(body), message(body))
+                assertEquals(listOf("Bearer"), response.headers().allValues("www-authenticate"))
+            }
+        }
+    }
+
+    @Test
+    fun `no-route is a path no route serves, or a known path with another method`() {
+        withServer { client, _ ->
+            val unknown = errorBody(client.get("/nope"), "no-route", status = 404)
+            assertEquals(listOf("fake_llm_error", "message"), unknown.keys.toList())
+            assertEquals("no route: GET /nope", message(unknown))
+            assertEquals(
+                "no route: GET /anthropic/v1/messages",
+                message(errorBody(client.get("/anthropic/v1/messages"), "no-route", status = 404)),
+            )
+            // The path is decoded, so %22 and %5C reach the message as " and \; the body is still valid JSON.
+            assertEquals("no route: GET /a\"b\\c", message(errorBody(client.get("/a%22b%5Cc"), "no-route", status = 404)))
+        }
+    }
+
+    @Test
+    fun `not-implemented is the Anthropic Batches API`() {
+        withServer { client, _ ->
+            listOf(
+                client.get("/anthropic/v1/messages/batches"),
+                client.post("/anthropic/v1/messages/batches", "{}"),
+                client.get("/anthropic/v1/messages/batches/abc/results"),
+            ).forEach { response ->
+                val body = errorBody(response, "not-implemented", status = 501)
+                assertEquals(listOf("fake_llm_error", "message"), body.keys.toList())
+                assertEquals("the Anthropic Batches API is not implemented", message(body))
+            }
+        }
+    }
+
+    @Test
+    fun `openapi-missing is a build without the OpenAPI document`() {
+        val (status, _, text) = openApiResponse(null)
+        assertEquals(500, status)
+        val body = Json.parseToJsonElement(text).jsonObject
+        assertEquals(listOf("fake_llm_error", "message"), body.keys.toList())
+        assertEquals("openapi-missing", body.getValue("fake_llm_error").jsonPrimitive.content)
     }
 
     @Test

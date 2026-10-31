@@ -67,7 +67,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "no-route",
+          "message": {
             "$type": "string"
           }
         }

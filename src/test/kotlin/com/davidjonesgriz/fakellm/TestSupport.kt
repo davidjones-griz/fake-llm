@@ -120,7 +120,7 @@ internal fun anthropicStopReason(body: String): String =
         .getValue("stop_reason")
         .jsonPrimitive.content
 
-/** The `message` of fake-llm's own 400 [body], after checking that its code is [code] when one is given. */
+/** The `message` of one of fake-llm's own error [body]s, after checking that its code is [code] when one is given. */
 internal fun errorMessage(
     body: String,
     code: String? = null,

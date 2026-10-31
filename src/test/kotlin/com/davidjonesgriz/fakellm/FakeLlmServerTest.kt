@@ -388,7 +388,10 @@ class FakeLlmServerTest {
         val (status, contentType, body) = openApiResponse(null)
         assertEquals(500, status)
         assertEquals("application/json", contentType)
-        assertContains(body, "not bundled")
+        assertEquals(
+            """{"fake_llm_error":"openapi-missing","message":"the OpenAPI document is not bundled in this build"}""",
+            body,
+        )
         assertEquals(Triple(200, "application/yaml", "spec"), openApiResponse("spec"))
     }
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "control-routes-without-token",
-  "description": "With a control token set, each control route without it is a 401 with WWW-Authenticate: Bearer.",
+  "description": "With a control token set, each control route without it gets the `unauthorized` 401, with WWW-Authenticate: Bearer.",
   "server": {
     "controlToken": "conformance-token"
   },
@@ -19,7 +19,8 @@
           "www-authenticate": "Bearer"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "unauthorized",
+          "message": {
             "$type": "string"
           }
         }
@@ -37,7 +38,8 @@
           "www-authenticate": "Bearer"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "unauthorized",
+          "message": {
             "$type": "string"
           }
         }
@@ -55,7 +57,8 @@
           "www-authenticate": "Bearer"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "unauthorized",
+          "message": {
             "$type": "string"
           }
         }
@@ -74,7 +77,8 @@
           "www-authenticate": "Bearer"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "unauthorized",
+          "message": {
             "$type": "string"
           }
         }
@@ -93,7 +97,8 @@
           "www-authenticate": "Bearer"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "unauthorized",
+          "message": {
             "$type": "string"
           }
         }
@@ -117,7 +122,8 @@
           "www-authenticate": "Bearer"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "unauthorized",
+          "message": {
             "$type": "string"
           }
         }
@@ -135,7 +141,8 @@
           "www-authenticate": "Bearer"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "unauthorized",
+          "message": {
             "$type": "string"
           }
         }

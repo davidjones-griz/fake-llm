@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "control-routes-wrong-token",
-  "description": "A wrong token is a 401 too.",
+  "description": "A wrong token gets the `unauthorized` 401 too.",
   "server": {
     "controlToken": "conformance-token"
   },
@@ -22,7 +22,8 @@
           "www-authenticate": "Bearer"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "unauthorized",
+          "message": {
             "$type": "string"
           }
         }
@@ -43,7 +44,8 @@
           "www-authenticate": "Bearer"
         },
         "body": {
-          "fake_llm_error": {
+          "fake_llm_error": "unauthorized",
+          "message": {
             "$type": "string"
           }
         }
