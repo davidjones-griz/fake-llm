@@ -368,7 +368,7 @@
             "string",
             "null"
           ],
-          "description": "The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI formats (Chat\nCompletions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step\nhas it gets `ExceptionError`, and the step is not used.\n"
+          "description": "The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI formats (Chat\nCompletions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step\nhas it gets the `unsupported-step` 400 (`RequestError`), and the step is not used.\n"
         },
         "id": {
           "type": [

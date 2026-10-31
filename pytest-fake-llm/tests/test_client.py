@@ -82,6 +82,7 @@ def test_an_unknown_scenario_raises_with_the_servers_message(fake_llm):
 
     assert raised.value.status_code == 400
     assert raised.value.server_message.startswith("unknown scenario 'no-such-scenario'")
+    assert raised.value.error_code == "unknown-scenario"
     assert str(raised.value).startswith("POST /control/scenario returned HTTP 400: unknown scenario 'no-such-scenario'")
 
 
@@ -90,6 +91,7 @@ def test_a_rejected_inline_scenario_raises_with_the_servers_message(fake_llm):
         fake_llm.client.load_inline({"name": "misspelt", "steps": [{"txt": "a"}]})
 
     assert (raised.value.status_code, raised.value.server_message) == (400, "step 1: $.steps[0]: unknown field 'txt'")
+    assert raised.value.error_code == "invalid-scenario"
 
 
 def test_the_token_is_sent_as_a_bearer_header(stub):
@@ -112,6 +114,16 @@ def test_a_401_says_whether_the_token_was_missing_or_rejected(stub):
 
     assert missing.value.status_code == rejected.value.status_code == 401
     assert missing.value.server_message == "unauthorized: missing or invalid Authorization: Bearer <token>"
+    assert missing.value.error_code is None
+
+
+def test_an_older_servers_400_keeps_its_detail_and_value(stub):
+    server = stub(400, '{"fake_llm_error":"exception","detail":"unknown scenario \'x\'"}')
+
+    with pytest.raises(FakeLlmClientError) as raised:
+        FakeLlmClient(server.url).load("x")
+
+    assert (raised.value.server_message, raised.value.error_code) == ("unknown scenario 'x'", "exception")
 
 
 def test_a_non_json_error_and_an_unreadable_reply_keep_the_body(stub):
@@ -121,6 +133,7 @@ def test_a_non_json_error_and_an_unreadable_reply_keep_the_body(stub):
         FakeLlmClient(stub(200, "<html>", "text/html").url).calls()
 
     assert (proxy.value.status_code, proxy.value.server_message) == (502, "Bad gateway")
+    assert proxy.value.error_code is None
     assert (unreadable.value.status_code, unreadable.value.server_message) == (200, None)
 
 

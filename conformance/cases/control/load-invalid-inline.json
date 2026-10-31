@@ -24,8 +24,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-scenario",
+          "message": {
             "$type": "string"
           }
         }

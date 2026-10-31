@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "gemini-function-call-raw-arguments",
-  "description": "A request whose next step has rawArguments gets the exception 400, because functionCall.args must be a JSON object, and is not a call.",
+  "description": "A request whose next step has rawArguments gets the unsupported-step 400, because functionCall.args must be a JSON object, and is not a call.",
   "scenario": {
     "name": "gemini-function-call-raw-arguments",
     "steps": [
@@ -42,8 +42,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "unsupported-step",
+          "message": {
             "$type": "string"
           }
         }

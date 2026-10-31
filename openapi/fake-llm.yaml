@@ -23,21 +23,27 @@ info:
 
     **Compatibility.** Clients should ignore response fields they do not know: a later version
     may add fields. Request bodies are strict: unknown fields are rejected. Human-readable
-    messages (`fake_llm_error` texts other than `"exception"`, `"no scenario loaded"` and
-    `"no more steps"`, and `detail`) are diagnostics, not part of the contract. Integers are written as JSON integers,
+    messages (a 400's `message`, and `fake_llm_error` on the 401, 404, 501 and 500) are
+    diagnostics, not part of the contract; a 400's `fake_llm_error` code is. Integers are written as JSON integers,
     without quotes, a fraction or an exponent: `"24"`, `24.0` and `2e1` are rejected where an
     integer is expected.
 
+    **fake-llm's 400s.** Every 400 fake-llm sends itself has `fake_llm_error`, a stable code,
+    and `message`, which says why: `NoMoreStepsError` (`no-more-steps`), `NoScenarioError`
+    (`no-scenario`) and `RequestError` (`invalid-json`, `invalid-request`, `unsupported-step`,
+    `unknown-scenario`, `invalid-scenario` and `exception`). The first two also carry the call's
+    fields. A step's scripted error is outside these schemas, even when its status is 400.
+
     **Scenarios and calls.** A scenario is an ordered list of steps. Every request to a
     generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini
-    `generateContent` and `streamGenerateContent`) that does not get `ExceptionError` is a call:
+    `generateContent` and `streamGenerateContent`) that does not get `RequestError` is a call:
     it takes the next call number (`seq`, from 1) and one call-log entry, and one exchange-log
     entry (`GET /control/exchanges`) with its request and response, and call N after a load or
     reset gets step N, on any generation route. Calls
     are numbered in arrival order. A call is numbered and logged before any wait its step sets
     (`firstByteDelayMs`), so a delayed call can finish after a later one. A call after the
     last step gets `NoMoreStepsError`; the last step does not repeat. A request that gets
-    `ExceptionError`, a 404 and the Batches 501 are not calls. That includes a request whose next
+    `RequestError`, a 404 and the Batches 501 are not calls. That includes a request whose next
     step has a tool call with `rawArguments` that its format can't carry (a buffered Anthropic
     request, or a Gemini request). That step is not used, and the next call gets it. A Gemini
     `streamGenerateContent` request without `alt=sse` is not a call either. The embeddings routes
@@ -299,7 +305,7 @@ paths:
         Answers `{"input_tokens": 100}` for any body the Messages route accepts
         (https://docs.anthropic.com/en/api/messages-count-tokens): the fixed input token count
         every Messages reply reports by default. A body the Messages route rejects gets
-        `ExceptionError`. Not a call: no step, not logged, the same with or without a scenario.
+        `RequestError`. Not a call: no step, not logged, the same with or without a scenario.
       security: []
       requestBody:
         required: true
@@ -654,8 +660,8 @@ paths:
         Request follows the Gemini `streamGenerateContent` API
         (https://ai.google.dev/api/generate-content), and the success response is its server-sent
         events form: one `GenerateContentResponse` per `data:` frame, the last with `finishReason`
-        and `usageMetadata`. Requires `alt=sse`; without it the request gets `ExceptionError` and
-        is not a call. A step's scripted error can return any status and body.
+        and `usageMetadata`. Requires `alt=sse`; without it the request gets `RequestError`
+        (`invalid-request`, checked before the body is read) and is not a call. A step's scripted error can return any status and body.
       security: []
       parameters:
         - name: alt
@@ -782,13 +788,15 @@ components:
   responses:
     BadRequest:
       description: |
-        The request could not be handled: a body that is not valid JSON or does not match the
-        request schema, a scenario that cannot be found or decoded, an embeddings request outside
-        the documented rules, or a count_tokens body the Messages route rejects.
+        The request could not be handled: a body that is not valid JSON or not a JSON object
+        (`invalid-json`), a body that does not match the request schema, an embeddings request
+        outside the documented rules or a count_tokens body the Messages route rejects
+        (`invalid-request`), or a scenario that cannot be found (`unknown-scenario`) or decoded
+        (`invalid-scenario`).
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ExceptionError"
+            $ref: "#/components/schemas/RequestError"
     Unauthorized:
       description: A control token is configured and the request did not carry it.
       headers:
@@ -819,8 +827,10 @@ components:
         `NoScenarioError` in strict mode (the default); lenient mode serves the canned reply. On
         the Anthropic and OpenAI routes with `"stream": true`, the OpenAI Responses route with
         `"stream": true`, and on Gemini `streamGenerateContent`, both are JSON, with no SSE bytes. A request body that is not valid
-        JSON, or lacks the `messages` (Anthropic, OpenAI) or `contents` (Gemini) array, gets
-        `ExceptionError`. On OpenAI Responses, only a body that is not a JSON object gets it. A step's scripted
+        JSON gets `RequestError` `invalid-json`, and one that lacks the `messages` (Anthropic,
+        OpenAI) or `contents` (Gemini) array gets `invalid-request`; on OpenAI Responses, only a
+        body that is not a JSON object is rejected. A request whose next step has a tool call with
+        `rawArguments` its format can't carry gets `unsupported-step`. A step's scripted
         error is outside these schemas, even when its status is 400: see `ScriptedError`.
       content:
         application/json:
@@ -828,7 +838,7 @@ components:
             oneOf:
               - $ref: "#/components/schemas/NoScenarioError"
               - $ref: "#/components/schemas/NoMoreStepsError"
-              - $ref: "#/components/schemas/ExceptionError"
+              - $ref: "#/components/schemas/RequestError"
     ScriptedError:
       description: |
         A step's scripted error, sent exactly as the scenario scripts it: any status from 100 to
@@ -1143,30 +1153,40 @@ components:
         fake_llm_error:
           type: string
           description: A human-readable explanation; not part of the contract.
-    ExceptionError:
+    RequestError:
       type: object
       description: |
-        A request fake-llm could not handle, such as an invalid body. It is not a call. That
-        includes a request whose next step has a tool call with `rawArguments` that its format
-        can't carry (a buffered Anthropic request, or a Gemini request). That step is not used,
-        and the next call gets it. A Gemini `streamGenerateContent` request without `alt=sse`
-        gets it too.
-      required: [fake_llm_error, detail]
+        A request fake-llm could not handle. It is not a call. `invalid-json`: the body is not
+        JSON, or not a JSON object. `invalid-request`: the route rejects the body (no `messages`
+        or `contents` array, an invalid `cache_control`, an embeddings rule, a Gemini
+        `streamGenerateContent` request without `alt=sse` whatever its body, or a
+        `POST /control/scenario` body with an unknown field, without exactly one of `name` and
+        `scenario`, or with a `name` that is not a non-blank string). `unsupported-step`: the next step has a
+        tool call with `rawArguments` that this request's format can't carry (a buffered
+        Anthropic request, or a Gemini request); that step is not used, and the next call gets
+        it. `unknown-scenario`: a load by name found no such scenario. `invalid-scenario`: a
+        scenario failed to load (an illegal name, a scenario that doesn't decode or validate, or
+        a file whose declared name differs). `exception`: any other failure.
+      required: [fake_llm_error, message]
       properties:
         fake_llm_error:
           type: string
-          const: exception
-        detail:
-          type: [string, "null"]
-          description: A human-readable explanation; not part of the contract.
+          enum: [invalid-json, invalid-request, unsupported-step, unknown-scenario, invalid-scenario, exception]
+        message:
+          $ref: "#/components/schemas/ErrorMessage"
+    ErrorMessage:
+      type: string
+      description: Why the request failed, for a person to read; not part of the contract.
     NoScenarioError:
       type: object
       description: A call made while no scenario is loaded, in strict mode.
-      required: [fake_llm_error, seq, vendor, model, system_shape, message_count, prompt_preview]
+      required: [fake_llm_error, message, seq, vendor, model, system_shape, message_count, prompt_preview]
       properties:
         fake_llm_error:
           type: string
-          const: no scenario loaded
+          const: no-scenario
+        message:
+          $ref: "#/components/schemas/ErrorMessage"
         seq:
           $ref: "#/components/schemas/CallNumber"
         vendor:
@@ -1182,11 +1202,13 @@ components:
     NoMoreStepsError:
       type: object
       description: A call after the loaded scenario's last step.
-      required: [fake_llm_error, scenario, steps, seq, vendor, model, system_shape, message_count, prompt_preview]
+      required: [fake_llm_error, message, scenario, steps, seq, vendor, model, system_shape, message_count, prompt_preview]
       properties:
         fake_llm_error:
           type: string
-          const: no more steps
+          const: no-more-steps
+        message:
+          $ref: "#/components/schemas/ErrorMessage"
         scenario:
           type: string
           description: The loaded scenario's name.
@@ -1430,7 +1452,7 @@ components:
           description: |
             The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI formats (Chat
             Completions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step
-            has it gets `ExceptionError`, and the step is not used.
+            has it gets the `unsupported-step` 400 (`RequestError`), and the step is not used.
         id:
           type: [string, "null"]
           minLength: 1

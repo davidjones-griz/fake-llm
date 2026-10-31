@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "gemini-stream-without-alt-sse",
-  "description": "streamGenerateContent without alt=sse gets the exception 400 and is not a call: the step stays next, and the request with alt=sse gets it as call 1.",
+  "description": "streamGenerateContent without alt=sse gets the invalid-request 400 and is not a call: the step stays next, and the request with alt=sse gets it as call 1.",
   "scenario": {
     "name": "gemini-stream-without-alt-sse",
     "steps": [
@@ -37,8 +37,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "invalid-request",
+          "message": {
             "$type": "string"
           }
         }

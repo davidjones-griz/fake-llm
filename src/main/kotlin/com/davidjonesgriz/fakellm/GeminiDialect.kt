@@ -17,7 +17,7 @@ internal fun parseGeminiRequest(
     modelFromPath: String,
     stream: Boolean = false,
 ): ParsedRequest {
-    val obj = geminiLenientJson.parseToJsonElement(body).jsonObject
+    val obj = parseRequestObject(geminiLenientJson, body)
     val contents = obj["contents"] as? JsonArray ?: error("request has no contents array")
     // The REST API accepts the proto field name too, as Google's own curl examples use.
     val systemInstruction = obj.valueOrNull("systemInstruction") ?: obj.valueOrNull("system_instruction")

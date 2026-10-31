@@ -1,18 +1,19 @@
-# Diagnosing "no scenario loaded" and "no more steps"
+# Diagnosing the no-scenario and no-more-steps errors
 
-fake-llm answers a call that has no step with HTTP 400 and a JSON body that says why. There are two cases, and both usually mean the test and the app disagree about how many calls the app makes. These examples use the bundled scenario `hello`, which has one step:
+fake-llm answers a call that has no step with HTTP 400 and a JSON body: `fake_llm_error` is a code that says which case it is, and `message` says why. There are two cases, and both usually mean the test and the app disagree about how many calls the app makes. These examples use the bundled scenario `hello`, which has one step:
 
 ```json
 --8<-- "src/main/resources/com/davidjonesgriz/fakellm/scenarios/hello.json"
 ```
 
-## No more steps
+## no-more-steps
 
 A call after the scenario's last step gets:
 
 ```json
 {
-  "fake_llm_error": "no more steps",
+  "fake_llm_error": "no-more-steps",
+  "message": "no more steps: call 2 came after the last step of scenario 'hello', which has 1 step. The last step does not repeat.",
   "scenario": "hello",
   "steps": 1,
   "seq": 2,
@@ -32,14 +33,18 @@ A call after the scenario's last step gets:
 
 `GET /control/calls` lists every call in order, with its `outcome` and the step that served it; the call that got the 400 has outcome `no-more-steps` and `step` null. `GET /health`'s `unusedSteps` shows the opposite mistake, steps no call used.
 
-## No scenario loaded
+## no-scenario
 
-With no scenario loaded, a call gets the same body without `scenario` and `steps`, and `"fake_llm_error": "no scenario loaded"`. Common causes:
+With no scenario loaded, a call gets the same body without `scenario` and `steps`, and `"fake_llm_error": "no-scenario"`. Its message says how to load a scenario. Common causes:
 
 - The test never loaded a scenario, or loaded it on a different server than the one the app calls (check the app's base URL).
 - The scenario was unloaded, for example by the pytest plugin before each test, and this test has no `fake_llm_scenario` marker.
 
 A server started with `--lenient` or `FAKE_LLM_LENIENT=true` answers this case with a canned reply instead. Lenient mode is for trying fake-llm by hand; a test is clearer with an explicit scenario. A call after the last step is a 400 in either mode.
+
+## Other 400s
+
+A 400 with another code means the request never became a call, so it took no step and is not in the call log: `invalid-json` and `invalid-request` for a body the route can't use, `unsupported-step` for a next step whose `rawArguments` the request's format can't carry, and `unknown-scenario` or `invalid-scenario` for a scenario load that failed. [fake-llm's 400 responses](../endpoints.md#fake-llms-400-responses) lists every code.
 
 ## Testing how the app handles them
 
@@ -75,6 +80,6 @@ def test_a_second_call_gets_no_more_steps(fake_llm):
     client.messages.create(**request)
     with pytest.raises(anthropic.BadRequestError) as raised:
         client.messages.create(**request)
-    assert raised.value.body["fake_llm_error"] == "no more steps"
+    assert raised.value.body["fake_llm_error"] == "no-more-steps"
     assert raised.value.body["seq"] == 2
 ```

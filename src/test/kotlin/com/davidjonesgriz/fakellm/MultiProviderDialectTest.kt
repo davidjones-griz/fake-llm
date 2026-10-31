@@ -267,7 +267,7 @@ class MultiProviderDialectTest {
                     .startsWith("application/json"),
             )
             assertEquals(
-                "no more steps",
+                "no-more-steps",
                 Json
                     .parseToJsonElement(resp.body())
                     .jsonObject
@@ -650,7 +650,7 @@ class MultiProviderDialectTest {
             assertEquals(400, resp.statusCode())
             assertTrue(contentType(resp).startsWith("application/json"))
             assertEquals(
-                "no more steps",
+                "no-more-steps",
                 Json
                     .parseToJsonElement(resp.body())
                     .jsonObject
@@ -703,11 +703,11 @@ class MultiProviderDialectTest {
     }
 
     @Test
-    fun `streamGenerateContent without alt=sse is the exception 400 and not a call`() {
+    fun `streamGenerateContent without alt=sse is the invalid-request 400 and not a call`() {
         withServer(engineWith(Step(text = "Hi."))) { client, engine ->
             val resp = client.post(geminiStreamPath.substringBefore('?'), geminiBody())
             assertEquals(400, resp.statusCode())
-            assertEquals(GEMINI_STREAM_NEEDS_ALT_SSE, errorDetail(resp.body()))
+            assertEquals(GEMINI_STREAM_NEEDS_ALT_SSE, errorMessage(resp.body(), "invalid-request"))
             assertFalse(resp.body().contains("data:"))
             assertEquals(emptyList(), engine.calls())
             assertEquals(listOf(geminiChunk(geminiText("Hi."), "STOP")), dataFrames(client.post(geminiStreamPath, geminiBody()).body()))
@@ -716,13 +716,13 @@ class MultiProviderDialectTest {
     }
 
     @Test
-    fun `a streamed gemini request whose next step has rawArguments is the exception 400 and not a call`() {
+    fun `a streamed gemini request whose next step has rawArguments is the unsupported-step 400 and not a call`() {
         withServer(engineWith(Step(toolCalls = listOf(ToolCall(name = "get_weather", rawArguments = "{}"))))) { client, engine ->
             val resp = client.post(geminiStreamPath, geminiBody())
             assertEquals(400, resp.statusCode())
             assertEquals(
                 "step 1: tool call 1 sets rawArguments, which a Gemini reply cannot carry; functionCall.args must be a JSON object",
-                errorDetail(resp.body()),
+                errorMessage(resp.body(), "unsupported-step"),
             )
             assertFalse(resp.body().contains("data:"))
             assertEquals(emptyList(), engine.calls())

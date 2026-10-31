@@ -15,7 +15,10 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
-/** Answers an embeddings request, or returns false when the request is not one. Invalid bodies throw (the `exception` 400). */
+/**
+ * Answers an embeddings request, or returns false when the request is not one. Invalid bodies throw (the `invalid-json` or
+ * `invalid-request` 400).
+ */
 internal fun embeddingRoute(ex: HttpExchange): Boolean {
     val path = ex.requestURI.path
     val body =
@@ -30,9 +33,7 @@ internal fun embeddingRoute(ex: HttpExchange): Boolean {
     return body != null
 }
 
-private fun readJsonObject(ex: HttpExchange): JsonObject =
-    Json.parseToJsonElement(ex.requestBody.readBytes().decodeToString()) as? JsonObject
-        ?: error("the request body must be a JSON object")
+private fun readJsonObject(ex: HttpExchange): JsonObject = parseRequestObject(Json, ex.requestBody.readBytes().decodeToString())
 
 /** The OpenAI embeddings list. Every check runs before any vector is built. */
 private fun openAiEmbeddings(obj: JsonObject): JsonObject {

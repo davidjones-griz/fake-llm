@@ -24,13 +24,22 @@ class FakeLlmClientError(Exception):
 
     ``status_code`` is the HTTP status, or None when no complete response arrived (a transport failure
     such as a refused connection, a timeout or a body cut off). ``server_message`` is the server's own
-    explanation of an error status, verbatim, when the response carried one.
+    explanation of an error status, verbatim, when the response carried one. ``error_code`` is a 400's
+    ``fake_llm_error`` code, such as ``unknown-scenario`` or ``invalid-scenario``, and None for any
+    other status; from a server older than 0.7.0 it is that server's older value.
     """
 
-    def __init__(self, message: str, status_code: int | None = None, server_message: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        server_message: str | None = None,
+        error_code: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.server_message = server_message
+        self.error_code = error_code
 
 
 @dataclass(frozen=True)
@@ -202,7 +211,8 @@ def _call_record(entry: dict[str, Any]) -> CallRecord:
 
 
 def _server_message(body: str) -> str | None:
-    """``detail`` when it is a string, else ``fake_llm_error``, else the raw body's start; None when empty."""
+    """``message`` when it is a string, else ``detail`` (a server older than 0.7.0), else ``fake_llm_error``
+    (the 401, 404 and 501 bodies), else the raw body's start; None when empty."""
     if not body.strip():
         return None
     try:
@@ -210,7 +220,7 @@ def _server_message(body: str) -> str | None:
     except ValueError:
         parsed = None
     if isinstance(parsed, dict):
-        for key in ("detail", "fake_llm_error"):
+        for key in ("message", "detail", "fake_llm_error"):
             if isinstance(parsed.get(key), str):
                 return parsed[key]
     return body[:_RAW_BODY_LIMIT]
@@ -224,7 +234,19 @@ def _http_failure(method: str, path: str, status: int, body: str, token_configur
         explanation = "the server rejected the control token"
     else:
         explanation = "the server requires a control token (pass control_token, or set FAKE_LLM_CONTROL_TOKEN for the plugin)"
-    return FakeLlmClientError(f"{method} {path} returned HTTP {status}: {explanation}", status, server_message)
+    return FakeLlmClientError(f"{method} {path} returned HTTP {status}: {explanation}", status, server_message, _error_code(status, body))
+
+
+def _error_code(status: int, body: str) -> str | None:
+    """A 400 body's ``fake_llm_error`` code; None for any other status or a body without one."""
+    if status != 400:
+        return None
+    try:
+        parsed = json.loads(body)
+    except ValueError:
+        return None
+    code = parsed.get("fake_llm_error") if isinstance(parsed, dict) else None
+    return code if isinstance(code, str) else None
 
 
 def _normalized_base_url(raw: str) -> str:

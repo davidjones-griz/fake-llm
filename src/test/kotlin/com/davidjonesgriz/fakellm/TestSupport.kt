@@ -120,12 +120,15 @@ internal fun anthropicStopReason(body: String): String =
         .getValue("stop_reason")
         .jsonPrimitive.content
 
-internal fun errorDetail(body: String): String =
-    Json
-        .parseToJsonElement(body)
-        .jsonObject
-        .getValue("detail")
-        .jsonPrimitive.content
+/** The `message` of fake-llm's own 400 [body], after checking that its code is [code] when one is given. */
+internal fun errorMessage(
+    body: String,
+    code: String? = null,
+): String {
+    val obj = Json.parseToJsonElement(body).jsonObject
+    code?.let { assertEquals(it, obj.getValue("fake_llm_error").jsonPrimitive.content, body) }
+    return obj.getValue("message").jsonPrimitive.content
+}
 
 /** Runs [block] with a new temporary directory, deleted afterwards. */
 @OptIn(ExperimentalPathApi::class)

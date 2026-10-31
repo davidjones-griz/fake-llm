@@ -86,5 +86,5 @@ def test_with_no_scenario_the_call_fails(fake_llm):
     with pytest.raises(anthropic.BadRequestError) as failure:
         greet("Ada")
 
-    assert failure.value.body["fake_llm_error"] == "no scenario loaded"
+    assert failure.value.body["fake_llm_error"] == "no-scenario"
     assert [call["outcome"] for call in calls(fake_llm)] == ["no-scenario"]

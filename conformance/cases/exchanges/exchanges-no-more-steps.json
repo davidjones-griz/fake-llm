@@ -80,7 +80,10 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "no more steps",
+          "fake_llm_error": "no-more-steps",
+          "message": {
+            "$type": "string"
+          },
           "scenario": "no-more-steps",
           "steps": 1,
           "seq": 2,
@@ -141,7 +144,7 @@
                   "application/json"
                 ]
               },
-              "body": "{\"fake_llm_error\":\"no more steps\",\"scenario\":\"no-more-steps\",\"steps\":1,\"seq\":2,\"vendor\":\"anthropic\",\"model\":\"example-model\",\"system_shape\":\"absent\",\"message_count\":1,\"prompt_preview\":\"Hello\\n\"}",
+              "body": "{\"fake_llm_error\":\"no-more-steps\",\"message\":\"no more steps: call 2 came after the last step of scenario 'no-more-steps', which has 1 step. The last step does not repeat.\",\"scenario\":\"no-more-steps\",\"steps\":1,\"seq\":2,\"vendor\":\"anthropic\",\"model\":\"example-model\",\"system_shape\":\"absent\",\"message_count\":1,\"prompt_preview\":\"Hello\\n\"}",
               "state": "complete"
             }
           }

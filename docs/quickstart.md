@@ -32,7 +32,7 @@ The call log has one entry: which route was called, with which model, what the a
 [{"seq":1,"vendor":"anthropic","model":"example-model","systemShape":"absent","messageCount":1,"outcome":"text","timestampMs":1710000000000,"promptSample":"Hello\n","step":1,"toolCalls":[],"toolResults":[],"firstByteDelayMs":0,"streamInterChunkDelayMs":0}]
 ```
 
-`hello` has one step, so a second call would get HTTP 400 (`no more steps`). `POST /control/reset` starts the scenario over at step 1. The server does not check API keys; any value satisfies a client that insists on sending one.
+`hello` has one step, so a second call would get HTTP 400 (`no-more-steps`). `POST /control/reset` starts the scenario over at step 1. The server does not check API keys; any value satisfies a client that insists on sending one.
 
 To keep the server in the foreground and load a scenario at startup instead:
 

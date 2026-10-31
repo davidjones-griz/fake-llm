@@ -47,7 +47,7 @@ class InfoRoutesTest {
     }
 
     @Test
-    fun `a count_tokens body the Messages parser rejects is the exception 400`() {
+    fun `a count_tokens body the Messages parser rejects is the invalid-json or invalid-request 400`() {
         withServer { client, _ ->
             listOf("not json", "[]", """{"model":"example-model"}""").forEach { body ->
                 val response = client.post(countPath, body)
@@ -58,7 +58,7 @@ class InfoRoutesTest {
                         .jsonObject["fake_llm_error"]
                         ?.jsonPrimitive
                         ?.contentOrNull
-                assertEquals("exception", error, body)
+                assertEquals(if (body.startsWith("{")) "invalid-request" else "invalid-json", error, body)
             }
             assertNotLogged(client)
         }

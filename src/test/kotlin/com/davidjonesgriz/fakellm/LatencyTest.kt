@@ -202,7 +202,7 @@ class LatencyTest {
                     text.append(input.readNBytes(length).decodeToString()).toString()
                 }
             assertTrue(reply.startsWith("HTTP/1.1 400"), reply)
-            assertTrue(reply.endsWith("""{"fake_llm_error":"exception","detail":"invalid chunk length"}"""), reply)
+            assertTrue(reply.endsWith("""{"fake_llm_error":"exception","message":"invalid chunk length"}"""), reply)
             assertEquals(0, engine.calls().size)
         }
     }

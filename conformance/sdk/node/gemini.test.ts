@@ -84,7 +84,9 @@ test("call after last step", async (t) => {
   await assert.rejects(generate(), (e) => {
     assert.ok(e instanceof ApiError);
     assert.equal(e.status, 400);
-    assert.equal((JSON.parse(e.message) as { fake_llm_error?: unknown }).fake_llm_error, "no more steps");
+    const body = JSON.parse(e.message) as { fake_llm_error?: unknown; message?: unknown };
+    assert.equal(body.fake_llm_error, "no-more-steps");
+    assert.match(String(body.message), /^no more steps: /);
     return true;
   });
   assert.deepEqual(await f.log(), [call(1, "text", 1), call(2, "no-more-steps", null)]);

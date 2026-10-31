@@ -9,7 +9,7 @@ A provider sometimes answers with a server error that a second attempt would get
 ## What to check
 
 - The app returns the second reply's text.
-- The call log has exactly two calls, `error:500` then `text`. One call means the app gave up; three means it retried after succeeding, or the scenario ran out and the third got `no more steps`.
+- The call log has exactly two calls, `error:500` then `text`. One call means the app gave up; three means it retried after succeeding, or the scenario ran out and the third got `no-more-steps`.
 
 The `anthropic` and `openai` Python SDKs retry a 500 on their own, twice by default. A test of your own retry logic should turn the SDK's off, so the call log shows the app's retries. To test a rate limit instead, the bundled `rate-limit-429` scenario answers call 1 with HTTP 429 and a `retry-after` header.
 

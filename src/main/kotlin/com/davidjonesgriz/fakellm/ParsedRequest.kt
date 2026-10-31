@@ -63,7 +63,7 @@ private fun validateCacheControl(raw: JsonElement) {
 private val lenientJson = Json { ignoreUnknownKeys = true }
 
 internal fun parseAnthropicRequest(body: String): ParsedRequest {
-    val obj = lenientJson.parseToJsonElement(body).jsonObject
+    val obj = parseRequestObject(lenientJson, body)
     val model = obj.stringField("model").orEmpty()
     val system = obj["system"]
     val systemShape =

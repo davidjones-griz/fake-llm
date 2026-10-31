@@ -119,7 +119,7 @@ def test_call_after_last_step(fake, openai_client):
     assert create(openai_client).output_text == "once"
     with pytest.raises(openai.BadRequestError) as raised:
         create(openai_client)
-    assert raised.value.body["fake_llm_error"] == "no more steps"
+    assert raised.value.body["fake_llm_error"] == "no-more-steps" and raised.value.body["message"].startswith("no more steps:")
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
 
 
@@ -130,7 +130,7 @@ def test_call_after_unload(fake, openai_client):
     assert fake.log() == []
     with pytest.raises(openai.BadRequestError) as raised:
         create(openai_client)
-    assert raised.value.body["fake_llm_error"] == "no scenario loaded"
+    assert raised.value.body["fake_llm_error"] == "no-scenario" and raised.value.body["message"].startswith("no scenario loaded:")
     assert fake.log() == [call(1, "no-scenario", None)]
 
 
@@ -294,7 +294,7 @@ def test_stream_call_after_last_step(fake, openai_client):
     assert list(stream(openai_client))[-1].type == "response.completed"
     with pytest.raises(openai.BadRequestError) as raised:
         list(stream(openai_client))
-    assert raised.value.body["fake_llm_error"] == "no more steps"
+    assert raised.value.body["fake_llm_error"] == "no-more-steps" and raised.value.body["message"].startswith("no more steps:")
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
 
 

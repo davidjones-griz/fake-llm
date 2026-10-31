@@ -160,6 +160,7 @@ class FakeLlmClientTest {
             val unknown = assertFailsWith<FakeLlmClientException> { client.load("no-such-scenario") }
             assertEquals(400, unknown.statusCode)
             assertContains(unknown.serverMessage!!, "unknown scenario 'no-such-scenario'")
+            assertEquals("unknown-scenario", unknown.errorCode)
             assertContains(unknown.message!!, "POST /control/scenario returned HTTP 400: unknown scenario")
 
             val invalid =
@@ -172,15 +173,27 @@ class FakeLlmClientTest {
                 }
             assertEquals(400, invalid.statusCode)
             assertContains(invalid.serverMessage!!, "scenario 'x' has no steps")
+            assertEquals("invalid-scenario", invalid.errorCode)
 
             val noRoute = assertFailsWith<FakeLlmClientException> { client.send("GET", "/nope") }
             assertEquals(404, noRoute.statusCode)
             assertEquals("no route: GET /nope", noRoute.serverMessage)
+            assertNull(noRoute.errorCode)
         }
     }
 
     @Test
-    fun `an error body's message falls back from detail to fake_llm_error to the raw text`() {
+    fun `the error code is a 400's fake_llm_error, and null for other statuses and bodies without one`() {
+        assertEquals("invalid-json", errorCodeOf(400, """{"fake_llm_error":"invalid-json","message":"why"}"""))
+        assertEquals("exception", errorCodeOf(400, """{"fake_llm_error":"exception","detail":"why"}"""))
+        assertNull(errorCodeOf(404, """{"fake_llm_error":"no route: GET /x"}"""))
+        assertNull(errorCodeOf(400, "<html>Bad Request</html>"))
+        assertNull(errorCodeOf(400, """{"error":{"message":"scripted"}}"""))
+    }
+
+    @Test
+    fun `an error body's message falls back from message to detail to fake_llm_error to the raw text`() {
+        assertEquals("why", serverMessageOf("""{"fake_llm_error":"invalid-request","message":"why"}"""))
         assertEquals("why", serverMessageOf("""{"fake_llm_error":"exception","detail":"why"}"""))
         assertEquals("exception", serverMessageOf("""{"fake_llm_error":"exception","detail":null}"""))
         assertEquals("<html>Bad Gateway</html>", serverMessageOf("<html>Bad Gateway</html>"))
@@ -221,6 +234,7 @@ class FakeLlmClientTest {
         FakeLlmClient("http://127.0.0.1:$port").use { client ->
             val failure = assertFailsWith<FakeLlmClientException> { client.health() }
             assertNull(failure.statusCode)
+            assertNull(failure.errorCode)
             assertIs<IOException>(failure.cause)
         }
     }

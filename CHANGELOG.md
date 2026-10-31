@@ -7,6 +7,28 @@ change the public API.
 
 ## [Unreleased]
 
+### Added
+
+- `FakeLlmClientException.errorCode` and the pytest plugin's `FakeLlmClientError.error_code`: a
+  400's `fake_llm_error` code, such as `unknown-scenario`; null for other statuses.
+
+### Changed
+
+- fake-llm's own 400s share one body: `fake_llm_error` is a stable error code, and `message`
+  says why. This changes the body format, so a test that reads `fake_llm_error` or `detail` needs
+  updating:
+
+  | Before | After |
+  | --- | --- |
+  | `"fake_llm_error": "no more steps"` | `"fake_llm_error": "no-more-steps"`, plus `message` |
+  | `"fake_llm_error": "no scenario loaded"` | `"fake_llm_error": "no-scenario"`, plus `message` |
+  | `"fake_llm_error": "exception"`, `detail` | one of `invalid-json`, `invalid-request`, `unsupported-step`, `unknown-scenario`, `invalid-scenario` or `exception`, with the reason in `message` |
+
+  `detail` is gone; `message` replaces it. The no-more-steps and no-scenario bodies keep their
+  call fields, and their messages start with the old texts. `FakeLlmClient` and the pytest
+  plugin's client read `message`, and still read `detail` from an older server. The 401, 404, 501
+  and 500 bodies are unchanged. In the OpenAPI document, `ExceptionError` is now `RequestError`.
+
 ## [0.6.0] - 2026-10-30
 
 ### Added

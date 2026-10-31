@@ -20,7 +20,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.util.concurrent.TimeUnit
 
 // Fixtures for the check that every call a test makes gets a step. `hello` has one step, so a
-// second call to it gets the "no more steps" 400.
+// second call to it gets the `no-more-steps` 400.
 
 /** Two calls to a one-step scenario: the second gets no step, so the test fails. */
 @Fixture

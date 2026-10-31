@@ -2,7 +2,7 @@
 
 A running fake-llm server is driven over HTTP: load a scenario, start it over, and read back what the app sent. The contract for these routes, `/health` and `/openapi` is the OpenAPI 3.1 document [openapi/fake-llm.yaml](https://github.com/davidjones-griz/fake-llm/blob/main/openapi/fake-llm.yaml), which this page summarises.
 
-Clients should ignore response fields they do not know, since a later version may add fields. Request bodies are strict: `POST /control/scenario` rejects unknown fields, as does the scenario format. Human-readable messages, such as most `fake_llm_error` texts and the `detail` of a 400, are diagnostics, not part of the contract.
+Clients should ignore response fields they do not know, since a later version may add fields. Request bodies are strict: `POST /control/scenario` rejects unknown fields, as does the scenario format. Human-readable messages, such as a 400's `message` and the `fake_llm_error` text of a 401 or 404, are diagnostics, not part of the contract; a 400's `fake_llm_error` code is part of it.
 
 ## Control token
 
@@ -65,7 +65,7 @@ curl -s -X POST http://localhost:8080/control/scenario \
 {"loaded":"inline","steps":1}
 ```
 
-Sending both `name` and `scenario`, or neither, is HTTP 400. A bad name or a body the decoder rejects is HTTP 400 with `{"fake_llm_error":"exception","detail":"..."}`.
+Sending both `name` and `scenario`, or neither, is HTTP 400 `invalid-request`, and a body that is not a JSON object is `invalid-json`. A name that finds no scenario is `unknown-scenario`, and an illegal name or a scenario the decoder rejects is `invalid-scenario`, with the reason in `message`: `{"fake_llm_error":"unknown-scenario","message":"unknown scenario 'x' — ..."}`. [Endpoints](endpoints.md#fake-llms-400-responses) lists every code.
 
 ### `GET /control/scenarios`
 
@@ -130,7 +130,7 @@ With a scenario directory set, `*.json` names from that directory are merged in,
 - `response.state` is `open` while the body is still being written (`body` holds what has been written so far), `complete` once fake-llm finished the response and closed the body normally, and `aborted` when sending the headers, or a write, flush or close, failed (usually because the client disconnected), or the server stopped mid-response. An `aborted` body holds the bytes written before the failure; the client may have received fewer. A server stopped while a call waits out its `firstByteDelayMs` records the `exception` 400 it tried to send, `aborted`, while the call log still names the step.
 - `response` is `null` until fake-llm starts sending the response, for example during a step's `firstByteDelayMs` wait.
 
-Requests that are not calls (the `exception` 400s, 404s, the Batches 501, the embeddings routes, token counting and the model lists, and health and control requests) are not listed. Bodies are not capped. The log is emptied with the call log by a load, a reset or an unload.
+Requests that are not calls (the 400s other than `no-more-steps` and `no-scenario`, 404s, the Batches 501, the embeddings routes, token counting and the model lists, and health and control requests) are not listed. Bodies are not capped. The log is emptied with the call log by a load, a reset or an unload.
 
 ```json
 [

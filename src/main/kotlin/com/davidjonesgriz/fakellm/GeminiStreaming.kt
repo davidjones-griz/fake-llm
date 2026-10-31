@@ -16,7 +16,7 @@ import kotlinx.serialization.json.put
 internal const val GENERIC_GEMINI_STREAM_ERROR_BODY =
     """{"error":{"code":500,"message":"scripted stream error","status":"INTERNAL"}}"""
 
-/** The `exception` 400 detail for a `:streamGenerateContent` request without `alt=sse`. */
+/** The `invalid-request` 400 message for a `:streamGenerateContent` request without `alt=sse`. */
 internal const val GEMINI_STREAM_NEEDS_ALT_SSE =
     "streamGenerateContent is served only as server-sent events: add alt=sse to the query string"
 

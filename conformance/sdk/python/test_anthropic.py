@@ -132,7 +132,7 @@ def test_call_after_last_step(fake, anthropic_client):
     assert create(anthropic_client).content[0].text == "once"
     with pytest.raises(anthropic.BadRequestError) as raised:
         create(anthropic_client)
-    assert raised.value.body["fake_llm_error"] == "no more steps"
+    assert raised.value.body["fake_llm_error"] == "no-more-steps" and raised.value.body["message"].startswith("no more steps:")
     assert fake.log() == [call(1, "text", 1), call(2, "no-more-steps", None)]
 
 
@@ -143,7 +143,7 @@ def test_call_after_unload(fake, anthropic_client):
     assert fake.log() == []
     with pytest.raises(anthropic.BadRequestError) as raised:
         create(anthropic_client)
-    assert raised.value.body["fake_llm_error"] == "no scenario loaded"
+    assert raised.value.body["fake_llm_error"] == "no-scenario" and raised.value.body["message"].startswith("no scenario loaded:")
     assert fake.log() == [call(1, "no-scenario", None)]
 
 
@@ -280,7 +280,7 @@ def test_raw_arguments_buffered_not_a_call(fake, anthropic_client):
     fake.load([RAW])
     with pytest.raises(anthropic.BadRequestError) as raised:
         create(anthropic_client)
-    assert raised.value.body["fake_llm_error"] == "exception"
+    assert raised.value.body["fake_llm_error"] == "unsupported-step"
     assert fake.log() == []
     starts = [e.content_block for e in create(anthropic_client, stream=True) if e.type == "content_block_start"]
     assert [(block.type, block.id) for block in starts] == [("tool_use", "toolu_fake_1_1")]

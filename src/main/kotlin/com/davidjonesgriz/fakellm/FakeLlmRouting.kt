@@ -60,8 +60,9 @@ internal fun route(
             ex.exchangeCapture()?.abort()
             ex.close()
         } else {
-            // A parse or handler failure answers 400 with the message. The exchange is not left open.
-            respond(ex, HTTP_BAD_REQUEST, """{"fake_llm_error":"exception","detail":${jsonString(e.message)}}""")
+            // A parse or handler failure answers 400 with its code and message. The exchange is not left open.
+            val (code, message) = errorFor(e)
+            respond(ex, HTTP_BAD_REQUEST, errorBody(code, message))
         }
     }
 }
@@ -172,10 +173,7 @@ private fun loadScenario(
     engine: ScenarioEngine,
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
-    val root = Json.parseToJsonElement(body)
-    val obj =
-        root as? JsonObject
-            ?: error("body must be a JSON object with exactly one of \"name\" or \"scenario\"")
+    val obj = parseRequestObject(Json, body, notAnObject = "body must be a JSON object with exactly one of \"name\" or \"scenario\"")
     val unknown = obj.keys - setOf("name", "scenario")
     if (unknown.isNotEmpty()) error("unknown field(s) ${unknown.sorted()}; the body takes exactly one of \"name\" or \"scenario\"")
     val hasName = "name" in obj
@@ -189,12 +187,12 @@ private fun loadScenario(
                 (obj["name"] as? JsonPrimitive)?.takeIf { it.isString }?.content
                     ?: error("\"name\" must be a string")
             if (name.isBlank()) error("\"name\" must be a non-blank string")
-            engine.load(name)
+            scenarioLoad { engine.load(name) }
         } else {
             val inline =
                 obj["scenario"] as? JsonObject
                     ?: error("\"scenario\" must be a JSON object")
-            engine.loadInline(ScenarioLoader.decode(inline))
+            scenarioLoad { engine.loadInline(ScenarioLoader.decode(inline)) }
         }
     respond(ex, HTTP_OK, """{"loaded":${jsonString(scenario.name)},"steps":${scenario.steps.size}}""")
 }

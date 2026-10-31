@@ -27,17 +27,18 @@ A scenario file is JSON. Unknown keys are rejected. `name` is required, `descrip
 }
 ```
 
-After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with the `exception` 400 (a body that is not JSON, has no `messages` or `contents` array, or has an invalid `cache_control`, or whose next step has a tool call with `rawArguments` that its format can't carry), a 404, the Batches 501, the [embeddings routes](endpoints.md#embeddings), and [token counting and the model lists](endpoints.md#token-counting-and-model-lists) are not calls.
+After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with a [400 that is not a call](endpoints.md#fake-llms-400-responses) (`invalid-json`, `invalid-request` or `unsupported-step`), a 404, the Batches 501, the [embeddings routes](endpoints.md#embeddings), and [token counting and the model lists](endpoints.md#token-counting-and-model-lists) are not calls.
 
 Each step is a reply (`text`, `toolCalls`, or both) or an `error`. When a step in a file or an inline scenario is invalid, the error names its number, from 1, and the path of the field at fault, such as `step 2: $.steps[1]: unknown field 'stopReasn'`. The path is relative to the scenario, including for an inline scenario in `POST /control/scenario`.
 
 The step fields are listed under [Step fields](#step-fields).
 
-A call after the last step returns HTTP 400, in strict and lenient mode alike. The body is JSON:
+A call after the last step returns HTTP 400, in strict and lenient mode alike, with the `no-more-steps` code (see [fake-llm's 400 responses](endpoints.md#fake-llms-400-responses)). The body is JSON:
 
 ```json
 {
-  "fake_llm_error": "no more steps",
+  "fake_llm_error": "no-more-steps",
+  "message": "no more steps: call 3 came after the last step of scenario 'example', which has 2 steps. The last step does not repeat.",
   "scenario": "example",
   "steps": 2,
   "seq": 3,
@@ -49,7 +50,7 @@ A call after the last step returns HTTP 400, in strict and lenient mode alike. T
 }
 ```
 
-With no scenario loaded, strict mode (the default) returns HTTP 400 with the same fields except `scenario` and `steps`, and `"fake_llm_error": "no scenario loaded"`. `seq` is the call's number, as in the call log. `prompt_preview` is the first 200 characters of the combined prompt text. The call log records outcome `no-more-steps` or `no-scenario`, with `step` null. A streamed Anthropic, OpenAI (either route) or Gemini request gets the same status and JSON body, and the server writes no SSE bytes.
+With no scenario loaded, strict mode (the default) returns HTTP 400 with the same fields except `scenario` and `steps`, and `"fake_llm_error": "no-scenario"`; its message says how to load a scenario. `seq` is the call's number, as in the call log. `prompt_preview` is the first 200 characters of the combined prompt text. The call log records outcome `no-more-steps` or `no-scenario`, with `step` null. A streamed Anthropic, OpenAI (either route) or Gemini request gets the same status and JSON body, and the server writes no SSE bytes.
 
 Lenient mode (`--lenient` or `FAKE_LLM_LENIENT=true`) answers a call with no scenario loaded with one canned assistant reply, `This is a canned response from fake-llm.`, logged with outcome `default`. It is a normal text reply, so a streamed Anthropic, OpenAI (either route) or Gemini request streams it. Lenient mode changes nothing once a scenario is loaded.
 
@@ -71,7 +72,7 @@ Each format renders them as its API does:
 - OpenAI Responses: one `function_call` output item per call, after the message item, with `id` `fc_fake_<seq>_<n>`, `call_id`, `name`, the argument text as `arguments`, and `status` `completed`; the response's `status` is `completed`. Streamed, each call is an `output_item.added` with empty `arguments`, its argument text as `response.function_call_arguments.delta` events of `streamChunkChars` code points, `response.function_call_arguments.done`, and `output_item.done`.
 - Gemini: one `functionCall` part per call, after the text part, with `args` set to `arguments`, and `finishReason` `STOP`. Streamed, each call is its own chunk whose only part is that `functionCall`, after the text chunks, and the last chunk carries `finishReason` `STOP`.
 
-`rawArguments` is sent verbatim by OpenAI (both routes), buffered or streamed, and by a streamed Anthropic reply. A buffered Anthropic `tool_use.input` and a Gemini `functionCall.args` must be JSON objects, so a buffered Anthropic request or a Gemini request whose next step sets `rawArguments` gets the `exception` 400. That request is not a call: the step is not used, and the next call gets it.
+`rawArguments` is sent verbatim by OpenAI (both routes), buffered or streamed, and by a streamed Anthropic reply. A buffered Anthropic `tool_use.input` and a Gemini `functionCall.args` must be JSON objects, so a buffered Anthropic request or a Gemini request whose next step sets `rawArguments` gets the `unsupported-step` 400. That request is not a call: the step is not used, and the next call gets it.
 
 The request's `tools` and `tool_choice` (and Gemini `tools` and `toolConfig`) are ignored: a step's tool calls are sent whatever tools the request declares.
 
@@ -139,7 +140,7 @@ second = client.chat.completions.create(model="example-gpt", messages=messages, 
 
 Two step fields add latency. `firstByteDelayMs` holds back the whole response: the server waits that long before sending anything, status and headers included, on every generation route, for a buffered or streamed reply and for an error step. On a stream, `streamInterChunkDelayMs` then waits before each delta (each text, thinking and tool-call argument delta; a Gemini `functionCall` chunk has no wait); a buffered response ignores it. Both are 0 by default and at most 600000 (10 minutes).
 
-Only a step's own fields wait. The responses that come from no step never wait: the no-more-steps and no-scenario 400s, the lenient canned reply, and the `exception` 400s, 401s, 404s and the Batches 501.
+Only a step's own fields wait. The responses that come from no step never wait: the no-more-steps and no-scenario 400s, the lenient canned reply, and the other 400s, 401s, 404s and the Batches 501.
 
 A call is numbered and logged when it arrives, before the wait, and the wait runs outside the engine's lock. Other calls are served while one waits, so a later call can finish first, and a reset, load or unload during the wait doesn't change the waiting call's response. The call log records the delays each call used (`firstByteDelayMs`, and `streamInterChunkDelayMs` only when the response was an event stream: a streamed request answered by a reply, or by an error step with `streamErrorAfterChunks`), not measured time.
 
@@ -154,7 +155,7 @@ With that scenario, an `openai` client created with `timeout=1.0` and `max_retri
 ## Writing scenarios for tests
 
 - Each test owns its scenario, even when that means repeating steps another scenario also has. Changing a scenario then affects only the test that owns it. Name a scenario file after its test, or build it inline with `loadInline`.
-- Script one step per call, in the order the app makes its calls, including every retry and error. A call the scenario has no step for fails with `no more steps`, and with the JUnit extension a step no call used fails the test, so a missing or extra call shows up in the test. Without the extension, check `engine.unusedSteps` is empty at the end of the test. Over HTTP, check that `GET /health`'s `unusedSteps` is empty.
+- Script one step per call, in the order the app makes its calls, including every retry and error. A call the scenario has no step for fails with `no-more-steps`, and with the JUnit extension a step no call used fails the test, so a missing or extra call shows up in the test. Without the extension, check `engine.unusedSteps` is empty at the end of the test. Over HTTP, check that `GET /health`'s `unusedSteps` is empty.
 - Load the scenario, or reset it, at the start of each test, so its first call gets step 1 and the call log holds only its calls. The JUnit extension does this before each test.
 
 For example, a test whose app retries once after a rate limit scripts both calls, then checks the app's reply and that the app made exactly those two calls:
@@ -243,7 +244,7 @@ curl -s -X POST http://localhost:8080/control/scenario \
 {"loaded":"inline","steps":1}
 ```
 
-Sending both `name` and `scenario`, or neither, is HTTP 400. A bad name or a body the decoder rejects is HTTP 400 with `{"fake_llm_error":"exception","detail":"..."}`.
+Sending both `name` and `scenario`, or neither, is HTTP 400 `invalid-request`. A name that finds no scenario is `unknown-scenario`, and an illegal name or a scenario the decoder rejects is `invalid-scenario`, with the reason in `message`, such as `{"fake_llm_error":"invalid-scenario","message":"step 2: $.steps[1]: unknown field 'stopReasn'"}`.
 
 ## Fields
 

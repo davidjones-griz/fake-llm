@@ -38,7 +38,7 @@ class UnloadRouteTest {
             val next = client.post("/anthropic/v1/messages", anthropicBody("hi"))
             assertEquals(400, next.statusCode())
             val body = Json.parseToJsonElement(next.body()).jsonObject
-            assertEquals("no scenario loaded", body.getValue("fake_llm_error").jsonPrimitive.content)
+            assertEquals("no-scenario", body.getValue("fake_llm_error").jsonPrimitive.content)
             assertEquals(1, body.getValue("seq").jsonPrimitive.int)
             val record = calls(client).single().jsonObject
             assertEquals("no-scenario", record.getValue("outcome").jsonPrimitive.content)

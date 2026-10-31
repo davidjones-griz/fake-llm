@@ -21,8 +21,8 @@
           "content-type": "application/json"
         },
         "body": {
-          "fake_llm_error": "exception",
-          "detail": {
+          "fake_llm_error": "unknown-scenario",
+          "message": {
             "$type": "string"
           }
         }

@@ -158,7 +158,9 @@ private fun <T> FakeLlmClient.get(
 /**
  * A failed [FakeLlmClient] call. [statusCode] is the HTTP status, or null when no response arrived
  * (a transport failure or an interrupt, available as [cause]). [serverMessage] is the server's
- * own explanation of an error status, verbatim, when the response carried one. A 2xx response that
+ * own explanation of an error status, verbatim, when the response carried one. [errorCode] is a
+ * 400's `fake_llm_error` code, such as `unknown-scenario` or `invalid-scenario`, and null for any
+ * other status; from a server older than 0.7.0 it is that server's older value. A 2xx response that
  * this client cannot decode has its status, no [serverMessage], and the decoding error as [cause].
  */
 public class FakeLlmClientException internal constructor(
@@ -166,6 +168,7 @@ public class FakeLlmClientException internal constructor(
     public val statusCode: Int?,
     public val serverMessage: String?,
     cause: Throwable? = null,
+    public val errorCode: String? = null,
 ) : RuntimeException(message, cause)
 
 /**
@@ -202,6 +205,7 @@ private val responseJson = Json { ignoreUnknownKeys = true }
 private val requestJson = Json { encodeDefaults = false }
 
 private const val DEFAULT_TIMEOUT_SECONDS = 10L
+private const val HTTP_BAD_REQUEST = 400
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_SUCCESS_MIN = 200
 private const val HTTP_SUCCESS_MAX = 299
@@ -214,14 +218,17 @@ internal fun encodeLoadInline(scenario: Scenario): String =
     buildJsonObject { put("scenario", requestJson.encodeToJsonElement(Scenario.serializer(), scenario)) }.toString()
 
 /**
- * The server's explanation in an error [body]: `detail` when it is a string, else `fake_llm_error`,
- * else the raw body (first [RAW_BODY_LIMIT] characters), which covers a non-JSON page from a proxy.
- * Null for an empty body.
+ * The server's explanation in an error [body]: `message` when it is a string, else `detail` (a server
+ * older than 0.7.0), else `fake_llm_error` (the 401, 404 and 501 bodies), else the raw body (first
+ * [RAW_BODY_LIMIT] characters), which covers a non-JSON page from a proxy. Null for an empty body.
  */
 internal fun serverMessageOf(body: String): String? {
     if (body.isBlank()) return null
     val json = parseObjectOrNull(body)
-    return json?.stringField("detail") ?: json?.stringField("fake_llm_error") ?: body.take(RAW_BODY_LIMIT)
+    return json?.stringField("message")
+        ?: json?.stringField("detail")
+        ?: json?.stringField("fake_llm_error")
+        ?: body.take(RAW_BODY_LIMIT)
 }
 
 // A body that is not JSON is expected here (for example a proxy's error page); the caller uses the raw text.
@@ -247,8 +254,19 @@ internal fun httpFailure(
             tokenConfigured -> "the server rejected the control token"
             else -> "the server requires a control token (pass controlToken)"
         }
-    return FakeLlmClientException("$method $path returned HTTP $status: $explanation", status, serverMessage)
+    return FakeLlmClientException(
+        "$method $path returned HTTP $status: $explanation",
+        status,
+        serverMessage,
+        errorCode = errorCodeOf(status, body),
+    )
 }
+
+/** A 400 [body]'s `fake_llm_error` code; null for any other [status] or a body without one. */
+internal fun errorCodeOf(
+    status: Int,
+    body: String,
+): String? = if (status == HTTP_BAD_REQUEST) parseObjectOrNull(body)?.stringField("fake_llm_error") else null
 
 private fun transportFailure(
     method: String,
