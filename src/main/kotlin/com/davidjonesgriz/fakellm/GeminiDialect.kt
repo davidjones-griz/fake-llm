@@ -26,6 +26,11 @@ internal fun parseGeminiRequest(
             appendPartTexts(systemInstruction)
             contents.forEach { appendPartTexts(it) }
         }
+    val toolNames =
+        (obj["tools"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>().flatMap { tool ->
+            namesIn(tool.valueOrNull("functionDeclarations") ?: tool.valueOrNull("function_declarations"))
+        }
+    val choice = geminiToolChoice(obj, toolNames)
     return ParsedRequest(
         model = modelFromPath,
         systemShape =
@@ -38,6 +43,12 @@ internal fun parseGeminiRequest(
         messageCount = contents.size,
         stream = stream,
         toolResults = geminiToolResults(contents),
+        systemText = contentText((systemInstruction as? JsonObject)?.get("parts")),
+        messages = requestMessages(contents, contentKey = "parts", defaultRole = "user"),
+        toolNames = toolNames,
+        toolChoice = choice.choice,
+        toolChoiceName = choice.name,
+        body = obj,
     )
 }
 

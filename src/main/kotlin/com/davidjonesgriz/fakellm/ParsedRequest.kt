@@ -22,6 +22,20 @@ internal data class ParsedRequest(
     val includeUsage: Boolean = false,
     /** Every tool result the request sends, in request order. See [CallRecord.toolResults]. */
     val toolResults: List<ToolResultRecord> = emptyList(),
+    /** The system prompt's text: its strings and text parts, joined with newlines; empty without one. */
+    val systemText: String = "",
+    /** One entry per message, as many as [messageCount], each with its role and text (text parts only, no tool results). */
+    val messages: List<RequestMessage> = emptyList(),
+    /** The names of the tools the request declares, in order. */
+    val toolNames: List<String> = emptyList(),
+    /** The normalized tool choice: `auto`, `none`, `required`, `tool` or `other`. See [ToolChoiceFact]. */
+    val toolChoice: String = "none",
+    /** The forced tool's name when [toolChoice] is `tool`, else null. */
+    val toolChoiceName: String? = null,
+    /** The request body as parsed. */
+    val body: JsonObject = JsonObject(emptyMap()),
+    /** The request's headers, names lowercased, every value; empty for a request built in-process. */
+    val headers: Map<String, List<String>> = emptyMap(),
 )
 
 /** [key]'s value when it is a JSON string, else null. */
@@ -84,6 +98,8 @@ internal fun parseAnthropicRequest(body: String): ParsedRequest {
     val messagesHaveCacheBreakpoint =
         messages.map { hasCacheControl((it as? JsonObject)?.get("content")) }.any { it }
     val hasCacheBreakpoint = systemHasCacheBreakpoint || messagesHaveCacheBreakpoint
+    val toolNames = namesIn(obj["tools"])
+    val choice = anthropicToolChoice(obj["tool_choice"], toolNames)
     return ParsedRequest(
         model = model,
         systemShape = systemShape,
@@ -92,6 +108,12 @@ internal fun parseAnthropicRequest(body: String): ParsedRequest {
         stream = stream,
         hasCacheBreakpoint = hasCacheBreakpoint,
         toolResults = anthropicToolResults(messages),
+        systemText = contentText(system),
+        messages = requestMessages(messages),
+        toolNames = toolNames,
+        toolChoice = choice.choice,
+        toolChoiceName = choice.name,
+        body = obj,
     )
 }
 

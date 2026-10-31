@@ -1,6 +1,7 @@
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
@@ -32,8 +33,15 @@ class ResponsesDialectTest {
     fun `a string input is one message, and string instructions come first in the prompt with the string system shape`() {
         val req = parseResponsesRequest("""{"model":"example-gpt","instructions":"Answer briefly.","input":"Hello"}""")
         assertEquals(
-            ParsedRequest(model = "example-gpt", systemShape = "string", promptText = "Answer briefly.\nHello\n", messageCount = 1),
-            req,
+            ParsedRequest(
+                model = "example-gpt",
+                systemShape = "string",
+                promptText = "Answer briefly.\nHello\n",
+                messageCount = 1,
+                systemText = "Answer briefly.",
+                messages = listOf(RequestMessage("user", "Hello")),
+            ),
+            req.copy(body = JsonObject(emptyMap())),
         )
     }
 
@@ -122,7 +130,8 @@ class ResponsesDialectTest {
                 """{"model":"m","input":"Hello","stream":"TRUE","previous_response_id":"resp_fake_1","store":true,"conversation":"conv_1"}""",
             )
         assertEquals(true, plain.stream)
-        assertEquals(plain, stateful)
+        // The ignored fields are still in the parsed body, which a step's match can read.
+        assertEquals(plain, stateful.copy(body = plain.body))
         assertEquals(false, parseResponsesRequest("""{"model":"m","input":"Hello"}""").stream)
     }
 

@@ -45,6 +45,12 @@ internal fun parseOpenAiRequest(body: String): ParsedRequest {
     // Read like `stream`, and only on a streamed request.
     val includeUsage =
         stream && ((obj["stream_options"] as? JsonObject)?.get("include_usage") as? JsonPrimitive)?.content?.toBoolean() == true
+    val requestMessages = requestMessages(messages)
+    val toolNames =
+        (obj["tools"] as? JsonArray).orEmpty().mapNotNull {
+            ((it as? JsonObject)?.get("function") as? JsonObject)?.stringField("name")
+        }
+    val choice = openAiToolChoice(obj["tool_choice"], toolNames) { (it["function"] as? JsonObject)?.stringField("name") }
     return ParsedRequest(
         model = model,
         systemShape = systemShape,
@@ -53,6 +59,12 @@ internal fun parseOpenAiRequest(body: String): ParsedRequest {
         stream = stream,
         includeUsage = includeUsage,
         toolResults = openAiToolResults(messages.filterIsInstance<JsonObject>()),
+        systemText = requestMessages.filter { it.role in OPENAI_SYSTEM_ROLES }.joinToString("\n") { it.text },
+        messages = requestMessages,
+        toolNames = toolNames,
+        toolChoice = choice.choice,
+        toolChoiceName = choice.name,
+        body = obj,
     )
 }
 
