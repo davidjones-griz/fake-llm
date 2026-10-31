@@ -46,8 +46,9 @@ class FakeLlmClientError(Exception):
 class Health:
     """``GET /health``: the loaded scenario's name, or None, and whether the server is lenient.
 
-    ``steps`` is the scenario's step count, None with none loaded, and ``unused_steps`` the steps no call
-    has used since the last load, reset or unload, [] with none loaded. Both are None from a server older
+    ``steps`` is the scenario's step count, None with none loaded, and ``unused_steps`` the steps not used
+    up since the last load, reset or unload (a parallel step until every step in it is used), [] with none
+    loaded. Both are None from a server older
     than 0.6.0.
     """
 

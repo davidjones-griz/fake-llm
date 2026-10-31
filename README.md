@@ -167,7 +167,7 @@ A scenario is an ordered list of steps. Each step is a reply (`text`, tool calls
 }
 ```
 
-Call N, on any generation route, gets step N. The last step does not repeat: a call after it gets HTTP 400. A scenario loads by name from a scenario directory, the bundled scenarios (`hello`, `rate-limit-429`, `fail-then-retry` and others) or, in process, the test classpath; or inline over the control API. The [scenario reference](docs/scenarios.md) has every field, the bundled scenarios, and `validate`, which checks scenario files; the [recipes](docs/recipes/index.md) test retries, truncated and malformed output, and mid-stream failures.
+Call N, on any generation route, gets step N. The last step does not repeat: a call after it gets HTTP 400. For an app that makes calls in parallel, a step's `match` and parallel steps say which call gets which response ([Parallel calls](docs/scenarios.md#parallel-calls)). A scenario loads by name from a scenario directory, the bundled scenarios (`hello`, `rate-limit-429`, `fail-then-retry` and others) or, in process, the test classpath; or inline over the control API. The [scenario reference](docs/scenarios.md) has every field, the bundled scenarios, and `validate`, which checks scenario files; the [recipes](docs/recipes/index.md) test retries, truncated and malformed output, and mid-stream failures.
 
 ## Endpoints
 

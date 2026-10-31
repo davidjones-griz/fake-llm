@@ -1,6 +1,6 @@
 # Scenario reference
 
-A scenario is the script a fake-llm server follows: an ordered list of steps, where call N gets step N. This page describes the scenario file format, how calls map to steps, and how to load a scenario. Every field is listed under [Fields](#fields) at the end.
+A scenario is the script a fake-llm server follows: an ordered list of steps, where call N gets step N, or, for calls made in parallel, the step its [match](#parallel-calls) picks. This page describes the scenario file format, how calls map to steps, and how to load a scenario. Every field is listed under [Fields](#fields) at the end.
 
 ## Scenario files
 
@@ -27,7 +27,7 @@ A scenario file is JSON. Unknown keys are rejected. `name` is required, `descrip
 }
 ```
 
-After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with a [400 that is not a call](endpoints.md#fake-llms-error-responses) (`invalid-json`, `invalid-request` or `unsupported-step`), a 404, the Batches 501, the [embeddings routes](endpoints.md#embeddings), and [token counting and the model lists](endpoints.md#token-counting-and-model-lists) are not calls.
+After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step; to say which call gets which step, see [Parallel calls](#parallel-calls). The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with a [400 that is not a call](endpoints.md#fake-llms-error-responses) (`invalid-json`, `invalid-request` or `unsupported-step`), a 404, the Batches 501, the [embeddings routes](endpoints.md#embeddings), and [token counting and the model lists](endpoints.md#token-counting-and-model-lists) are not calls.
 
 Each step is a reply (`text`, `toolCalls`, or both) or an `error`. When a step in a file or an inline scenario is invalid, the error names its number, from 1, and the path of the field at fault, such as `step 2: $.steps[1]: unknown field 'stopReasn'`. The path is relative to the scenario, including for an inline scenario in `POST /control/scenario`.
 
@@ -248,15 +248,140 @@ Sending both `name` and `scenario`, or neither, is HTTP 400 `invalid-request`. A
 
 ## Parallel calls
 
-A step can carry a `match`, and a parallel step holds several responses that calls use in any order.
+Calls are numbered in the order they arrive, and an app that makes calls concurrently doesn't fix that order. A scenario for such an app says which response goes to which call, with a `match` on a step, and groups the responses that can come in any order into a parallel step. A scenario with no `match` and no parallel step works as described above: call N gets step N.
+
+A parallel step is an object with one key, `parallel`:
+
+```json
+{ "parallel": { "overlap": false, "steps": [ { "match": { "lastUser": { "contains": "doc-a" } }, "text": "Summary of A." } ] } }
+```
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `steps` | array of steps, at least one | required | The responses in the section. Each is a plain step (a reply or an `error`, with any delays) with an optional `match`. |
+| `overlap` | boolean | `false` | Joins this section with the consecutive sections after it that also set it, into one group. See [Overlap](#overlap). |
+
+A parallel step inside a parallel step is rejected with `invalid-scenario`, named by its step and path: `step 1.2: $.steps[0].parallel.steps[1].parallel: a parallel step cannot contain another parallel step`. A problem in a parallel step's own steps is named `step N.M` in the same way.
+
+How a call is served:
+
+- A parallel step is one position in the scenario that holds several responses, used in any order.
+- A call that reaches it takes the first unused step whose `match` it satisfies, in listed order. A step with no `match` matches any call.
+- A call uses up its response when it arrives, even if the client later times out or disconnects.
+- The scenario moves past the parallel step only once every step in it is used.
+- A plain step with a `match` is served only to a call that satisfies it. A call that doesn't takes nothing, and the step stays next.
+- Within one `match`, every key must hold.
+
+A call that matches none of the unused steps it could take gets HTTP 400 `no-match`. It takes a call number and a call-log entry with outcome `no-match`, and uses nothing. Its body carries the call's fields, as `no-scenario` does, and its `message` lists the steps the call could have taken, with their rules (at most ten, then "and N more"):
+
+```json
+{
+  "fake_llm_error": "no-match",
+  "message": "no match: call 3 matched none of the unused steps it could have taken: step 1.2 (lastUser contains \"doc-b\"), step 1.3 (lastUser contains \"doc-c\")",
+  "seq": 3,
+  "vendor": "anthropic",
+  "model": "example-model",
+  "system_shape": "absent",
+  "message_count": 1,
+  "prompt_preview": "Summarize doc-z\n"
+}
+```
+
+A call after the last step is still `no-more-steps`, and lenient mode doesn't change `no-match`. A call that arrives earlier than the scenario expects, or a call that never comes, shows up as a `no-match` 400 or a wrong response, and the unused-steps check fails the test: a parallel step counts as unused until every step in it is used (`GET /health`'s `unusedSteps`, `engine.unusedSteps`, and the JUnit extension).
+
+The call log's `step` is the parallel step's number and `innerStep` the step within it, from 1; `innerStep` is left out for a plain step. The CLI prints it as `step=2.3`.
+
+Three summaries in parallel, then a merge call:
+
+```json
+{
+  "name": "summarize-three-then-merge",
+  "steps": [
+    {
+      "parallel": {
+        "steps": [
+          { "match": { "lastUser": { "contains": "doc-a" } }, "text": "Summary of A." },
+          { "match": { "lastUser": { "contains": "doc-b" } }, "text": "Summary of B." },
+          { "match": { "lastUser": { "contains": "doc-c" } }, "text": "Summary of C." }
+        ]
+      }
+    },
+    { "match": { "system": { "contains": "Merge" } }, "text": "A, B and C, combined." }
+  ]
+}
+```
+
+Two parallel calls where one is rate limited and retried. Both responses for `doc-a` are in the section, and first-match in listed order gives the 429 to the first `doc-a` call and the reply to its retry:
+
+```json
+{
+  "name": "parallel-with-a-429-retry",
+  "steps": [
+    {
+      "parallel": {
+        "steps": [
+          {
+            "match": { "lastUser": { "contains": "doc-a" } },
+            "error": { "status": 429, "body": "{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}", "headers": { "retry-after": "1" } }
+          },
+          { "match": { "lastUser": { "contains": "doc-a" } }, "text": "Summary of A." },
+          { "match": { "lastUser": { "contains": "doc-b" } }, "text": "Summary of B." }
+        ]
+      }
+    }
+  ]
+}
+```
+
+When the retry is sure to come after every other call in the section, its reply can instead be the next step after the section.
+
+Two notes for writing these scenarios:
+
+- A tool call's default id includes the call number (see [Tool calls](#tool-calls)), which is unpredictable inside a parallel step. When a follow-up call is matched with `toolResult.id`, script the tool call's `id`.
+- `toolResult` searches every tool result in the request, and requests resend the conversation, so it also matches results from earlier turns.
 
 ### Overlap
 
-Consecutive parallel steps with `"overlap": true` form one group.
+Consecutive parallel steps marked `"overlap": true` form one group. A call that reaches the group searches every unused step across all its sections, first match in listed order. The group ends at the first step after it that is not an overlap-marked parallel step, so the scenario author marks where the fan-out ends: that step is reachable only once every step in the group is used. Inside a group, only the rules keep calls apart, so each step needs a `match` that tells its calls from the others. A lone marked section behaves exactly like an unmarked one.
+
+This covers nested fan-out: each of two calls fans out into sub-calls, and a sub-call of the first can arrive before the second has started.
+
+```json
+{
+  "name": "nested-fan-out",
+  "steps": [
+    { "parallel": { "overlap": true, "steps": [
+      { "match": { "lastUser": { "equals": "plan a" } }, "text": "A" },
+      { "match": { "lastUser": { "equals": "plan b" } }, "text": "B" } ] } },
+    { "parallel": { "overlap": true, "steps": [
+      { "match": { "lastUser": { "equals": "a1" } }, "text": "A1" },
+      { "match": { "lastUser": { "equals": "a2" } }, "text": "A2" } ] } },
+    { "parallel": { "overlap": true, "steps": [
+      { "match": { "lastUser": { "equals": "b1" } }, "text": "B1" } ] } },
+    { "text": "merged" }
+  ]
+}
+```
 
 ### Match keys
 
-Each key of a [match](#match-fields) reads one fact of the request.
+| Key | Matches |
+| --- | --- |
+| `route` | The route, as the call log's `vendor` names it: `anthropic`, `openai` (Chat Completions), `openai-responses` or `gemini`. |
+| `model` | The request's model, exactly. |
+| `stream` | Whether the request asked for a stream. |
+| `system` | The system prompt's text: Anthropic `system` (a string, or its text blocks); OpenAI Chat Completions `system` and `developer` messages; OpenAI Responses `instructions`, or without it `system` and `developer` input items; Gemini `systemInstruction` (or `system_instruction`). Several parts are joined with newlines. |
+| `lastUser` | The text of the last user message that has text. A tool-result turn has none (Anthropic sends `tool_result` blocks in a `user` message, Gemini `functionResponse` parts with role `user`), so it is skipped, and all four routes pick the same prompt. A Gemini content without a `role` is a user message. |
+| `prompt` | The combined prompt text, of which a call record's `promptSample` is the end. |
+| `message` | One message, by `index` (from 0; `-1` is the last) or by `role` (the last message with it, as the request spells it). The messages are the request's `messages`, `contents` or `input` entries, as many as its `messageCount`; a message's text is its text parts, joined with newlines, without tool results. An OpenAI Responses string `input` is one `user` message. |
+| `messageCount` | The number of messages, as the call log counts them. |
+| `hasSystem` | Whether the request has a system prompt (a system value of the wrong JSON type counts as none). |
+| `toolResult` | A tool result the request sends back: some result must match every key that is set. |
+| `tools` | `declares`: the name of a declared tool (Anthropic `tools[].name`, OpenAI `tools[].function.name`, Responses `tools[].name`, Gemini `functionDeclarations[].name`). `choice`: the tool choice, normalized to `auto`, `none`, `required` (Anthropic `any`, Gemini `ANY`), `tool` (one tool forced: Anthropic `tool`, an OpenAI `function` choice, Gemini `ANY` with exactly one allowed function) or `other`; without one in the request it is `auto` when tools are declared and `none` otherwise. `choiceTool`: the forced tool's name. |
+| `body` | A value in the request body at a path, compared as JSON. |
+| `header` | A request header. Optional: the app never has to send one. |
+
+The text keys (`system`, `lastUser`, `prompt`, `message`, and `header`'s value) each take exactly one of `contains`, `equals` and `regex`. The field tables are [Match fields](#match-fields) and the ones after it.
 
 ## Fields
 
@@ -268,7 +393,7 @@ Types are JSON types. Integers are plain JSON integers. A field with no default 
 | --- | --- | --- | --- |
 | `name` | string | required | The scenario's name, `[A-Za-z0-9_-]+` for a load by name, where it must equal the file name. |
 | `description` | string | `""` | What the scenario is for. |
-| `steps` | array of [Step](#step-fields), at least one | required | The replies, in call order: call N gets step N. |
+| `steps` | array of [Step](#step-fields), at least one | required | The replies, in call order: call N gets step N, unless a step has a `match` or is a parallel step (see [Parallel calls](#parallel-calls)). |
 
 A top-level `$schema` key is allowed and ignored; see [Scenario schema and `validate`](#scenario-schema-and-validate).
 

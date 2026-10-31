@@ -9,12 +9,31 @@ change the public API.
 
 ### Added
 
+- Parallel calls in scenarios. A step can carry a `match` that a call must satisfy, on the route,
+  model, stream, system prompt, last user message, prompt, one message, message count, tool
+  results, tools and tool choice, a body value or a header. A parallel step holds several steps
+  that calls take in any order, each call the first unused one it matches, and the scenario moves
+  past it once all are used; consecutive parallel steps with `overlap` form one group, for nested
+  fan-out. A scenario with no `match` and no parallel step is served as before. In Kotlin, the
+  new `Match`, `TextMatch`, `MessageMatch`, `ToolResultMatch`, `ToolsMatch`, `BodyMatch`,
+  `HeaderMatch` and `ParallelSection` build them.
+- The `no-match` 400, for a call that matches none of the steps it could take. It carries the
+  call's fields, and its message lists those steps and their rules. The JUnit extension treats it
+  as an unserved call.
+- `CallRecord.innerStep` (`innerStep` in `GET /control/calls`, and the pytest plugin's
+  `inner_step`): the step within the parallel step that served a call. It is left out of the
+  call log's JSON when there is none, so a scenario without parallel steps writes the same log.
 - `FakeLlmClientException.errorCode` and the pytest plugin's `FakeLlmClientError.error_code`: the
   `fake_llm_error` code of any error fake-llm sends, such as `unknown-scenario` or `no-route`; null
   for every error from a server older than 0.7.0.
 
 ### Changed
 
+- `Step` gains `match` and `parallel`, so its constructor and `copy` change: code compiled against
+  0.6.0 that constructs a `Step` must be recompiled.
+- `unusedSteps` (`GET /health`, `ScenarioEngine.unusedSteps`, `FakeLlmHealth`) lists a parallel
+  step until every step in it is used, so it is no longer always the last steps. The JUnit
+  extension's unused-steps message lists the steps one by one, with runs written `2-3`.
 - fake-llm's own error responses share one body: `fake_llm_error` is a stable error code, and
   `message` says why. This changes the body format, so a test that reads `fake_llm_error` or
   `detail` needs updating:

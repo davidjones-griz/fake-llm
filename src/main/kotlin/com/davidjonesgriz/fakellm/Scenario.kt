@@ -12,8 +12,9 @@ import java.nio.file.Path
 
 /**
  * One named behavior of the fake: an ordered list of [steps]. After [ScenarioEngine.load] or
- * [ScenarioEngine.reset], call N on any generation route gets step N, in arrival order. A call
- * after the last step gets HTTP 400 (`no-more-steps`); the last step does not repeat.
+ * [ScenarioEngine.reset], call N on any generation route gets step N, in arrival order, unless a
+ * step has a [Step.match] or is a [Step.parallel] step. A call after the last step gets HTTP 400
+ * (`no-more-steps`); the last step does not repeat.
  *
  * Scenario files are JSON in this shape. [ScenarioEngine.load] reads one by name from the engine's
  * [ScenarioEngine.scenarioDirectory], the project's classpath resource `/scenarios/<name>.json`, or
