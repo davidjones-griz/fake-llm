@@ -37,6 +37,15 @@ class FakeLlmClientTest {
             assertEquals("anthropic", call.vendor)
             assertEquals("text", call.outcome)
             assertEquals(1, call.step)
+            assertNull(call.innerStep)
+
+            client.loadInline(
+                Scenario(name = "fan", steps = listOf(Step(parallel = ParallelSection(listOf(Step(text = "a"), Step(text = "b")))))),
+            )
+            TestClient(server.port).post("/anthropic/v1/messages", anthropicBody("hi"))
+            assertEquals(1 to 1, client.calls().single().let { it.step to it.innerStep })
+            assertEquals(listOf(1), client.health().unusedSteps)
+            client.load("hello")
 
             client.reset()
             assertTrue(client.calls().isEmpty())

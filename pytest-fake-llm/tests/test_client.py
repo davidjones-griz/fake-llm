@@ -45,7 +45,21 @@ def test_a_scenario_loaded_by_name_answers_and_its_call_is_logged(fake_llm):
     assert (call.seq, call.step, call.vendor, call.model, call.outcome) == (1, 1, "anthropic", "m", "text")
     assert (call.message_count, call.system_shape, call.prompt_sample) == (1, "absent", "Hi\n")
     assert (call.tool_calls, call.tool_results) == ([], [])
+    assert call.inner_step is None
     assert fake_llm.client.health().scenario == "hello"
+
+
+def test_a_call_served_by_a_parallel_step_reports_its_inner_step(fake_llm):
+    fake_llm.client.load_inline(
+        {"name": "fan", "steps": [{"parallel": {"steps": [{"match": {"lastUser": {"equals": "no"}}, "text": "x"}, {"text": "any"}]}}]}
+    )
+
+    reply = post(f"{fake_llm.anthropic_base_url}/v1/messages", ANTHROPIC_REQUEST)
+
+    assert reply["content"][0]["text"] == "any"
+    [call] = fake_llm.client.calls()
+    assert (call.step, call.inner_step) == (1, 2)
+    assert fake_llm.client.health().unused_steps == [1]
 
 
 def test_an_inline_scenario_logs_tool_calls_and_results(fake_llm):

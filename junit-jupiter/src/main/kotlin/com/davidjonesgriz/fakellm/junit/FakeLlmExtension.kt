@@ -23,7 +23,7 @@ private const val SERVER = "server"
 private const val HANDLED = "handled:"
 private const val ENTERED = "entered:"
 private const val CHECK = "check:"
-private val UNSERVED = setOf("no-more-steps", "no-scenario")
+private val UNSERVED = setOf("no-more-steps", "no-scenario", "no-match")
 private val INJECTABLE = setOf(FakeLlmServer::class.java, ScenarioEngine::class.java)
 private const val CONCURRENT_TESTS =
     "Tests in one class share one fake-llm server, so they must not run concurrently. With JUnit's " +
@@ -190,10 +190,17 @@ private fun unusedMessage(
     scenario: String?,
     steps: List<Int>,
 ): String {
-    val which = if (steps.size == 1) "step ${steps.single()}" else "steps ${steps.first()}-${steps.last()}"
+    val which = (if (steps.size == 1) "step " else "steps ") + ranges(steps)
     return "${steps.size} step(s) of fake-llm scenario '$scenario' got no call: $which. " +
         "The app made fewer calls than the scenario scripts. Remove the steps the test does not need, " +
         "or annotate a test that leaves steps unused on purpose with @FakeLlmAllowUnusedSteps."
+}
+
+/** [steps], ascending, with each run of consecutive numbers written `a-b`: `1, 3-4`. */
+private fun ranges(steps: List<Int>): String {
+    val runs = mutableListOf<IntRange>()
+    steps.forEach { n -> if (runs.lastOrNull()?.last == n - 1) runs[runs.lastIndex] = runs.last().first..n else runs += n..n }
+    return runs.joinToString(", ") { if (it.first == it.last) "${it.first}" else "${it.first}-${it.last}" }
 }
 
 private fun unservedMessage(
@@ -204,6 +211,9 @@ private fun unservedMessage(
         val loaded = if (scenario != null) "scenario '$scenario'" else "no scenario loaded"
         append("${calls.size} fake-llm call(s) got no step ($loaded):")
         calls.forEach { append("\n  call ${it.seq}: ${it.vendor} model '${it.model}', ${it.outcome}") }
+        if (calls.any { it.outcome == "no-match" }) {
+            append("\nA no-match call matched none of the steps it could take: check those steps' match rules and the order of the calls.")
+        }
         append("\nAdd the steps the test needs, or annotate a test that makes such calls on purpose with @FakeLlmAllowUnservedCalls.")
     }
 

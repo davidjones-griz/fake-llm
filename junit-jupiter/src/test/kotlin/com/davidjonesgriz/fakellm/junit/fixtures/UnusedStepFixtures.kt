@@ -1,6 +1,8 @@
 package com.davidjonesgriz.fakellm.junit.fixtures
 
 import com.davidjonesgriz.fakellm.FakeLlmServer
+import com.davidjonesgriz.fakellm.Match
+import com.davidjonesgriz.fakellm.ParallelSection
 import com.davidjonesgriz.fakellm.Scenario
 import com.davidjonesgriz.fakellm.ScenarioEngine
 import com.davidjonesgriz.fakellm.Step
@@ -104,5 +106,59 @@ class OptOutsAreIndependentFixture {
     fun unusedAllowed(server: FakeLlmServer) {
         post(server)
         post(server)
+    }
+}
+
+/** A parallel step left partly unused, with a later step unused too: the unused steps are 1 and 3. */
+@Fixture
+@FakeLlmTest
+class NonContiguousUnusedStepsFixture {
+    @Test
+    fun partly(
+        engine: ScenarioEngine,
+        server: FakeLlmServer,
+    ) {
+        val on = { model: String -> Step(text = model, match = Match(model = model)) }
+        engine.loadInline(
+            Scenario(
+                name = "groups",
+                steps =
+                    listOf(
+                        Step(parallel = ParallelSection(listOf(on("a"), on("b")), overlap = true)),
+                        Step(parallel = ParallelSection(listOf(on("c")), overlap = true)),
+                        Step(text = "after"),
+                    ),
+            ),
+        )
+        Sink.add("partly:status", post(server, model = "c"))
+    }
+}
+
+/** A call that matches none of the steps it could take is unserved; the opt-out allows it. */
+@Fixture
+@FakeLlmTest
+class NoMatchFixture {
+    private fun load(engine: ScenarioEngine) =
+        engine.loadInline(Scenario(name = "matched", steps = listOf(Step(text = "a", match = Match(model = "a")))))
+
+    @Test
+    fun unmatched(
+        engine: ScenarioEngine,
+        server: FakeLlmServer,
+    ) {
+        load(engine)
+        Sink.add("noMatch:status", post(server, model = "x"))
+        post(server, model = "a")
+    }
+
+    @Test
+    @FakeLlmAllowUnservedCalls
+    fun allowed(
+        engine: ScenarioEngine,
+        server: FakeLlmServer,
+    ) {
+        load(engine)
+        post(server, model = "x")
+        post(server, model = "a")
     }
 }

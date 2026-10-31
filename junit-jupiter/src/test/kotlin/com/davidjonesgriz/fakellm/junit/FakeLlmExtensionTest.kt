@@ -28,7 +28,9 @@ import com.davidjonesgriz.fakellm.junit.fixtures.MethodOptOutFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.MissingCallFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.NestedInstanceRegisteredFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.NestedOptOutFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.NoMatchFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.NoScenarioFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.NonContiguousUnusedStepsFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.OptOutsAreIndependentFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ParallelFixtureA
 import com.davidjonesgriz.fakellm.junit.fixtures.ParallelFixtureB
@@ -374,6 +376,28 @@ class FakeLlmExtensionTest {
     fun `a scenario loaded during the test is the one checked`() {
         val failure = run(InlineUnusedStepsFixture::class.java).failures().values.single()
         assertContains(failure.message.orEmpty(), "2 step(s) of fake-llm scenario 'three-steps' got no call: steps 2-3.")
+    }
+
+    @Test
+    fun `unused steps that are not a tail are listed one by one`() {
+        val failure = run(NonContiguousUnusedStepsFixture::class.java).failures().values.single()
+        assertEquals(listOf(200), Sink.get("partly:status"))
+        assertContains(failure.message.orEmpty(), "2 step(s) of fake-llm scenario 'groups' got no call: steps 1, 3.")
+    }
+
+    @Test
+    fun `a call that matches none of the steps it could take fails the test, unless unserved calls are allowed`() {
+        val results = run(NoMatchFixture::class.java)
+        results.testEvents().assertStatistics { it.started(2).succeeded(1).failed(1) }
+        assertEquals(listOf(400), Sink.get("noMatch:status"))
+        val message =
+            results
+                .failures()
+                .getValue("unmatched(ScenarioEngine, FakeLlmServer)")
+                .message
+                .orEmpty()
+        assertContains(message, "call 1: anthropic model 'x', no-match")
+        assertContains(message, "matched none of the steps it could take")
     }
 
     @Test
