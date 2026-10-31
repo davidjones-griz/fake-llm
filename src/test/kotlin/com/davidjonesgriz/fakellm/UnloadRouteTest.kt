@@ -85,7 +85,7 @@ class UnloadRouteTest {
             }
             val get = client.get("/control/unload")
             assertEquals(404, get.statusCode())
-            assertEquals("""{"fake_llm_error":"no route: GET /control/unload"}""", get.body())
+            assertEquals("""{"fake_llm_error":"no-route","message":"no route: GET /control/unload"}""", get.body())
         }
     }
 

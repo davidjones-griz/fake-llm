@@ -181,16 +181,18 @@ class OpenApiConformanceTest {
         fun control401(server: String) =
             json.readTree(
                 """{"scenario":"hello",$server"exchanges":[{"request":{"method":"GET","path":"/control/nope"},
-                "response":{"status":401,"headers":{"www-authenticate":"Bearer"},"body":{"fake_llm_error":"x"}}}]}""",
+                "response":{"status":401,"headers":{"www-authenticate":"Bearer"},"body":{"fake_llm_error":"unauthorized","message":"x"}}}]}""",
             )
         assertEquals(emptyList(), caseDisagreements(control401(""""server":{"controlToken":"t"},""")))
         assertTrue(caseDisagreements(control401("")).isNotEmpty(), "a 401 without a control token")
-        val rightToken =
+
+        fun rightToken(code: String) =
             json.readTree(
                 """{"scenario":"hello","server":{"controlToken":"t"},"exchanges":[{"request":{"method":"GET","path":"/control/nope",
-                "headers":{"Authorization":"Bearer t"}},"response":{"status":404,"body":{"fake_llm_error":"x"}}}]}""",
+                "headers":{"Authorization":"Bearer t"}},"response":{"status":404,"body":{"fake_llm_error":"$code","message":"x"}}}]}""",
             )
-        assertEquals(emptyList(), caseDisagreements(rightToken), "the right token on an unknown control path is a 404")
+        assertEquals(emptyList(), caseDisagreements(rightToken("no-route")), "the right token on an unknown control path is a 404")
+        assertTrue(caseDisagreements(rightToken("unauthorized")).isNotEmpty(), "a 404 with the 401's code")
         assertEquals(
             emptyList(),
             caseDisagreements(

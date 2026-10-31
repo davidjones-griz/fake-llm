@@ -142,6 +142,7 @@ class FakeLlmClientTest {
                     assertEquals(401, missing.statusCode)
                     assertContains(missing.message!!, "requires a control token", message = "token '$missingToken'")
                     assertContains(missing.serverMessage!!, "unauthorized")
+                    assertEquals("unauthorized", missing.errorCode)
                     assertEquals("hello", client.health().scenario, "health is never gated")
                 }
             }
@@ -150,6 +151,7 @@ class FakeLlmClientTest {
                 assertEquals(401, wrong.statusCode)
                 assertContains(wrong.message!!, "rejected the control token")
                 assertContains(wrong.serverMessage!!, "unauthorized")
+                assertEquals("unauthorized", wrong.errorCode)
             }
         }
     }
@@ -178,17 +180,23 @@ class FakeLlmClientTest {
             val noRoute = assertFailsWith<FakeLlmClientException> { client.send("GET", "/nope") }
             assertEquals(404, noRoute.statusCode)
             assertEquals("no route: GET /nope", noRoute.serverMessage)
-            assertNull(noRoute.errorCode)
+            assertEquals("no-route", noRoute.errorCode)
         }
     }
 
     @Test
-    fun `the error code is a 400's fake_llm_error, and null for other statuses and bodies without one`() {
-        assertEquals("invalid-json", errorCodeOf(400, """{"fake_llm_error":"invalid-json","message":"why"}"""))
-        assertEquals("exception", errorCodeOf(400, """{"fake_llm_error":"exception","detail":"why"}"""))
-        assertNull(errorCodeOf(404, """{"fake_llm_error":"no route: GET /x"}"""))
-        assertNull(errorCodeOf(400, "<html>Bad Request</html>"))
-        assertNull(errorCodeOf(400, """{"error":{"message":"scripted"}}"""))
+    fun `the error code is fake_llm_error when the body also has a message, and null for an older server's bodies`() {
+        assertEquals("invalid-json", errorCodeOf("""{"fake_llm_error":"invalid-json","message":"why"}"""))
+        for (code in listOf("unauthorized", "no-route", "not-implemented", "openapi-missing")) {
+            assertEquals(code, errorCodeOf("""{"fake_llm_error":"$code","message":"why"}"""))
+        }
+        // A server older than 0.7.0 sent no message: its fake_llm_error is a sentence or an older value.
+        assertNull(errorCodeOf("""{"fake_llm_error":"exception","detail":"why"}"""))
+        assertNull(errorCodeOf("""{"fake_llm_error":"no more steps","seq":2}"""))
+        assertNull(errorCodeOf("""{"fake_llm_error":"no route: GET /x"}"""))
+        assertNull(errorCodeOf("""{"fake_llm_error":"no-route","message":null}"""))
+        assertNull(errorCodeOf("<html>Bad Request</html>"))
+        assertNull(errorCodeOf("""{"error":{"message":"scripted"}}"""))
     }
 
     @Test

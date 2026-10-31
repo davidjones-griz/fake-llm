@@ -9,25 +9,32 @@ change the public API.
 
 ### Added
 
-- `FakeLlmClientException.errorCode` and the pytest plugin's `FakeLlmClientError.error_code`: a
-  400's `fake_llm_error` code, such as `unknown-scenario`; null for other statuses.
+- `FakeLlmClientException.errorCode` and the pytest plugin's `FakeLlmClientError.error_code`: the
+  `fake_llm_error` code of any error fake-llm sends, such as `unknown-scenario` or `no-route`; null
+  for every error from a server older than 0.7.0.
 
 ### Changed
 
-- fake-llm's own 400s share one body: `fake_llm_error` is a stable error code, and `message`
-  says why. This changes the body format, so a test that reads `fake_llm_error` or `detail` needs
-  updating:
+- fake-llm's own error responses share one body: `fake_llm_error` is a stable error code, and
+  `message` says why. This changes the body format, so a test that reads `fake_llm_error` or
+  `detail` needs updating:
 
   | Before | After |
   | --- | --- |
   | `"fake_llm_error": "no more steps"` | `"fake_llm_error": "no-more-steps"`, plus `message` |
   | `"fake_llm_error": "no scenario loaded"` | `"fake_llm_error": "no-scenario"`, plus `message` |
   | `"fake_llm_error": "exception"`, `detail` | one of `invalid-json`, `invalid-request`, `unsupported-step`, `unknown-scenario`, `invalid-scenario` or `exception`, with the reason in `message` |
+  | 401 `"fake_llm_error": "unauthorized: …"` | `"fake_llm_error": "unauthorized"`, with a `message` that says how to send the token |
+  | 404 `"fake_llm_error": "no route: …"` | `"fake_llm_error": "no-route"`, with the old text in `message` |
+  | 501 `"fake_llm_error": "the Anthropic Batches API is not implemented"` | `"fake_llm_error": "not-implemented"`, with the old text in `message` |
+  | 500 `"fake_llm_error": "the OpenAPI document is not bundled …"` | `"fake_llm_error": "openapi-missing"`, with the old text in `message` |
 
   `detail` is gone; `message` replaces it. The no-more-steps and no-scenario bodies keep their
   call fields, and their messages start with the old texts. `FakeLlmClient` and the pytest
-  plugin's client read `message`, and still read `detail` from an older server. The 401, 404, 501
-  and 500 bodies are unchanged. In the OpenAPI document, `ExceptionError` is now `RequestError`.
+  plugin's client read `message`, and still read `detail` from an older server. A 404 for a path
+  containing `"` or `\` is now valid JSON. In the OpenAPI document, `ExceptionError` is now
+  `RequestError`, and `MessageError` is replaced by `UnauthorizedError`, `NoRouteError`,
+  `NotImplementedError` and `OpenApiMissingError`.
 
 ## [0.6.0] - 2026-10-30
 

@@ -158,9 +158,9 @@ private fun <T> FakeLlmClient.get(
 /**
  * A failed [FakeLlmClient] call. [statusCode] is the HTTP status, or null when no response arrived
  * (a transport failure or an interrupt, available as [cause]). [serverMessage] is the server's
- * own explanation of an error status, verbatim, when the response carried one. [errorCode] is a
- * 400's `fake_llm_error` code, such as `unknown-scenario` or `invalid-scenario`, and null for any
- * other status; from a server older than 0.7.0 it is that server's older value. A 2xx response that
+ * own explanation of an error status, verbatim, when the response carried one. [errorCode] is the
+ * error's `fake_llm_error` code, for any status, such as `unknown-scenario` or `no-route`; null when
+ * the body has none, which includes every error from a server older than 0.7.0. A 2xx response that
  * this client cannot decode has its status, no [serverMessage], and the decoding error as [cause].
  */
 public class FakeLlmClientException internal constructor(
@@ -205,7 +205,6 @@ private val responseJson = Json { ignoreUnknownKeys = true }
 private val requestJson = Json { encodeDefaults = false }
 
 private const val DEFAULT_TIMEOUT_SECONDS = 10L
-private const val HTTP_BAD_REQUEST = 400
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_SUCCESS_MIN = 200
 private const val HTTP_SUCCESS_MAX = 299
@@ -219,7 +218,7 @@ internal fun encodeLoadInline(scenario: Scenario): String =
 
 /**
  * The server's explanation in an error [body]: `message` when it is a string, else `detail` (a server
- * older than 0.7.0), else `fake_llm_error` (the 401, 404 and 501 bodies), else the raw body (first
+ * older than 0.7.0), else `fake_llm_error` (an older server's 401, 404, 501 or 500), else the raw body (first
  * [RAW_BODY_LIMIT] characters), which covers a non-JSON page from a proxy. Null for an empty body.
  */
 internal fun serverMessageOf(body: String): String? {
@@ -258,15 +257,16 @@ internal fun httpFailure(
         "$method $path returned HTTP $status: $explanation",
         status,
         serverMessage,
-        errorCode = errorCodeOf(status, body),
+        errorCode = errorCodeOf(body),
     )
 }
 
-/** A 400 [body]'s `fake_llm_error` code; null for any other [status] or a body without one. */
-internal fun errorCodeOf(
-    status: Int,
-    body: String,
-): String? = if (status == HTTP_BAD_REQUEST) parseObjectOrNull(body)?.stringField("fake_llm_error") else null
+/**
+ * An error [body]'s `fake_llm_error` code, when the body also has a string `message`; else null. A server older
+ * than 0.7.0 sent no `message`, and its `fake_llm_error` was a sentence or an older value, not a code.
+ */
+internal fun errorCodeOf(body: String): String? =
+    parseObjectOrNull(body)?.takeIf { it.stringField("message") != null }?.stringField("fake_llm_error")
 
 private fun transportFailure(
     method: String,

@@ -23,16 +23,18 @@ info:
 
     **Compatibility.** Clients should ignore response fields they do not know: a later version
     may add fields. Request bodies are strict: unknown fields are rejected. Human-readable
-    messages (a 400's `message`, and `fake_llm_error` on the 401, 404, 501 and 500) are
-    diagnostics, not part of the contract; a 400's `fake_llm_error` code is. Integers are written as JSON integers,
+    messages (an error's `message`) are diagnostics, not part of the contract; an error's
+    `fake_llm_error` code is. Integers are written as JSON integers,
     without quotes, a fraction or an exponent: `"24"`, `24.0` and `2e1` are rejected where an
     integer is expected.
 
-    **fake-llm's 400s.** Every 400 fake-llm sends itself has `fake_llm_error`, a stable code,
-    and `message`, which says why: `NoMoreStepsError` (`no-more-steps`), `NoScenarioError`
-    (`no-scenario`) and `RequestError` (`invalid-json`, `invalid-request`, `unsupported-step`,
-    `unknown-scenario`, `invalid-scenario` and `exception`). The first two also carry the call's
-    fields. A step's scripted error is outside these schemas, even when its status is 400.
+    **fake-llm's errors.** Every error fake-llm sends itself has `fake_llm_error`, a stable code,
+    and `message`, which says why. The 400s are `NoMoreStepsError` (`no-more-steps`),
+    `NoScenarioError` (`no-scenario`) and `RequestError` (`invalid-json`, `invalid-request`,
+    `unsupported-step`, `unknown-scenario`, `invalid-scenario` and `exception`); the first two also
+    carry the call's fields. The others are `UnauthorizedError` (401, `unauthorized`), `NoRouteError`
+    (404, `no-route`), `NotImplementedError` (501, `not-implemented`) and `OpenApiMissingError`
+    (500, `openapi-missing`). A step's scripted error is outside these schemas, whatever its status.
 
     **Scenarios and calls.** A scenario is an ordered list of steps. Every request to a
     generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini
@@ -114,7 +116,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageError"
+                $ref: "#/components/schemas/OpenApiMissingError"
   /control/scenario:
     post:
       tags: [control]
@@ -599,7 +601,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageError"
+                $ref: "#/components/schemas/NoRouteError"
   /gemini/{version}/models/{model}:generateContent:
     parameters:
       - name: version
@@ -805,13 +807,13 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/MessageError"
+            $ref: "#/components/schemas/UnauthorizedError"
     NotImplemented:
       description: The route exists in the provider's API but is not implemented here.
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/MessageError"
+            $ref: "#/components/schemas/NotImplementedError"
     NoRoute:
       description: |
         No route matches the method and path. OpenAPI has no catch-all path, so this response is
@@ -819,7 +821,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/MessageError"
+            $ref: "#/components/schemas/NoRouteError"
     VendorBadRequest:
       description: |
         fake-llm's own 400s, not the provider's. A call after the loaded scenario's last step gets
@@ -1146,13 +1148,46 @@ components:
         when `instructions` is a string, `unknown` for any other non-null value; without
         `instructions`, `blocks` when an `input` item has role `system` or `developer`, else
         `absent`.
-    MessageError:
+    UnauthorizedError:
       type: object
-      required: [fake_llm_error]
+      description: A `/control/` request without the configured control token. The message says how to send it.
+      required: [fake_llm_error, message]
       properties:
         fake_llm_error:
           type: string
-          description: A human-readable explanation; not part of the contract.
+          const: unauthorized
+        message:
+          $ref: "#/components/schemas/ErrorMessage"
+    NoRouteError:
+      type: object
+      description: A request no route matches. The message names the method and path.
+      required: [fake_llm_error, message]
+      properties:
+        fake_llm_error:
+          type: string
+          const: no-route
+        message:
+          $ref: "#/components/schemas/ErrorMessage"
+    NotImplementedError:
+      type: object
+      description: A provider route that fake-llm does not implement.
+      required: [fake_llm_error, message]
+      properties:
+        fake_llm_error:
+          type: string
+          const: not-implemented
+        message:
+          $ref: "#/components/schemas/ErrorMessage"
+    OpenApiMissingError:
+      type: object
+      description: A server built without its OpenAPI document.
+      required: [fake_llm_error, message]
+      properties:
+        fake_llm_error:
+          type: string
+          const: openapi-missing
+        message:
+          $ref: "#/components/schemas/ErrorMessage"
     RequestError:
       type: object
       description: |

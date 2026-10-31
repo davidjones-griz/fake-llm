@@ -127,8 +127,8 @@ Turns every skip into a failure. CI sets it: with a command target, nothing shou
   passes for `application/json`). Headers a case does not list are ignored.
 - **Matchers**: `{ "$type": "integer" }`, `{ "$type": "string" }` and `{ "$type": "object" }`,
   which accept any value of that type. Cases use them only for values that vary (`timestampMs`)
-  and for the messages the spec says are diagnostics, not contract (a 400's `message`, and the
-  `fake_llm_error` text of a 401, 404 or 501). Cases use `object` only for the request headers in
+  and for the messages the spec says are diagnostics, not contract (an error's `message`; its
+  `fake_llm_error` code is matched exactly). Cases use `object` only for the request headers in
   `GET /control/exchanges` entries, which depend on the client.
 - **Timeouts:** each response, body included, must arrive within 10 seconds, so a stream that
   stalls fails its case.

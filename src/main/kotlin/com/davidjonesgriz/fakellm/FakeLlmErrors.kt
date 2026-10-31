@@ -1,4 +1,4 @@
-// fake-llm's own 400 responses share one body: a stable code in `fake_llm_error`, a `message`
+// fake-llm's own error responses share one body: a stable code in `fake_llm_error`, a `message`
 // saying why, and any fields the code adds (the no-more-steps and no-scenario call fields).
 package com.davidjonesgriz.fakellm
 
@@ -9,7 +9,7 @@ import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** The codes of fake-llm's own 400s, as `fake_llm_error` sends them. */
+/** The codes of fake-llm's own error responses, as `fake_llm_error` sends them. */
 internal enum class ErrorCode(
     val wire: String,
 ) {
@@ -21,6 +21,12 @@ internal enum class ErrorCode(
     UNKNOWN_SCENARIO("unknown-scenario"),
     INVALID_SCENARIO("invalid-scenario"),
     EXCEPTION("exception"),
+
+    // The other statuses fake-llm sends itself, each chosen where it is sent, never by errorFor.
+    UNAUTHORIZED("unauthorized"),
+    NO_ROUTE("no-route"),
+    NOT_IMPLEMENTED("not-implemented"),
+    OPENAPI_MISSING("openapi-missing"),
 }
 
 /**
@@ -38,7 +44,7 @@ internal class UnknownScenarioException(
     message: String,
 ) : IllegalStateException(message)
 
-/** The 400 body for [code]: `fake_llm_error`, `message`, then the fields [extra] adds. */
+/** The error body for [code]: `fake_llm_error`, `message`, then the fields [extra] adds. */
 internal fun errorBody(
     code: ErrorCode,
     message: String,
