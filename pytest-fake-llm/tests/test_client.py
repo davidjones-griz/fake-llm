@@ -1,5 +1,7 @@
 """FakeLlmClient against the session's server, and against a stub for what a real server never sends."""
 
+import json
+
 import pytest
 
 from pytest_fake_llm import CallRecord, FakeLlmClient, FakeLlmClientError, Health, ToolCallRecord, ToolResultRecord
@@ -105,7 +107,7 @@ def test_the_token_is_sent_as_a_bearer_header(stub):
 
 
 def test_a_401_says_whether_the_token_was_missing_or_rejected(stub):
-    server = stub(401, '{"fake_llm_error":"unauthorized: missing or invalid Authorization: Bearer <token>"}')
+    server = stub(401, '{"fake_llm_error":"unauthorized","message":"unauthorized: send the token"}')
 
     with pytest.raises(FakeLlmClientError, match="requires a control token") as missing:
         FakeLlmClient(server.url).reset()
@@ -113,17 +115,36 @@ def test_a_401_says_whether_the_token_was_missing_or_rejected(stub):
         FakeLlmClient(server.url, control_token="wrong").reset()
 
     assert missing.value.status_code == rejected.value.status_code == 401
-    assert missing.value.server_message == "unauthorized: missing or invalid Authorization: Bearer <token>"
-    assert missing.value.error_code is None
+    assert missing.value.server_message == "unauthorized: send the token"
+    assert missing.value.error_code == rejected.value.error_code == "unauthorized"
 
 
-def test_an_older_servers_400_keeps_its_detail_and_value(stub):
-    server = stub(400, '{"fake_llm_error":"exception","detail":"unknown scenario \'x\'"}')
+@pytest.mark.parametrize(
+    ("status", "code"), [(404, "no-route"), (501, "not-implemented"), (500, "openapi-missing")]
+)
+def test_any_error_status_carries_its_code(stub, status, code):
+    server = stub(status, json.dumps({"fake_llm_error": code, "message": "why"}))
 
     with pytest.raises(FakeLlmClientError) as raised:
-        FakeLlmClient(server.url).load("x")
+        FakeLlmClient(server.url).reset()
 
-    assert (raised.value.server_message, raised.value.error_code) == ("unknown scenario 'x'", "exception")
+    assert (raised.value.status_code, raised.value.error_code, raised.value.server_message) == (status, code, "why")
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "message"),
+    [
+        (400, '{"fake_llm_error":"exception","detail":"unknown scenario \'x\'"}', "unknown scenario 'x'"),
+        (404, '{"fake_llm_error":"no route: POST /control/reset"}', "no route: POST /control/reset"),
+    ],
+)
+def test_an_older_servers_error_keeps_its_explanation_and_has_no_code(stub, status, body, message):
+    server = stub(status, body)
+
+    with pytest.raises(FakeLlmClientError) as raised:
+        FakeLlmClient(server.url).reset()
+
+    assert (raised.value.server_message, raised.value.error_code) == (message, None)
 
 
 def test_a_non_json_error_and_an_unreadable_reply_keep_the_body(stub):

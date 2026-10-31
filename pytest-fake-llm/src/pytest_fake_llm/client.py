@@ -24,9 +24,9 @@ class FakeLlmClientError(Exception):
 
     ``status_code`` is the HTTP status, or None when no complete response arrived (a transport failure
     such as a refused connection, a timeout or a body cut off). ``server_message`` is the server's own
-    explanation of an error status, verbatim, when the response carried one. ``error_code`` is a 400's
-    ``fake_llm_error`` code, such as ``unknown-scenario`` or ``invalid-scenario``, and None for any
-    other status; from a server older than 0.7.0 it is that server's older value.
+    explanation of an error status, verbatim, when the response carried one. ``error_code`` is the
+    error's ``fake_llm_error`` code, for any status, such as ``unknown-scenario`` or ``no-route``; None
+    when the body has none, which includes every error from a server older than 0.7.0.
     """
 
     def __init__(
@@ -212,7 +212,7 @@ def _call_record(entry: dict[str, Any]) -> CallRecord:
 
 def _server_message(body: str) -> str | None:
     """``message`` when it is a string, else ``detail`` (a server older than 0.7.0), else ``fake_llm_error``
-    (the 401, 404 and 501 bodies), else the raw body's start; None when empty."""
+    (an older server's 401, 404, 501 or 500), else the raw body's start; None when empty."""
     if not body.strip():
         return None
     try:
@@ -234,18 +234,19 @@ def _http_failure(method: str, path: str, status: int, body: str, token_configur
         explanation = "the server rejected the control token"
     else:
         explanation = "the server requires a control token (pass control_token, or set FAKE_LLM_CONTROL_TOKEN for the plugin)"
-    return FakeLlmClientError(f"{method} {path} returned HTTP {status}: {explanation}", status, server_message, _error_code(status, body))
+    return FakeLlmClientError(f"{method} {path} returned HTTP {status}: {explanation}", status, server_message, _error_code(body))
 
 
-def _error_code(status: int, body: str) -> str | None:
-    """A 400 body's ``fake_llm_error`` code; None for any other status or a body without one."""
-    if status != 400:
-        return None
+def _error_code(body: str) -> str | None:
+    """An error body's ``fake_llm_error`` code, when the body also has a string ``message``; else None.
+    A server older than 0.7.0 sent no ``message``, and its ``fake_llm_error`` was not a code."""
     try:
         parsed = json.loads(body)
     except ValueError:
         return None
-    code = parsed.get("fake_llm_error") if isinstance(parsed, dict) else None
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("message"), str):
+        return None
+    code = parsed.get("fake_llm_error")
     return code if isinstance(code, str) else None
 
 
