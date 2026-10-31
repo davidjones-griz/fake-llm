@@ -186,7 +186,7 @@ Call N, on any generation route, gets step N. The last step does not repeat: a c
 | `GET /openapi` | The OpenAPI document for this version. |
 | `/control/…` | Load, reset and unload scenarios; read the call and exchange logs. |
 
-Every generation reply names the request's model. Anything else is HTTP 404. A request fake-llm can't serve gets a 400 whose `fake_llm_error` is a stable code, such as `no-more-steps` or `invalid-request`, with a `message` saying why; [Endpoints](docs/endpoints.md#fake-llms-400-responses) lists the codes. [Endpoints](docs/endpoints.md) describes each vendor route's bodies and streams, and [Control API](docs/control-api.md) the `/health`, `/openapi` and `/control/` routes and the control token. The OpenAPI document, [openapi/fake-llm.yaml](openapi/fake-llm.yaml), is the contract.
+Every generation reply names the request's model. Anything else is HTTP 404. Every error fake-llm sends itself, such as a 400 for a request it can't serve or that 404, has a `fake_llm_error` that is a stable code, such as `no-more-steps` or `no-route`, with a `message` saying why; [Endpoints](docs/endpoints.md#fake-llms-error-responses) lists the codes. [Endpoints](docs/endpoints.md) describes each vendor route's bodies and streams, and [Control API](docs/control-api.md) the `/health`, `/openapi` and `/control/` routes and the control token. The OpenAPI document, [openapi/fake-llm.yaml](openapi/fake-llm.yaml), is the contract.
 
 ## Configuration
 

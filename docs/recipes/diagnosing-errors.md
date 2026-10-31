@@ -44,7 +44,7 @@ A server started with `--lenient` or `FAKE_LLM_LENIENT=true` answers this case w
 
 ## Other 400s
 
-A 400 with another code means the request never became a call, so it took no step and is not in the call log: `invalid-json` and `invalid-request` for a body the route can't use, `unsupported-step` for a next step whose `rawArguments` the request's format can't carry, and `unknown-scenario` or `invalid-scenario` for a scenario load that failed. [fake-llm's 400 responses](../endpoints.md#fake-llms-400-responses) lists every code.
+A 400 with another code means the request never became a call, so it took no step and is not in the call log: `invalid-json` and `invalid-request` for a body the route can't use, `unsupported-step` for a next step whose `rawArguments` the request's format can't carry, and `unknown-scenario` or `invalid-scenario` for a scenario load that failed. [fake-llm's error responses](../endpoints.md#fake-llms-error-responses) lists every code.
 
 ## Testing how the app handles them
 

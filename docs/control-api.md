@@ -2,14 +2,14 @@
 
 A running fake-llm server is driven over HTTP: load a scenario, start it over, and read back what the app sent. The contract for these routes, `/health` and `/openapi` is the OpenAPI 3.1 document [openapi/fake-llm.yaml](https://github.com/davidjones-griz/fake-llm/blob/main/openapi/fake-llm.yaml), which this page summarises.
 
-Clients should ignore response fields they do not know, since a later version may add fields. Request bodies are strict: `POST /control/scenario` rejects unknown fields, as does the scenario format. Human-readable messages, such as a 400's `message` and the `fake_llm_error` text of a 401 or 404, are diagnostics, not part of the contract; a 400's `fake_llm_error` code is part of it.
+Clients should ignore response fields they do not know, since a later version may add fields. Request bodies are strict: `POST /control/scenario` rejects unknown fields, as does the scenario format. An error's `message` is a diagnostic, not part of the contract; its `fake_llm_error` code is part of it (see [fake-llm's error responses](endpoints.md#fake-llms-error-responses)).
 
 ## Control token
 
-When `FAKE_LLM_CONTROL_TOKEN` is set to a non-blank value, every path under `/control/` requires an `Authorization` header whose value is exactly `Bearer <token>`. A missing or different header is HTTP 401, with `WWW-Authenticate: Bearer`:
+When `FAKE_LLM_CONTROL_TOKEN` is set to a non-blank value, every path under `/control/` requires an `Authorization` header whose value is exactly `Bearer <token>`. A missing or different header is HTTP 401 `unauthorized`, with `WWW-Authenticate: Bearer`, and a message that says how to send the token:
 
 ```json
-{"fake_llm_error":"unauthorized: missing or invalid Authorization: Bearer <token>"}
+{"fake_llm_error":"unauthorized","message":"unauthorized: missing or invalid Authorization header. Send Authorization: Bearer <token> on every /control/ request, where <token> is the server's FAKE_LLM_CONTROL_TOKEN."}
 ```
 
 Vendor routes and `/health` stay open. With no token configured, the control routes are open. The environment variable is read first. A JVM system property of the same name is used only when the environment variable is absent. A blank environment variable counts as unset and does not fall through to the system property.
@@ -65,7 +65,7 @@ curl -s -X POST http://localhost:8080/control/scenario \
 {"loaded":"inline","steps":1}
 ```
 
-Sending both `name` and `scenario`, or neither, is HTTP 400 `invalid-request`, and a body that is not a JSON object is `invalid-json`. A name that finds no scenario is `unknown-scenario`, and an illegal name or a scenario the decoder rejects is `invalid-scenario`, with the reason in `message`: `{"fake_llm_error":"unknown-scenario","message":"unknown scenario 'x' — ..."}`. [Endpoints](endpoints.md#fake-llms-400-responses) lists every code.
+Sending both `name` and `scenario`, or neither, is HTTP 400 `invalid-request`, and a body that is not a JSON object is `invalid-json`. A name that finds no scenario is `unknown-scenario`, and an illegal name or a scenario the decoder rejects is `invalid-scenario`, with the reason in `message`: `{"fake_llm_error":"unknown-scenario","message":"unknown scenario 'x' — ..."}`. [Endpoints](endpoints.md#fake-llms-error-responses) lists every code.
 
 ### `GET /control/scenarios`
 

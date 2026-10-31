@@ -4,17 +4,17 @@ fake-llm serves the vendor routes below. Each generation route answers from the 
 
 Every generation reply names the request's model, as the providers do: `model` on a buffered Anthropic message and the stream's `message_start`, on OpenAI Chat Completions and Responses bodies, chunks and stream events, and `modelVersion` on Gemini bodies and chunks. A request without a string `model` gets `""` back.
 
-Anything that matches none of the routes below is HTTP 404:
+Anything that matches none of the routes below is HTTP 404 `no-route`:
 
 ```json
-{"fake_llm_error":"no route: GET /nope"}
+{"fake_llm_error":"no-route","message":"no route: GET /nope"}
 ```
 
-A request fake-llm can't serve gets one of [fake-llm's 400 responses](#fake-llms-400-responses), described below.
+A request fake-llm can't serve gets one of [fake-llm's error responses](#fake-llms-error-responses), described below.
 
-## fake-llm's 400 responses
+## fake-llm's error responses
 
-Every 400 fake-llm sends itself has the same structure: a stable error code and a message.
+Every error fake-llm sends itself, whatever its status, has the same structure: a stable error code and a message.
 
 ```json
 {"fake_llm_error":"invalid-request","message":"request has no messages array"}
@@ -22,22 +22,26 @@ Every 400 fake-llm sends itself has the same structure: a stable error code and 
 
 | Field | Meaning |
 | --- | --- |
-| `fake_llm_error` | The error code, from the table below. It is part of the contract, so a test can assert on it. A body that has it is fake-llm's own 400, not a step's scripted error. |
+| `fake_llm_error` | The error code, from the table below. It is part of the contract, so a test can assert on it. A body that has it is fake-llm's own error, not a step's scripted error. |
 | `message` | Why the request failed, for a person to read. It is a diagnostic, not part of the contract, and its wording can change. |
 | other fields | `no-more-steps` and `no-scenario` also carry the call's fields; see [Scenario files](scenarios.md#scenario-files). |
 
-| Code | When | A call? |
-| --- | --- | --- |
-| `no-more-steps` | A call after the loaded scenario's last step, in strict and lenient mode. The body also has `scenario`, `steps`, `seq`, `vendor`, `model`, `system_shape`, `message_count` and `prompt_preview`. | Yes |
-| `no-scenario` | A call with no scenario loaded, in strict mode (lenient mode serves the canned reply). The body has the same call fields as `no-more-steps`, without `scenario` and `steps`. | Yes |
-| `invalid-json` | The request body is not JSON, or not a JSON object, on any route that reads a body. | No |
-| `invalid-request` | Valid JSON the route rejects: no `messages` or `contents` array, an invalid `cache_control`, a Gemini `streamGenerateContent` request without `alt=sse`, an embeddings request outside the rules, a count_tokens body the Messages route rejects, or a `POST /control/scenario` body that has an unknown field, lacks exactly one of `name` and `scenario`, or has a `name` that is not a non-blank string or a `scenario` that is not an object. | No |
-| `unsupported-step` | The next step has a tool call with `rawArguments` that the request's format can't carry: a buffered Anthropic request, or a Gemini request. The step stays next. | No |
-| `unknown-scenario` | A load by name found no such scenario. | No |
-| `invalid-scenario` | A scenario failed to load: an illegal name, a scenario that doesn't decode or validate, or a file whose declared name differs from its file name. | No |
-| `exception` | Any other failure. | No |
+| Code | Status | When | A call? |
+| --- | --- | --- | --- |
+| `no-more-steps` | 400 | A call after the loaded scenario's last step, in strict and lenient mode. The body also has `scenario`, `steps`, `seq`, `vendor`, `model`, `system_shape`, `message_count` and `prompt_preview`. | Yes |
+| `no-scenario` | 400 | A call with no scenario loaded, in strict mode (lenient mode serves the canned reply). The body has the same call fields as `no-more-steps`, without `scenario` and `steps`. | Yes |
+| `invalid-json` | 400 | The request body is not JSON, or not a JSON object, on any route that reads a body. | No |
+| `invalid-request` | 400 | Valid JSON the route rejects: no `messages` or `contents` array, an invalid `cache_control`, a Gemini `streamGenerateContent` request without `alt=sse`, an embeddings request outside the rules, a count_tokens body the Messages route rejects, or a `POST /control/scenario` body that has an unknown field, lacks exactly one of `name` and `scenario`, or has a `name` that is not a non-blank string or a `scenario` that is not an object. | No |
+| `unsupported-step` | 400 | The next step has a tool call with `rawArguments` that the request's format can't carry: a buffered Anthropic request, or a Gemini request. The step stays next. | No |
+| `unknown-scenario` | 400 | A load by name found no such scenario. | No |
+| `invalid-scenario` | 400 | A scenario failed to load: an illegal name, a scenario that doesn't decode or validate, or a file whose declared name differs from its file name. | No |
+| `exception` | 400 | Any other failure. | No |
+| `unauthorized` | 401 | A `/control/` request without the configured control token, or with a different one; see [Control token](control-api.md#control-token). The message says how to send it, and the response has `WWW-Authenticate: Bearer`. | No |
+| `no-route` | 404 | A method and path that no route serves, including a known path with another method. The message names the method and path. | No |
+| `not-implemented` | 501 | Any method on the Anthropic Batches API, `/anthropic/v1/messages/batches` and the paths under it. | No |
+| `openapi-missing` | 500 | `GET /openapi` on a server built without its OpenAPI document, a packaging fault. | No |
 
-A request that gets a 400 and is not a call takes no step and no call-log or exchange-log entry. A streamed request that gets a 400 gets it as JSON, with no SSE bytes. Other errors (the 401 for the control token, the 404 above and the Batches 501) still carry only a message in `fake_llm_error`.
+A request that gets a 400 and is not a call takes no step and no call-log or exchange-log entry. A streamed request that gets a 400 gets it as JSON, with no SSE bytes.
 
 ## Requests that are not calls
 
@@ -80,10 +84,10 @@ A call the scenario has no step for is HTTP 400 with the JSON body described in 
 
 ### `GET /anthropic/v1/messages/batches`
 
-The Batches API is not implemented. Any method on a path that starts with `/anthropic/v1/messages/batches` returns HTTP 501:
+The Batches API is not implemented. Any method on a path that starts with `/anthropic/v1/messages/batches` returns HTTP 501 `not-implemented`:
 
 ```json
-{"fake_llm_error":"the Anthropic Batches API is not implemented"}
+{"fake_llm_error":"not-implemented","message":"the Anthropic Batches API is not implemented"}
 ```
 
 ### `POST /anthropic/v1/messages/batches`

@@ -27,13 +27,13 @@ A scenario file is JSON. Unknown keys are rejected. `name` is required, `descrip
 }
 ```
 
-After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with a [400 that is not a call](endpoints.md#fake-llms-400-responses) (`invalid-json`, `invalid-request` or `unsupported-step`), a 404, the Batches 501, the [embeddings routes](endpoints.md#embeddings), and [token counting and the model lists](endpoints.md#token-counting-and-model-lists) are not calls.
+After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step. The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with a [400 that is not a call](endpoints.md#fake-llms-error-responses) (`invalid-json`, `invalid-request` or `unsupported-step`), a 404, the Batches 501, the [embeddings routes](endpoints.md#embeddings), and [token counting and the model lists](endpoints.md#token-counting-and-model-lists) are not calls.
 
 Each step is a reply (`text`, `toolCalls`, or both) or an `error`. When a step in a file or an inline scenario is invalid, the error names its number, from 1, and the path of the field at fault, such as `step 2: $.steps[1]: unknown field 'stopReasn'`. The path is relative to the scenario, including for an inline scenario in `POST /control/scenario`.
 
 The step fields are listed under [Step fields](#step-fields).
 
-A call after the last step returns HTTP 400, in strict and lenient mode alike, with the `no-more-steps` code (see [fake-llm's 400 responses](endpoints.md#fake-llms-400-responses)). The body is JSON:
+A call after the last step returns HTTP 400, in strict and lenient mode alike, with the `no-more-steps` code (see [fake-llm's error responses](endpoints.md#fake-llms-error-responses)). The body is JSON:
 
 ```json
 {
