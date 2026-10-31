@@ -286,6 +286,24 @@ internal val invalidScenarios =
             """{"name":"x","steps":[{"match":{"header":{"name":"","contains":"a"}},"text":"t"}]}""",
         "a header name with a space" to
             """{"name":"x","steps":[{"match":{"header":{"name":"x trace","contains":"a"}},"text":"t"}]}""",
+        "a body path index of ten digits" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$[1234567890]","equals":1}},"text":"t"}]}""",
+        "a body path with a bad escape" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$['a\\b']","equals":1}},"text":"t"}]}""",
+        "a body path name starting with a digit" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$.1a","equals":1}},"text":"t"}]}""",
+        "a body path with a double dot" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$..a","equals":1}},"text":"t"}]}""",
+        "a body path name with a space" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$.a b","equals":1}},"text":"t"}]}""",
+        "a body path ending in a newline" to
+            """{"name":"x","steps":[{"match":{"body":{"path":"$.a\n","equals":1}},"text":"t"}]}""",
+        "a header name ending in a newline" to
+            """{"name":"x","steps":[{"match":{"header":{"name":"x-trace\n","contains":"a"}},"text":"t"}]}""",
+        "a tools match whose only key is null" to
+            """{"name":"x","steps":[{"match":{"tools":{"declares":null}},"text":"t"}]}""",
+        "a header match whose only operator is null" to
+            """{"name":"x","steps":[{"match":{"header":{"name":"x","contains":null}},"text":"t"}]}""",
         "a header match with no operator" to
             """{"name":"x","steps":[{"match":{"header":{"name":"x-trace"}},"text":"t"}]}""",
     )
@@ -333,10 +351,36 @@ internal val validParallelScenarios =
               {"parallel":null,"text":"t"},
               {"match":{"tools":{"choiceTool":"f"}},"text":"t"},
               {"match":{"header":{"name":"X-Trace","regex":"a+","contains":null}},"text":"t"}]}""",
+        "body paths the decoder and the schema both accept" to
+            """{"name":"paths","steps":[{"match":{"body":{"path":"$['a\\\\b']","equals":1}},"text":"t"},
+              {"match":{"body":{"path":"$[-0]","equals":1}},"text":"t"},{"match":{"body":{"path":"$['']","equals":1}},"text":"t"},
+              {"match":{"body":{"path":"$.a-b[123456789]._x","equals":1}},"text":"t"}]}""",
         "a lone overlap section and one with no matches" to
             """{"name":"lone","steps":[{"parallel":{"overlap":true,"steps":[{"text":"x"},{"text":"y"}]}},
               {"parallel":{"steps":[{"text":"z"}]}}]}""",
-    )
+    ) + docScenarios("docs/scenarios.md", "Parallel calls")
+
+/**
+ * Each JSON scenario (a block with `"name"` and `"steps"`) in the `## [section]` section of the
+ * docs page [page], so the examples the docs show are checked like the rest.
+ */
+private fun docScenarios(
+    page: String,
+    section: String,
+): List<Pair<String, String>> {
+    val text = File(page).readText()
+    val start = text.indexOf("\n## $section\n")
+    check(start >= 0) { "no '## $section' in $page" }
+    val end = text.indexOf("\n## ", start + 1).takeIf { it > 0 } ?: text.length
+    val blocks =
+        Regex("```json\n(.*?)\n```", RegexOption.DOT_MATCHES_ALL)
+            .findAll(text.substring(start, end))
+            .map { it.groupValues[1] }
+            .filter { "\"steps\"" in it && "\"name\"" in it }
+            .toList()
+    check(blocks.size >= 3) { "expected the scenario examples in $page's $section section, found ${blocks.size}" }
+    return blocks.mapIndexed { i, block -> "$page example ${i + 1}" to block }
+}
 
 /** Every directory of scenario files in the repository, relative to the root project. */
 internal val scenarioDirectories =

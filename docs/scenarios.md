@@ -72,7 +72,7 @@ Each format renders them as its API does:
 - OpenAI Responses: one `function_call` output item per call, after the message item, with `id` `fc_fake_<seq>_<n>`, `call_id`, `name`, the argument text as `arguments`, and `status` `completed`; the response's `status` is `completed`. Streamed, each call is an `output_item.added` with empty `arguments`, its argument text as `response.function_call_arguments.delta` events of `streamChunkChars` code points, `response.function_call_arguments.done`, and `output_item.done`.
 - Gemini: one `functionCall` part per call, after the text part, with `args` set to `arguments`, and `finishReason` `STOP`. Streamed, each call is its own chunk whose only part is that `functionCall`, after the text chunks, and the last chunk carries `finishReason` `STOP`.
 
-`rawArguments` is sent verbatim by OpenAI (both routes), buffered or streamed, and by a streamed Anthropic reply. A buffered Anthropic `tool_use.input` and a Gemini `functionCall.args` must be JSON objects, so a buffered Anthropic request or a Gemini request whose next step sets `rawArguments` gets the `unsupported-step` 400. That request is not a call: the step is not used, and the next call gets it.
+`rawArguments` is sent verbatim by OpenAI (both routes), buffered or streamed, and by a streamed Anthropic reply. A buffered Anthropic `tool_use.input` and a Gemini `functionCall.args` must be JSON objects, so a buffered Anthropic request or a Gemini request whose chosen step sets `rawArguments` gets the `unsupported-step` 400. That request is not a call: the step stays unused, and a later call can take it.
 
 The request's `tools` and `tool_choice` (and Gemini `tools` and `toolConfig`) are ignored: a step's tool calls are sent whatever tools the request declares.
 
@@ -269,7 +269,7 @@ How a call is served:
 - A call that reaches it takes the first unused step whose `match` it satisfies, in listed order. A step with no `match` matches any call.
 - A call uses up its response when it arrives, even if the client later times out or disconnects.
 - The scenario moves past the parallel step only once every step in it is used.
-- A plain step with a `match` is served only to a call that satisfies it. A call that doesn't takes nothing, and the step stays next.
+- A plain step with a `match` is served only to a call that satisfies it. A call that doesn't takes nothing, and the step stays next. In a parallel step, a call that doesn't satisfy one step's `match` looks at the others.
 - Within one `match`, every key must hold.
 
 A call that matches none of the unused steps it could take gets HTTP 400 `no-match`. It takes a call number and a call-log entry with outcome `no-match`, and uses nothing. Its body carries the call's fields, as `no-scenario` does, and its `message` lists the steps the call could have taken, with their rules (at most ten, then "and N more"):
@@ -379,7 +379,7 @@ This covers nested fan-out: each of two calls fans out into sub-calls, and a sub
 | `toolResult` | A tool result the request sends back: some result must match every key that is set. |
 | `tools` | `declares`: the name of a declared tool (Anthropic `tools[].name`, OpenAI `tools[].function.name`, Responses `tools[].name`, Gemini `functionDeclarations[].name`). `choice`: the tool choice, normalized to `auto`, `none`, `required` (Anthropic `any`, Gemini `ANY`), `tool` (one tool forced: Anthropic `tool`, an OpenAI `function` choice, Gemini `ANY` with exactly one allowed function) or `other`; without one in the request it is `auto` when tools are declared and `none` otherwise. `choiceTool`: the forced tool's name. |
 | `body` | A value in the request body at a path, compared as JSON. |
-| `header` | A request header. Optional: the app never has to send one. |
+| `header` | A request header, by name in any case; some value of it must match. A header the request doesn't send never matches, and no match ever requires the app to send one. |
 
 The text keys (`system`, `lastUser`, `prompt`, `message`, and `header`'s value) each take exactly one of `contains`, `equals` and `regex`. The field tables are [Match fields](#match-fields) and the ones after it.
 
@@ -515,7 +515,7 @@ At least one must be set.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `path` | string | required | `$` followed by one or more `.name`, `['name']` or `[n]` segments. A negative `n` counts from the end; inside quotes, `\'` and `\\` are the only escapes. There are no wildcards or filters. |
+| `path` | string | required | `$` followed by one or more `.name`, `['name']` or `[n]` segments. A `.name` is a letter or `_` followed by letters, digits, `_` or `-`; any other key needs `['…']`. `n` has at most 9 digits, and a negative `n` counts from the end. Inside quotes, `\'` and `\\` are the only escapes. There are no wildcards or filters. |
 | `equals` | any JSON value | required | The value at `path`, compared as JSON, numbers by value. `null` matches a `null` value. A path that isn't there never matches. |
 
 ### HeaderMatch fields

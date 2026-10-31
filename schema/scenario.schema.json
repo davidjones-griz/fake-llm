@@ -4,7 +4,7 @@
   "$comment": "Generated from openapi/fake-llm.yaml by ./gradlew updateScenarioSchema. Do not edit by hand.",
   "title": "fake-llm scenario",
   "type": "object",
-  "description": "One named behaviour: an ordered list of steps. After a load or reset, call N gets step N.\nA call after the last step gets `NoMoreStepsError`.\n",
+  "description": "One named behaviour: an ordered list of steps. After a load or reset, call N gets step N, in a\nscenario with no `match` and no parallel step.\nA call after the last step gets `NoMoreStepsError`.\n",
   "required": [
     "name",
     "steps"
@@ -334,7 +334,7 @@
               "type": "null"
             }
           ],
-          "description": "Only a call that satisfies it takes this step. On a plain step, a call that doesn't\ntakes nothing and gets the `no-match` 400, and the step stays next.\n"
+          "description": "Only a call that satisfies it takes this step. On a plain step, a call that doesn't\ntakes nothing and gets the `no-match` 400, and the step stays next; in a parallel step,\nthe call looks at the section's other steps.\n"
         },
         "parallel": {
           "oneOf": [
@@ -415,7 +415,7 @@
             "string",
             "null"
           ],
-          "description": "The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI formats (Chat\nCompletions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step\nhas it gets the `unsupported-step` 400 (`RequestError`), and the step is not used.\n"
+          "description": "The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI formats (Chat\nCompletions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose chosen step\nhas it gets the `unsupported-step` 400 (`RequestError`), and the step stays unused.\n"
         },
         "id": {
           "type": [
@@ -1108,7 +1108,7 @@
         "path": {
           "type": "string",
           "pattern": "^\\$(?:\\.[A-Za-z_][A-Za-z0-9_-]*|\\['(?:[^'\\\\]|\\\\['\\\\])*'\\]|\\[-?[0-9]{1,9}\\])+$",
-          "description": "`$` followed by one or more `.name`, `['name']` or `[n]` segments; a negative `n` counts\nfrom the end, and `\\'` and `\\\\` are the only escapes inside quotes.\n"
+          "description": "`$` followed by one or more `.name`, `['name']` or `[n]` segments. A `.name` is a letter\nor `_` followed by letters, digits, `_` or `-`; any other key needs `['…']`. `n` has at\nmost 9 digits, and a negative `n` counts from the end. `\\'` and `\\\\` are the only\nescapes inside quotes.\n"
         },
         "equals": {
           "description": "The value at `path`, compared as JSON (numbers by value). Any JSON value, `null` included."

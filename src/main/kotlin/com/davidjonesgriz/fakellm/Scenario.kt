@@ -120,7 +120,10 @@ public data class Step(
      * have no such field and ignore it.
      */
     val stopSequence: String? = null,
-    /** Only a call that satisfies it takes this step; a call that doesn't takes nothing, and the step stays next. */
+    /**
+     * Only a call that satisfies it takes this step. On a plain step, a call that doesn't takes
+     * nothing and the step stays next; in a parallel step, the call looks at the section's other steps.
+     */
     val match: Match? = null,
     /** Makes this a parallel step: several responses, used in any order. A parallel step sets no other field. */
     val parallel: ParallelSection? = null,

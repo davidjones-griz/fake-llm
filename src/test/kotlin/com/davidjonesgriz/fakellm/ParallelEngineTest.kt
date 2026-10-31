@@ -249,10 +249,8 @@ class ParallelEngineTest {
         )
     }
 
-    /** The record as the call log writes it, with defaults. */
+    /** The record as `GET /control/calls` writes it. */
     private fun json(record: CallRecord) = logJson.encodeToString(CallRecord.serializer(), record)
-
-    private val logJson = Json { encodeDefaults = true }
 
     private fun <T> List<T>.permutations(): List<List<T>> =
         if (size <= 1) listOf(this) else flatMap { first -> (this - first).permutations().map { listOf(first) + it } }

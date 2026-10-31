@@ -836,7 +836,7 @@ components:
         `"stream": true`, and on Gemini `streamGenerateContent`, all three are JSON, with no SSE bytes. A request body that is not valid
         JSON gets `RequestError` `invalid-json`, and one that lacks the `messages` (Anthropic,
         OpenAI) or `contents` (Gemini) array gets `invalid-request`; on OpenAI Responses, only a
-        body that is not a JSON object is rejected. A request whose next step has a tool call with
+        body that is not a JSON object is rejected. A request whose chosen step has a tool call with
         `rawArguments` its format can't carry gets `unsupported-step`. A step's scripted
         error is outside these schemas, even when its status is 400: see `ScriptedError`.
       content:
@@ -1214,10 +1214,10 @@ components:
         or `contents` array, an invalid `cache_control`, an embeddings rule, a Gemini
         `streamGenerateContent` request without `alt=sse` whatever its body, or a
         `POST /control/scenario` body with an unknown field, without exactly one of `name` and
-        `scenario`, or with a `name` that is not a non-blank string). `unsupported-step`: the next step has a
-        tool call with `rawArguments` that this request's format can't carry (a buffered
-        Anthropic request, or a Gemini request); that step is not used, and the next call gets
-        it. `unknown-scenario`: a load by name found no such scenario. `invalid-scenario`: a
+        `scenario`, or with a `name` that is not a non-blank string). `unsupported-step`: the step the call
+        chose (`step N`, or `step N.M` in a parallel step) has a tool call with `rawArguments` that
+        this request's format can't carry (a buffered Anthropic request, or a Gemini request);
+        that step stays unused. `unknown-scenario`: a load by name found no such scenario. `invalid-scenario`: a
         scenario failed to load (an illegal name, a scenario that doesn't decode or validate, or
         a file whose declared name differs). `exception`: any other failure.
       required: [fake_llm_error, message]
@@ -1328,7 +1328,8 @@ components:
     Scenario:
       type: object
       description: |
-        One named behaviour: an ordered list of steps. After a load or reset, call N gets step N.
+        One named behaviour: an ordered list of steps. After a load or reset, call N gets step N, in a
+        scenario with no `match` and no parallel step.
         A call after the last step gets `NoMoreStepsError`.
       required: [name, steps]
       additionalProperties: false
@@ -1522,7 +1523,8 @@ components:
             - type: "null"
           description: |
             Only a call that satisfies it takes this step. On a plain step, a call that doesn't
-            takes nothing and gets the `no-match` 400, and the step stays next.
+            takes nothing and gets the `no-match` 400, and the step stays next; in a parallel step,
+            the call looks at the section's other steps.
         parallel:
           oneOf:
             - $ref: "#/components/schemas/ParallelSection"
@@ -1779,8 +1781,10 @@ components:
           type: string
           pattern: '^\$(?:\.[A-Za-z_][A-Za-z0-9_-]*|\[''(?:[^''\\]|\\[''\\])*''\]|\[-?[0-9]{1,9}\])+$'
           description: |
-            `$` followed by one or more `.name`, `['name']` or `[n]` segments; a negative `n` counts
-            from the end, and `\'` and `\\` are the only escapes inside quotes.
+            `$` followed by one or more `.name`, `['name']` or `[n]` segments. A `.name` is a letter
+            or `_` followed by letters, digits, `_` or `-`; any other key needs `['…']`. `n` has at
+            most 9 digits, and a negative `n` counts from the end. `\'` and `\\` are the only
+            escapes inside quotes.
         equals:
           description: The value at `path`, compared as JSON (numbers by value). Any JSON value, `null` included.
     HeaderMatch:
@@ -1833,8 +1837,8 @@ components:
           type: [string, "null"]
           description: |
             The argument text, sent verbatim: invalid JSON is allowed. Only the OpenAI formats (Chat
-            Completions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose next step
-            has it gets the `unsupported-step` 400 (`RequestError`), and the step is not used.
+            Completions and Responses) and a streamed Anthropic reply carry it; a buffered Anthropic or a Gemini request whose chosen step
+            has it gets the `unsupported-step` 400 (`RequestError`), and the step stays unused.
         id:
           type: [string, "null"]
           minLength: 1

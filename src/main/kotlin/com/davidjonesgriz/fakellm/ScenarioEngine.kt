@@ -130,9 +130,9 @@ internal data class Resolution(
  * canned reply when [lenient] is true. Every call takes a number and one log entry, whatever it is
  * answered with.
  *
- * One lock covers the scenario, the call counter and the log: a call reads the scenario, takes its
- * number and appends its entry under it, and [load], [reset] and [unload] replace all three under
- * it. So the log is always in call order, and a call that overlaps a reset belongs entirely to the
+ * One lock covers the scenario, its position, the call counter and the log: a call reads the
+ * scenario, takes its step and number and appends its entry under it, and [load], [reset] and
+ * [unload] replace all four under it. So the log is always in call order, and a call that overlaps a reset belongs entirely to the
  * run before it or the run after it.
  *
  * Next to the call log the engine keeps an exchange log ([exchanges]): for each call received over
@@ -278,7 +278,7 @@ public class ScenarioEngine(
      * unset, so every streaming path sends its JSON and writes no SSE bytes.
      *
      * The call takes the first unused step at the scenario's position whose match it satisfies: the
-     * step at [pos], or the steps of the parallel step there, or of the whole overlap group there.
+     * plain step there, or the steps of the parallel step there, or of the whole overlap group there.
      * Taking the last of them moves the position past them.
      *
      * Throws [IllegalArgumentException] when the chosen step has a tool call with

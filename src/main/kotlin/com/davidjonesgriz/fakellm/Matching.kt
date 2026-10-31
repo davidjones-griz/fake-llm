@@ -1,10 +1,9 @@
-// Whether a step's `match` holds for a request, and how the no-match message describes it.
+// Whether a step's `match` holds for a request.
 package com.davidjonesgriz.fakellm
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 /** Whether every key this match sets holds for [req], a [vendor] request. */
 internal fun Match.holds(
@@ -71,15 +70,8 @@ private fun BodyMatch.valueIn(body: JsonObject): JsonElement? =
 
             is PathSegment.Index -> {
                 (value as? JsonArray)?.let { array ->
-                    array.getOrNull(
-                        if (segment.index <
-                            0
-                        ) {
-                            array.size + segment.index
-                        } else {
-                            segment.index
-                        },
-                    )
+                    val i = segment.index
+                    array.getOrNull(if (i < 0) array.size + i else i)
                 }
             }
         }
