@@ -110,9 +110,9 @@ private val Step.minUses: Int get() = times?.min ?: 1
 /** The most calls a step can take: [Times.max] (null is unbounded), or 1 without `times`. */
 private val Step.maxUses: Int? get() = if (times == null) 1 else times.max
 
-/** The responses in reach of a call ([window]), the open ones ([open]), and the one it takes, if any. */
+/** The responses in reach of a call ([reach]), the open ones ([open]), and the one it takes, if any. */
 internal data class Choice(
-    val window: List<Candidate>,
+    val reach: List<Candidate>,
     val open: List<Candidate>,
     val chosen: Candidate?,
 )
@@ -126,7 +126,7 @@ internal fun outcomeOf(
     when {
         choice.chosen != null -> stepOutcome(choice.chosen.step)
         s == null -> if (lenient) "default" else "no-scenario"
-        choice.window.isEmpty() -> "no-more-steps"
+        choice.reach.isEmpty() -> "no-more-steps"
         else -> "no-match"
     }
 

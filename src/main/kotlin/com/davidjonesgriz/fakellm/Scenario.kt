@@ -122,7 +122,8 @@ public data class Step(
     val stopSequence: String? = null,
     /**
      * Only a call that satisfies it takes this step. On a plain step, a call that doesn't takes
-     * nothing and the step stays next; in a parallel step, the call looks at the section's other steps.
+     * nothing and the step stays next, unless the step has [times] and its minimum, when the call can
+     * reach the step after it; in a parallel step, the call looks at the section's other steps.
      */
     val match: Match? = null,
     /** Makes this a parallel step: several responses, used in any order. A parallel step sets no other field. */
@@ -231,7 +232,7 @@ public data class TokenUsage(
 
 /**
  * How many calls a [Step] takes: at least [min] and at most [max]. Below [min], the step counts as
- * unused; at [max], the scenario moves past it. A null [max] is unbounded. See the scenario
+ * unused; at [max], it closes. A null [max] is unbounded. See the scenario
  * reference for when the scenario moves past a step between the two.
  *
  * @throws IllegalArgumentException when [min] is negative, [max] is below 1, or [max] is below

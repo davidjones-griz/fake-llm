@@ -15,7 +15,7 @@ internal fun unservedStep(
     val n = served.seq
     val loaded = served.scenario
     return when {
-        loaded != null && served.choice.window.isEmpty() -> errorStep(noMoreStepsBody(loaded, n, vendor, req))
+        loaded != null && served.choice.reach.isEmpty() -> errorStep(noMoreStepsBody(loaded, n, vendor, req))
         loaded != null -> errorStep(noMatchBody(n, vendor, req, served.choice.open))
         lenient -> Step(text = CANNED_ASSISTANT_TEXT)
         else -> errorStep(noScenarioBody(n, vendor, req))
@@ -85,9 +85,12 @@ private const val PROMPT_PREVIEW_CHARS = 200
 /** How many unused steps the no-match message names before "and N more". */
 private const val NO_MATCH_LISTED = 10
 
-/** Why a call after the last step gets nothing: the last step takes one call, or, with `times`, it is at its maximum. */
+/**
+ * Why a call after the last step gets nothing: the last step takes one call, or, when a step of the
+ * scenario has `times` (in an overlap group that ends the scenario it can be in an earlier section),
+ * it is at its maximum.
+ */
 private fun lastStepNote(s: Scenario): String {
-    val last = s.steps.last()
-    val repeatable = last.times != null || last.parallel?.steps?.any { it.times != null } == true
+    val repeatable = s.steps.any { step -> step.times != null || step.parallel?.steps?.any { it.times != null } == true }
     return if (repeatable) "The last step can't take more calls." else "The last step does not repeat."
 }

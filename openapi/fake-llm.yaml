@@ -50,7 +50,7 @@ info:
     `times.max` calls instead of one: the scenario moves past it at its maximum, or, once it has
     its minimum, when a call it can't take reaches the step after it. A call is numbered and logged before any wait its step sets
     (`firstByteDelayMs`), so a delayed call can finish after a later one. A call after the
-    last step gets `NoMoreStepsError`; the last step does not repeat. A request that gets
+    last step gets `NoMoreStepsError`; the last step does not repeat unless it has `times`. A request that gets
     `RequestError`, a 404 and the Batches 501 are not calls. That includes a request whose next
     step has a tool call with `rawArguments` that its format can't carry (a buffered Anthropic
     request, or a Gemini request). That step is not used, and stays available to the next call. A Gemini
@@ -1339,7 +1339,7 @@ components:
       type: object
       description: |
         One named behaviour: an ordered list of steps. After a load or reset, call N gets step N, in a
-        scenario with no `match` and no parallel step.
+        scenario with no `match`, no parallel step and no `times`.
         A call after the last step gets `NoMoreStepsError`.
       required: [name, steps]
       additionalProperties: false
@@ -1363,7 +1363,7 @@ components:
       type: object
       description: |
         One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking` and
-        `usage`), or a scripted `error`, optionally with a `match`; or a parallel step, an object
+        `usage`), or a scripted `error`, optionally with a `match` and `times`; or a parallel step, an object
         whose only key is `parallel`. A step sets exactly one of a reply, `error` and `parallel`.
       additionalProperties: false
       oneOf:
@@ -1533,8 +1533,9 @@ components:
             - type: "null"
           description: |
             Only a call that satisfies it takes this step. On a plain step, a call that doesn't
-            takes nothing and gets the `no-match` 400, and the step stays next; in a parallel step,
-            the call looks at the section's other steps.
+            gets the `no-match` 400 and the step stays next, unless the step has `times` and its
+            minimum, when the call can reach the step after it; in a parallel step, the call looks
+            at the section's other steps.
         parallel:
           oneOf:
             - $ref: "#/components/schemas/ParallelSection"
@@ -1553,8 +1554,9 @@ components:
       type: object
       description: |
         How many calls a step takes: at least `min` and at most `max`. Below `min` the step counts as
-        unused; at `max` the scenario moves past it. Between the two, a call the step can't take
-        moves on to the step after it. `max` must be at least `min`, which the server checks when
+        unused; at `max` it closes, and the scenario moves past it once the steps around it at the
+        scenario's position are closed too. Between the two, a call the step can't take moves on to
+        the step after it. `max` must be at least `min`, which the server checks when
         the scenario loads (JSON Schema can't compare two values).
       additionalProperties: false
       properties:
@@ -1591,7 +1593,7 @@ components:
                   properties:
                     parallel:
                       type: object
-          description: The responses, each a plain step with an optional `match`. A parallel step can't hold another.
+          description: The responses, each a plain step with an optional `match` and `times`. A parallel step can't hold another.
         overlap:
           type: boolean
           default: false

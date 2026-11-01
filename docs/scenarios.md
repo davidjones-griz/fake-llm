@@ -27,7 +27,7 @@ A scenario file is JSON. Unknown keys are rejected. `name` is required, `descrip
 }
 ```
 
-After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step; to say which call gets which step, see [Parallel calls](#parallel-calls). The last step does not repeat: a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with a [400 that is not a call](endpoints.md#fake-llms-error-responses) (`invalid-json`, `invalid-request` or `unsupported-step`), a 404, the Batches 501, the [embeddings routes](endpoints.md#embeddings), and [token counting and the model lists](endpoints.md#token-counting-and-model-lists) are not calls.
+After the scenario is loaded or reset, call N on any generation route gets step N. Calls are numbered in the order they arrive, so concurrent calls each get a different step; to say which call gets which step, see [Parallel calls](#parallel-calls). The last step does not repeat (unless it has [`times`](#steps-used-a-variable-number-of-times)): a call after it gets HTTP 400. Every request to a generation route (Anthropic Messages, OpenAI Chat Completions and Responses, Gemini `generateContent` and `streamGenerateContent`) that the route's parser accepts is a call and gets one entry in the call log. A request answered with a [400 that is not a call](endpoints.md#fake-llms-error-responses) (`invalid-json`, `invalid-request` or `unsupported-step`), a 404, the Batches 501, the [embeddings routes](endpoints.md#embeddings), and [token counting and the model lists](endpoints.md#token-counting-and-model-lists) are not calls.
 
 Each step is a reply (`text`, `toolCalls`, or both) or an `error`. When a step in a file or an inline scenario is invalid, the error names its number, from 1, and the path of the field at fault, such as `step 2: $.steps[1]: unknown field 'stopReasn'`. The path is relative to the scenario, including for an inline scenario in `POST /control/scenario`.
 
@@ -266,9 +266,9 @@ A parallel step inside a parallel step is rejected with `invalid-scenario`, name
 How a call is served:
 
 - A parallel step is one position in the scenario that holds several responses, used in any order.
-- A call that reaches it takes the first unused step whose `match` it satisfies, in listed order. A step with no `match` matches any call.
+- A call that reaches it takes the first open step whose `match` it satisfies, in listed order (a step is open until it has its calls: one, or its [`times`](#steps-used-a-variable-number-of-times) `max`). A step with no `match` matches any call.
 - A call uses up its response when it arrives, even if the client later times out or disconnects.
-- The scenario moves past the parallel step only once every step in it is used, or, for steps with [`times`](#steps-used-a-variable-number-of-times), at its `max`, or once each has its `min` calls and a call it can't take reaches the step after it.
+- The scenario moves past the parallel step once every step in it is closed. With [`times`](#steps-used-a-variable-number-of-times), it can also move on earlier: once each step has its `min` calls, a call the section can't take reaches the step after it.
 - A plain step with a `match` is served only to a call that satisfies it. A call that doesn't takes nothing, and the step stays next. In a parallel step, a call that doesn't satisfy one step's `match` looks at the others.
 - Within one `match`, every key must hold.
 
@@ -287,7 +287,7 @@ A call that matches none of the unused steps it could take gets HTTP 400 `no-mat
 }
 ```
 
-A call after the last step is still `no-more-steps` (for a last step with `times`, see [the end of the scenario](#steps-used-a-variable-number-of-times)), and lenient mode doesn't change `no-match`. A call that arrives earlier than the scenario expects, or a call that never comes, shows up as a `no-match` 400 or a wrong response, and the unused-steps check fails the test: a parallel step counts as unused until every step in it is used (`GET /health`'s `unusedSteps`, `engine.unusedSteps`, and the JUnit extension).
+A call after the last step is still `no-more-steps` (for a last step with `times`, see [the end of the scenario](#steps-used-a-variable-number-of-times)), and lenient mode doesn't change `no-match`. A call that arrives earlier than the scenario expects, or a call that never comes, shows up as a `no-match` 400 or a wrong response, and the unused-steps check fails the test: a parallel step counts as unused until every step in it is used, and a step with `times` until it has its `min` calls (`GET /health`'s `unusedSteps`, `engine.unusedSteps`, and the JUnit extension).
 
 The call log's `step` is the parallel step's number and `innerStep` the step within it, from 1; `innerStep` is left out for a plain step. The CLI prints it as `step=2.3`.
 
@@ -406,13 +406,13 @@ A fan-out of unknown width, then a merge call:
 }
 ```
 
-A retry that may or may not come: with `min` 0, the first call can already reach the next step.
+A call that may or may not come, such as a clarifying question the app asks only sometimes: with `min` 0, the first call can already reach the next step.
 
 ```json
 {
-  "name": "optional-retry",
+  "name": "optional-clarification",
   "steps": [
-    { "times": { "min": 0, "max": 2 }, "match": { "lastUser": { "contains": "retry" } }, "error": { "status": 503 } },
+    { "times": { "min": 0, "max": 1 }, "match": { "lastUser": { "contains": "Is anything unclear" } }, "text": "No, it's clear." },
     { "text": "Done." }
   ]
 }
@@ -477,7 +477,7 @@ Each step is a reply (`text`, `toolCalls`, or both) or an `error`, optionally wi
 | `firstByteDelayMs` | integer, 0 to 600000 | 0 | Milliseconds to wait before any response bytes, status and headers included. Default 0. From 0 to 600000 (10 minutes). Every generation route: buffered and streamed replies and error steps. The call is numbered and logged when it arrives, before the wait. Use it to test client timeouts and slow-first-token handling. See [Latency and timeouts](#latency-and-timeouts). |
 | `toolCalls` | array of [ToolCall](#toolcall-fields), at least one, or null | none | Tool calls the reply makes, in order, after any `text`. See [Tool calls](#tool-calls). |
 | `usage` | [TokenUsage](#tokenusage-fields) or null | none (100 input, 50 output) | Token counts the reply reports. Legal only on a reply step. Every format, buffered and streamed, reports them where it reports usage; totals are the sum. The Anthropic cache figures don't change. |
-| `match` | [Match](#match-fields) or null | none | Only a call that satisfies it takes this step. On a plain step, a call that doesn't takes nothing and gets the `no-match` 400, and the step stays next. See [Parallel calls](#parallel-calls). |
+| `match` | [Match](#match-fields) or null | none | Only a call that satisfies it takes this step. On a plain step, a call that doesn't takes nothing and gets the `no-match` 400, and the step stays next, unless it has `times` and its `min` calls, when the call can reach the step after it. See [Parallel calls](#parallel-calls). |
 | `parallel` | [ParallelSection](#parallelsection-fields) or null | none | Makes this a parallel step: one position holding several responses, used in any order. A parallel step has no other key. See [Parallel calls](#parallel-calls). |
 | `times` | [Times](#times-fields) or null | none (exactly once) | How many calls this step takes. Not on a parallel step; on its steps, yes. See [Steps used a variable number of times](#steps-used-a-variable-number-of-times). |
 
@@ -509,8 +509,8 @@ Each step is a reply (`text`, `toolCalls`, or both) or an `error`, optionally wi
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `min` | integer, 0 or more | `1` | The fewest calls the step must get. Below it, the step counts as unused. |
-| `max` | integer, 1 or more and at least `min`, or null | none (unbounded) | The most calls the step can take. At `max`, the scenario moves past the step. |
+| `min` | integer, 0 to 2147483647 | `1` | The fewest calls the step must get. Below it, the step counts as unused. |
+| `max` | integer, 1 to 2147483647 and at least `min`, or null | none (unbounded) | The most calls the step can take. At `max`, the step closes. |
 
 ### ParallelSection fields
 

@@ -146,6 +146,51 @@ class TimesEngineTest {
     }
 
     @Test
+    fun `a call can reach a later overlap group and take a step in its second section`() {
+        val e =
+            engine(
+                on("poll", Times(min = 1)),
+                section(on("a"), overlap = true),
+                section(on("b"), overlap = true),
+                on("end"),
+            )
+        e.call("poll")
+        assertEquals("B", e.call("b"))
+        assertEquals(listOf(2, 4), e.unusedSteps)
+        assertEquals("A", e.call("a"))
+        assertEquals("END", e.call("end"))
+        assertEquals(listOf(1, 3, 2, 4), e.calls().map { it.step })
+    }
+
+    @Test
+    fun `a step at its max in the middle of an overlap group closes, and the group stays for its other steps`() {
+        val e = engine(section(on("a", Times(max = 1)), overlap = true), section(on("b", Times(min = 1)), overlap = true), on("end"))
+        assertEquals("A", e.call("a"))
+        assertEquals("no-match", e.call("a"))
+        assertEquals(listOf("B", "B"), listOf(e.call("b"), e.call("b")))
+        assertEquals("END", e.call("end"))
+    }
+
+    @Test
+    fun `a plain inner step holds a section whose step with times has met its minimum`() {
+        val e = engine(section(on("rep", Times(min = 1)), on("once")), on("next"))
+        e.call("rep")
+        assertEquals("no-match", e.call("next"))
+        assertEquals(listOf(1, 2), e.unusedSteps)
+        assertEquals("ONCE", e.call("once"))
+        assertEquals("NEXT", e.call("next"))
+    }
+
+    @Test
+    fun `the no-more-steps message notices times in an overlap group that ends the scenario`() {
+        val e = engine(section(on("a", Times(max = 1)), overlap = true), section(on("b"), overlap = true))
+        e.call("a")
+        e.call("b")
+        val past = errorBody(e.resolve("anthropic", user("c")).step).getValue("message").jsonPrimitive.content
+        assertTrue(past.endsWith("The last step can't take more calls."), past)
+    }
+
+    @Test
     fun `a section is unused until every inner step has met its minimum`() {
         val e = engine(section(on("a", Times(min = 2)), on("b", Times(min = 0))))
         e.call("a")

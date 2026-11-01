@@ -22,7 +22,7 @@ change the public API.
   the test can't know. Once a step has its `min` calls, a call it can't take reaches the step after
   it; a step below its `min` is unused. In Kotlin, `Times` builds it. `CallRecord.useNumber`
   (`useNumber` in `GET /control/calls`, the pytest plugin's `use_number`) numbers each use of such a
-  step, and is left out for a step without `times`.
+  step, and is left out for a step without `times`; the CLI's call line adds ` use=<k>` for it.
 - The `no-match` 400, for a call that matches none of the steps it could take. It carries the
   call's fields, and its message lists those steps and their rules. The JUnit extension treats it
   as an unserved call.

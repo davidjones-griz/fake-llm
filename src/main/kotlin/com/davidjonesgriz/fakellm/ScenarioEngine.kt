@@ -42,8 +42,8 @@ public data class CallRecord internal constructor(
      */
     val promptSample: String,
     /**
-     * The 1-based step that served the call; for a scenario with no `match` and no parallel step,
-     * equal to [seq] whenever it is not null. A parallel step's number when one of its steps served
+     * The 1-based step that served the call; for a scenario with no `match`, no parallel step and no
+     * `times`, equal to [seq] whenever it is not null. A parallel step's number when one of its steps served
      * the call (see [innerStep]). Null when no step served it: [outcome] is `"default"`,
      * `"no-scenario"`, `"no-more-steps"` or `"no-match"`.
      */
@@ -237,8 +237,9 @@ public class ScenarioEngine(
     /**
      * The 1-based numbers of the loaded scenario's steps that are not used up since the last load,
      * reset or unload, in order: a snapshot, read under the same lock as [calls]. A parallel step is
-     * used up once every one of its steps is, so a partly used one is listed. In a scenario with no
-     * `match` and no parallel step these are always the last steps. Empty when no scenario is loaded
+     * used up once every one of its steps is, so a partly used one is listed, and a step with
+     * [Step.times] once it has its minimum. In a scenario with no `match`, no parallel step and no
+     * `times` these are always the last steps. Empty when no scenario is loaded
      * or every step has served a call. From Java, `getUnusedSteps()`.
      */
     public val unusedSteps: List<Int>
@@ -286,9 +287,10 @@ public class ScenarioEngine(
      * whichever transport renders it. The 400s are error steps with [Step.streamErrorAfterChunks]
      * unset, so every streaming path sends its JSON and writes no SSE bytes.
      *
-     * The call takes the first unused step at the scenario's position whose match it satisfies: the
-     * plain step there, or the steps of the parallel step there, or of the whole overlap group there.
-     * Taking the last of them moves the position past them.
+     * The call takes the first open step in reach whose match it satisfies: the plain step at the
+     * scenario's position, the steps of the parallel step or overlap group there, then, once their
+     * minimums are met, the steps after them (see [Position]). Closing every step at the position
+     * moves the position past them.
      *
      * Throws [IllegalArgumentException] when the chosen step has a tool call with
      * [ToolCall.rawArguments] that [vendor]'s reply can't carry (a buffered Anthropic or a Gemini

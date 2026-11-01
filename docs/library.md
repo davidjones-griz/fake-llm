@@ -41,7 +41,7 @@ try (FakeLlmServer server = FakeLlm.startFakeLlmServer(0, engine, null)) {
 }
 ```
 
-`engine.exchanges()` returns each call's full request and response; see [`GET /control/exchanges`](control-api.md#get-controlexchanges). `engine.unusedSteps` lists the steps not used up since the last load, reset or unload; a parallel step is listed until every step in it is used.
+`engine.exchanges()` returns each call's full request and response; see [`GET /control/exchanges`](control-api.md#get-controlexchanges). `engine.unusedSteps` lists the steps not used up since the last load, reset or unload; a parallel step is listed until every step in it is used, and a step with `times` until it has its `min` calls.
 
 A scenario for calls made in parallel can be built in code too: a step's `match` takes a `Match`, and a parallel step a `ParallelSection` (see [Parallel calls](scenarios.md#parallel-calls)). In Kotlin, `equals` is `equalTo`. A step's `times` takes a `Times(min, max)`, such as `Step(text = "Still running.", times = Times(min = 1))`:
 
