@@ -346,6 +346,17 @@
             }
           ],
           "description": "Makes this a parallel step: one position in the scenario holding several responses,\nused in any order. A parallel step has no other key.\n"
+        },
+        "times": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Times"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How many calls this step takes. Null, the default, is exactly once. Not on a parallel\nstep; on its steps, yes.\n"
         }
       }
     },
@@ -755,6 +766,29 @@
           "type": "boolean",
           "default": false,
           "description": "Joins this section with the consecutive sections after it that also set it, into one\ngroup whose unused steps a call searches together, first match in listed order. The group\nends at the first step that is not such a section.\n"
+        }
+      }
+    },
+    "Times": {
+      "type": "object",
+      "description": "How many calls a step takes: at least `min` and at most `max`. Below `min` the step counts as\nunused; at `max` the scenario moves past it. Between the two, a call the step can't take\nmoves on to the step after it. `max` must be at least `min`, which the server checks when\nthe scenario loads (JSON Schema can't compare two values).\n",
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647,
+          "default": 1,
+          "description": "The fewest calls the step must get."
+        },
+        "max": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "The most calls the step can take; null, the default, is unbounded."
         }
       }
     },

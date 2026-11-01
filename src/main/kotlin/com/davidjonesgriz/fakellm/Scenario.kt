@@ -127,6 +127,11 @@ public data class Step(
     val match: Match? = null,
     /** Makes this a parallel step: several responses, used in any order. A parallel step sets no other field. */
     val parallel: ParallelSection? = null,
+    /**
+     * How many calls this step takes: at least [Times.min] and at most [Times.max]. Null, the default,
+     * is exactly once. Not on a parallel step; on its steps, yes.
+     */
+    val times: Times? = null,
 ) {
     init {
         if (parallel != null) requireOnlyParallel() else requireReplyOrError()
@@ -134,7 +139,7 @@ public data class Step(
 
     private fun requireOnlyParallel() {
         val untouched =
-            match == null && text == null && toolCalls == null && error == null && thinking == null && usage == null &&
+            match == null && times == null && text == null && toolCalls == null && error == null && thinking == null && usage == null &&
                 stopSequence == null && stopReason == "end_turn" && streamChunkChars == DEFAULT_STREAM_CHUNK_CHARS &&
                 streamInterChunkDelayMs == 0L && firstByteDelayMs == 0L && streamErrorAfterChunks == null
         require(untouched) { "a parallel step sets nothing but parallel" }
@@ -222,6 +227,28 @@ public data class TokenUsage(
 
     /** Input plus output, as a Long so the sum of two large counts does not overflow. */
     internal val totalTokens: Long get() = inputTokens.toLong() + outputTokens
+}
+
+/**
+ * How many calls a [Step] takes: at least [min] and at most [max]. Below [min], the step counts as
+ * unused; at [max], the scenario moves past it. A null [max] is unbounded. See the scenario
+ * reference for when the scenario moves past a step between the two.
+ *
+ * @throws IllegalArgumentException when [min] is negative, [max] is below 1, or [max] is below
+ *   [min]. The message text is diagnostic, not part of the API.
+ */
+@Serializable
+public data class Times(
+    /** The fewest calls the step must get. */
+    val min: Int = 1,
+    /** The most calls the step can take; null is unbounded. */
+    val max: Int? = null,
+) {
+    init {
+        require(min >= 0) { "times.min must not be negative, got $min" }
+        require(max == null || max >= 1) { "times.max must be at least 1, got $max" }
+        require(max == null || max >= min) { "times.max must be at least times.min (got $max, min $min)" }
+    }
 }
 
 /** The counts a reply from this step reports: [Step.usage], or the defaults. */

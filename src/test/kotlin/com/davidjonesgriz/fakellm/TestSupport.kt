@@ -304,6 +304,20 @@ internal val invalidScenarios =
             """{"name":"x","steps":[{"match":{"tools":{"declares":null}},"text":"t"}]}""",
         "a header match whose only operator is null" to
             """{"name":"x","steps":[{"match":{"header":{"name":"x","contains":null}},"text":"t"}]}""",
+        "a negative times.min" to
+            """{"name":"x","steps":[{"times":{"min":-1},"text":"t"}]}""",
+        "a times.max of 0" to
+            """{"name":"x","steps":[{"times":{"max":0},"text":"t"}]}""",
+        "times.max as a string" to
+            """{"name":"x","steps":[{"times":{"max":"3"},"text":"t"}]}""",
+        "an unknown key in times" to
+            """{"name":"x","steps":[{"times":{"min":1,"count":2},"text":"t"}]}""",
+        "a null times.min" to
+            """{"name":"x","steps":[{"times":{"min":null},"text":"t"}]}""",
+        "times on a parallel step" to
+            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}]},"times":{"max":2}}]}""",
+        "times as a number" to
+            """{"name":"x","steps":[{"times":2,"text":"t"}]}""",
         "a header match with no operator" to
             """{"name":"x","steps":[{"match":{"header":{"name":"x-trace"}},"text":"t"}]}""",
     )
@@ -355,6 +369,11 @@ internal val validParallelScenarios =
             """{"name":"paths","steps":[{"match":{"body":{"path":"$['a\\\\b']","equals":1}},"text":"t"},
               {"match":{"body":{"path":"$[-0]","equals":1}},"text":"t"},{"match":{"body":{"path":"$['']","equals":1}},"text":"t"},
               {"match":{"body":{"path":"$.a-b[123456789]._x","equals":1}},"text":"t"}]}""",
+        "steps used a variable number of times" to
+            """{"name":"times","steps":[{"times":null,"text":"once"},{"times":{},"match":{"lastUser":{"contains":"poll"}},"text":"p"},
+              {"times":{"min":0},"match":{"lastUser":{"contains":"retry"}},"text":"r"},{"times":{"max":3,"min":1},"text":"t"},
+              {"times":{"min":2,"max":2},"error":{"status":503}},{"times":{"max":null,"min":0},"text":"u"},
+              {"parallel":{"steps":[{"times":{"min":1},"match":{"lastUser":{"contains":"doc-"}},"text":"s"},{"text":"x"}]}}]}""",
         "a lone overlap section and one with no matches" to
             """{"name":"lone","steps":[{"parallel":{"overlap":true,"steps":[{"text":"x"},{"text":"y"}]}},
               {"parallel":{"steps":[{"text":"z"}]}}]}""",

@@ -1532,6 +1532,33 @@ components:
           description: |
             Makes this a parallel step: one position in the scenario holding several responses,
             used in any order. A parallel step has no other key.
+        times:
+          oneOf:
+            - $ref: "#/components/schemas/Times"
+            - type: "null"
+          description: |
+            How many calls this step takes. Null, the default, is exactly once. Not on a parallel
+            step; on its steps, yes.
+    Times:
+      type: object
+      description: |
+        How many calls a step takes: at least `min` and at most `max`. Below `min` the step counts as
+        unused; at `max` the scenario moves past it. Between the two, a call the step can't take
+        moves on to the step after it. `max` must be at least `min`, which the server checks when
+        the scenario loads (JSON Schema can't compare two values).
+      additionalProperties: false
+      properties:
+        min:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          default: 1
+          description: The fewest calls the step must get.
+        max:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 2147483647
+          description: The most calls the step can take; null, the default, is unbounded.
     ParallelSection:
       type: object
       description: |

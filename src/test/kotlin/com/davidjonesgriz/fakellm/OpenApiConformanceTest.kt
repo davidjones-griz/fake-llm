@@ -524,6 +524,7 @@ class OpenApiConformanceTest {
                 "ErrorStep",
                 "TokenUsage",
                 "ParallelSection",
+                "Times",
                 "Match",
                 "TextMatch",
                 "MessageMatch",

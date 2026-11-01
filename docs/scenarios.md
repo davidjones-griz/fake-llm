@@ -363,6 +363,10 @@ This covers nested fan-out: each of two calls fans out into sub-calls, and a sub
 }
 ```
 
+### Steps used a variable number of times
+
+A step with `times` takes from `min` to `max` calls instead of exactly one.
+
 ### Match keys
 
 | Key | Matches |
@@ -416,6 +420,7 @@ Each step is a reply (`text`, `toolCalls`, or both) or an `error`, optionally wi
 | `usage` | [TokenUsage](#tokenusage-fields) or null | none (100 input, 50 output) | Token counts the reply reports. Legal only on a reply step. Every format, buffered and streamed, reports them where it reports usage; totals are the sum. The Anthropic cache figures don't change. |
 | `match` | [Match](#match-fields) or null | none | Only a call that satisfies it takes this step. On a plain step, a call that doesn't takes nothing and gets the `no-match` 400, and the step stays next. See [Parallel calls](#parallel-calls). |
 | `parallel` | [ParallelSection](#parallelsection-fields) or null | none | Makes this a parallel step: one position holding several responses, used in any order. A parallel step has no other key. See [Parallel calls](#parallel-calls). |
+| `times` | [Times](#times-fields) or null | none (exactly once) | How many calls this step takes. Not on a parallel step; on its steps, yes. See [Steps used a variable number of times](#steps-used-a-variable-number-of-times). |
 
 ### ErrorStep fields
 
@@ -440,6 +445,13 @@ Each step is a reply (`text`, `toolCalls`, or both) or an `error`, optionally wi
 | --- | --- | --- | --- |
 | `inputTokens` | integer, 0 to 2147483647 | 100 | The input token count the reply reports. |
 | `outputTokens` | integer, 0 to 2147483647 | 50 | The output token count the reply reports. |
+
+### Times fields
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `min` | integer, 0 or more | `1` | The fewest calls the step must get. Below it, the step counts as unused. |
+| `max` | integer, 1 or more and at least `min`, or null | none (unbounded) | The most calls the step can take. At `max`, the scenario moves past the step. |
 
 ### ParallelSection fields
 
