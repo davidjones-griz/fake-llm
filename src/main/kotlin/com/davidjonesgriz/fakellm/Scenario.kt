@@ -13,8 +13,8 @@ import java.nio.file.Path
 /**
  * One named behavior of the fake: an ordered list of [steps]. After [ScenarioEngine.load] or
  * [ScenarioEngine.reset], call N on any generation route gets step N, in arrival order, unless a
- * step has a [Step.match] or is a [Step.parallel] step. A call after the last step gets HTTP 400
- * (`no-more-steps`); the last step does not repeat.
+ * step has a [Step.match] or [Step.times], or is a [Step.parallel] step. A call after the last step
+ * gets HTTP 400 (`no-more-steps`); the last step does not repeat unless it has [Step.times].
  *
  * Scenario files are JSON in this shape. [ScenarioEngine.load] reads one by name from the engine's
  * [ScenarioEngine.scenarioDirectory], the project's classpath resource `/scenarios/<name>.json`, or
@@ -122,11 +122,17 @@ public data class Step(
     val stopSequence: String? = null,
     /**
      * Only a call that satisfies it takes this step. On a plain step, a call that doesn't takes
-     * nothing and the step stays next; in a parallel step, the call looks at the section's other steps.
+     * nothing and the step stays next, unless the step has [times] and its minimum, when the call can
+     * reach the step after it; in a parallel step, the call looks at the section's other steps.
      */
     val match: Match? = null,
     /** Makes this a parallel step: several responses, used in any order. A parallel step sets no other field. */
     val parallel: ParallelSection? = null,
+    /**
+     * How many calls this step takes: at least [Times.min] and at most [Times.max]. Null, the default,
+     * is exactly once. Not on a parallel step; on its steps, yes.
+     */
+    val times: Times? = null,
 ) {
     init {
         if (parallel != null) requireOnlyParallel() else requireReplyOrError()
@@ -134,7 +140,7 @@ public data class Step(
 
     private fun requireOnlyParallel() {
         val untouched =
-            match == null && text == null && toolCalls == null && error == null && thinking == null && usage == null &&
+            match == null && times == null && text == null && toolCalls == null && error == null && thinking == null && usage == null &&
                 stopSequence == null && stopReason == "end_turn" && streamChunkChars == DEFAULT_STREAM_CHUNK_CHARS &&
                 streamInterChunkDelayMs == 0L && firstByteDelayMs == 0L && streamErrorAfterChunks == null
         require(untouched) { "a parallel step sets nothing but parallel" }
@@ -222,6 +228,28 @@ public data class TokenUsage(
 
     /** Input plus output, as a Long so the sum of two large counts does not overflow. */
     internal val totalTokens: Long get() = inputTokens.toLong() + outputTokens
+}
+
+/**
+ * How many calls a [Step] takes: at least [min] and at most [max]. Below [min], the step counts as
+ * unused; at [max], it closes. A null [max] is unbounded. See the scenario
+ * reference for when the scenario moves past a step between the two.
+ *
+ * @throws IllegalArgumentException when [min] is negative, [max] is below 1, or [max] is below
+ *   [min]. The message text is diagnostic, not part of the API.
+ */
+@Serializable
+public data class Times(
+    /** The fewest calls the step must get. */
+    val min: Int = 1,
+    /** The most calls the step can take; null is unbounded. */
+    val max: Int? = null,
+) {
+    init {
+        require(min >= 0) { "times.min must not be negative, got $min" }
+        require(max == null || max >= 1) { "times.max must be at least 1, got $max" }
+        require(max == null || max >= min) { "times.max must be at least times.min (got $max, min $min)" }
+    }
 }
 
 /** The counts a reply from this step reports: [Step.usage], or the defaults. */

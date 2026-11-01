@@ -198,6 +198,7 @@ class ScenarioSchemaTest {
                 Scenario.serializer().descriptor,
                 Step.serializer().descriptor,
                 ParallelSection.serializer().descriptor,
+                Times.serializer().descriptor,
                 Match.serializer().descriptor,
                 TextMatch.serializer().descriptor,
                 MessageMatch.serializer().descriptor,

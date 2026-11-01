@@ -42,8 +42,8 @@ public data class CallRecord internal constructor(
      */
     val promptSample: String,
     /**
-     * The 1-based step that served the call; for a scenario with no `match` and no parallel step,
-     * equal to [seq] whenever it is not null. A parallel step's number when one of its steps served
+     * The 1-based step that served the call; for a scenario with no `match`, no parallel step and no
+     * `times`, equal to [seq] whenever it is not null. A parallel step's number when one of its steps served
      * the call (see [innerStep]). Null when no step served it: [outcome] is `"default"`,
      * `"no-scenario"`, `"no-more-steps"` or `"no-match"`.
      */
@@ -70,6 +70,14 @@ public data class CallRecord internal constructor(
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val innerStep: Int? = null,
+    /**
+     * Which call of a step with [Step.times] this was, from 1. Null for a step without `times` and
+     * when no step served the call. Left out of the JSON when null, so a scenario without `times`
+     * writes the same call log as before.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val useNumber: Int? = null,
 )
 
 /** One tool call a response carried, as [CallRecord.toolCalls] records it. */
@@ -125,7 +133,8 @@ internal data class Resolution(
  * `match` and no parallel step, call N gets step N. A step with a [Step.match] answers only a call
  * that satisfies it; a parallel step's steps answer calls in any order, each call taking the first
  * unused one it matches, and the scenario moves past it once all are used. A call that matches none
- * of the steps it could take gets HTTP 400 (`no-match`). A call after the last step gets HTTP 400
+ * of the steps it could take gets HTTP 400 (`no-match`). A step with [Step.times] takes from its
+ * minimum to its maximum number of calls (see [Position]). A call after the last step gets HTTP 400
  * (`no-more-steps`), in strict and lenient mode. With no scenario loaded, a call gets HTTP 400 (`no-scenario`), or the
  * canned reply when [lenient] is true. Every call takes a number and one log entry, whatever it is
  * answered with.
@@ -228,8 +237,9 @@ public class ScenarioEngine(
     /**
      * The 1-based numbers of the loaded scenario's steps that are not used up since the last load,
      * reset or unload, in order: a snapshot, read under the same lock as [calls]. A parallel step is
-     * used up once every one of its steps is, so a partly used one is listed. In a scenario with no
-     * `match` and no parallel step these are always the last steps. Empty when no scenario is loaded
+     * used up once every one of its steps is, so a partly used one is listed, and a step with
+     * [Step.times] once it has its minimum. In a scenario with no `match`, no parallel step and no
+     * `times` these are always the last steps. Empty when no scenario is loaded
      * or every step has served a call. From Java, `getUnusedSteps()`.
      */
     public val unusedSteps: List<Int>
@@ -277,9 +287,10 @@ public class ScenarioEngine(
      * whichever transport renders it. The 400s are error steps with [Step.streamErrorAfterChunks]
      * unset, so every streaming path sends its JSON and writes no SSE bytes.
      *
-     * The call takes the first unused step at the scenario's position whose match it satisfies: the
-     * plain step there, or the steps of the parallel step there, or of the whole overlap group there.
-     * Taking the last of them moves the position past them.
+     * The call takes the first open step in reach whose match it satisfies: the plain step at the
+     * scenario's position, the steps of the parallel step or overlap group there, then, once their
+     * minimums are met, the steps after them (see [Position]). Closing every step at the position
+     * moves the position past them.
      *
      * Throws [IllegalArgumentException] when the chosen step has a tool call with
      * [ToolCall.rawArguments] that [vendor]'s reply can't carry (a buffered Anthropic or a Gemini
@@ -307,8 +318,8 @@ public class ScenarioEngine(
                     )?.let { throw RequestException(ErrorCode.UNSUPPORTED_STEP, it) }
                 }
                 val n = ++callCount
-                choice.chosen?.let { position.take(it, choice.window) }
-                val record = callRecord(n, vendor, req, outcomeOf(choice, s, lenient), choice.chosen)
+                val taken = choice.chosen?.let { position.take(s!!, it) }
+                val record = callRecord(n, vendor, req, outcomeOf(choice, s, lenient), taken)
                 log.add(record)
                 logged = record
                 capture?.let { exchangeLog.add(n to it) }
@@ -360,14 +371,15 @@ private fun rawArgumentsProblem(
     }
 }
 
-/** The log entry for call [n], served by [chosen] (null when no step served it). */
+/** The log entry for call [n], served by [taken]'s step (null when no step served it). */
 private fun callRecord(
     n: Long,
     vendor: String,
     req: ParsedRequest,
     outcome: String,
-    chosen: Candidate?,
+    taken: Taken?,
 ): CallRecord {
+    val chosen = taken?.candidate
     val step = chosen?.step
     return CallRecord(
         seq = n,
@@ -384,6 +396,7 @@ private fun callRecord(
         firstByteDelayMs = step?.firstByteDelayMs ?: 0,
         streamInterChunkDelayMs = step?.let { appliedInterChunkDelayMs(it, req.stream) } ?: 0,
         innerStep = chosen?.inner?.plus(1),
+        useNumber = taken?.useNumber,
     )
 }
 

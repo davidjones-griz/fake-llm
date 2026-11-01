@@ -6,6 +6,7 @@ import com.davidjonesgriz.fakellm.ParallelSection
 import com.davidjonesgriz.fakellm.Scenario
 import com.davidjonesgriz.fakellm.ScenarioEngine
 import com.davidjonesgriz.fakellm.Step
+import com.davidjonesgriz.fakellm.Times
 import com.davidjonesgriz.fakellm.junit.FakeLlmAllowUnservedCalls
 import com.davidjonesgriz.fakellm.junit.FakeLlmAllowUnusedSteps
 import com.davidjonesgriz.fakellm.junit.FakeLlmScenario
@@ -160,5 +161,19 @@ class NoMatchFixture {
         load(engine)
         post(server, model = "x")
         post(server, model = "a")
+    }
+}
+
+/** A step with times min 2 that gets one call is still unused. */
+@Fixture
+@FakeLlmTest
+class BelowMinimumFixture {
+    @Test
+    fun once(
+        engine: ScenarioEngine,
+        server: FakeLlmServer,
+    ) {
+        engine.loadInline(Scenario(name = "twice", steps = listOf(Step(text = "again", times = Times(min = 2)))))
+        Sink.add("belowMinimum:status", post(server))
     }
 }

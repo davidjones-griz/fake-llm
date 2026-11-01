@@ -59,7 +59,19 @@ def test_a_call_served_by_a_parallel_step_reports_its_inner_step(fake_llm):
     assert reply["content"][0]["text"] == "any"
     [call] = fake_llm.client.calls()
     assert (call.step, call.inner_step) == (1, 2)
+    assert call.use_number is None
     assert fake_llm.client.health().unused_steps == [1]
+
+
+def test_a_step_with_times_numbers_each_use(fake_llm):
+    fake_llm.client.load_inline({"name": "poll", "steps": [{"times": {"min": 2}, "text": "again"}]})
+
+    post(f"{fake_llm.anthropic_base_url}/v1/messages", ANTHROPIC_REQUEST)
+    assert fake_llm.client.health().unused_steps == [1]
+    post(f"{fake_llm.anthropic_base_url}/v1/messages", ANTHROPIC_REQUEST)
+
+    assert [(c.step, c.use_number) for c in fake_llm.client.calls()] == [(1, 1), (1, 2)]
+    assert fake_llm.client.health().unused_steps == []
 
 
 def test_an_inline_scenario_logs_tool_calls_and_results(fake_llm):

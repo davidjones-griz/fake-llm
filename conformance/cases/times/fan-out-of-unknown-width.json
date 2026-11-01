@@ -1,0 +1,241 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "fan-out-of-unknown-width",
+  "description": "A parallel step whose one step has times min 1 answers however many fan-out calls arrive; the merge call matches none of them and reaches the next step.",
+  "scenario": {
+    "name": "fan-out-width",
+    "steps": [
+      {
+        "parallel": {
+          "steps": [
+            {
+              "times": {
+                "min": 1
+              },
+              "match": {
+                "lastUser": {
+                  "contains": "doc-"
+                }
+              },
+              "text": "Summary."
+            }
+          ]
+        }
+      },
+      {
+        "match": {
+          "system": {
+            "contains": "Merge"
+          }
+        },
+        "text": "Merged."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "doc-1"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "Summary."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "user",
+              "content": "doc-2"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-openai-2",
+          "object": "chat.completion",
+          "model": "example-gpt",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Summary."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "doc-3"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-3",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "Summary."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/openai/v1/chat/completions",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-gpt",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Merge them."
+            },
+            {
+              "role": "user",
+              "content": "all"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-openai-4",
+          "object": "chat.completion",
+          "model": "example-gpt",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Merged."
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "fan-out-width",
+          "lenient": false,
+          "steps": 2,
+          "unusedSteps": [],
+          "version": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

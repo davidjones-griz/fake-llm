@@ -28,7 +28,7 @@ Every error fake-llm sends itself, whatever its status, has the same structure: 
 
 | Code | Status | When | A call? |
 | --- | --- | --- | --- |
-| `no-more-steps` | 400 | A call after the loaded scenario's last step, in strict and lenient mode. The body also has `scenario`, `steps`, `seq`, `vendor`, `model`, `system_shape`, `message_count` and `prompt_preview`. | Yes |
+| `no-more-steps` | 400 | A call after the loaded scenario's last step, in strict and lenient mode. A call that a last step with [`times`](scenarios.md#steps-used-a-variable-number-of-times) doesn't take before its `max` is `no-match` instead. The body also has `scenario`, `steps`, `seq`, `vendor`, `model`, `system_shape`, `message_count` and `prompt_preview`. | Yes |
 | `no-scenario` | 400 | A call with no scenario loaded, in strict mode (lenient mode serves the canned reply). The body has the same call fields as `no-more-steps`, without `scenario` and `steps`. | Yes |
 | `no-match` | 400 | A call that matched none of the unused steps it could have taken (see [Parallel calls](scenarios.md#parallel-calls)), in strict and lenient mode. It uses nothing. The body has the same call fields as `no-scenario`, and the message lists the steps with their rules. | Yes |
 | `invalid-json` | 400 | The request body is not JSON, or not a JSON object, on any route that reads a body. | No |

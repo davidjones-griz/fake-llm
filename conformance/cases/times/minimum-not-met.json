@@ -1,0 +1,228 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "minimum-not-met",
+  "description": "Below its min a step holds the scenario: a call for the next step gets no-match, and GET /health lists the step as unused.",
+  "scenario": {
+    "name": "minimum-not-met",
+    "steps": [
+      {
+        "match": {
+          "lastUser": {
+            "equals": "a"
+          }
+        },
+        "text": "A.",
+        "times": {
+          "min": 2
+        }
+      },
+      {
+        "match": {
+          "lastUser": {
+            "equals": "b"
+          }
+        },
+        "text": "B."
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "A."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "b"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no-match",
+          "message": {
+            "$type": "string"
+          },
+          "seq": 2,
+          "vendor": "anthropic",
+          "model": "example-model",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "b\n"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "minimum-not-met",
+          "lenient": false,
+          "steps": 2,
+          "unusedSteps": [
+            1,
+            2
+          ],
+          "version": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-3",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "A."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "b"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-4",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "B."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}

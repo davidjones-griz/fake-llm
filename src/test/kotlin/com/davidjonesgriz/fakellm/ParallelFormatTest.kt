@@ -133,7 +133,48 @@ class ParallelFormatTest {
     }
 
     @Test
+    fun `times rules are checked when the scenario loads, naming the field`() {
+        fun timesMessage(times: String) = messageFor("""{"name":"x","steps":[{"text":"a"},{"times":$times,"text":"t"}]}""")
+        assertEquals("step 2: times.min must not be negative, got -1", timesMessage("""{"min":-1}"""))
+        assertEquals("step 2: times.max must be at least 1, got 0", timesMessage("""{"max":0}"""))
+        assertEquals(
+            "step 1.1: times.min must not be negative, got -2",
+            messageFor("""{"name":"x","steps":[{"parallel":{"steps":[{"times":{"min":-2},"text":"a"}]}}]}"""),
+        )
+        assertEquals("step 2: \$.steps[1].times.min: must not be null", timesMessage("""{"min":null}"""))
+    }
+
+    /**
+     * JSON Schema 2020-12 can't compare two values in a document, so `max >= min` is the decoder's
+     * alone, next to the regex rule: `fake-llm validate` and the decoder reject it, so nothing they
+     * accept fails when it runs.
+     */
+    @Test
+    fun `a times max below its min is rejected by the decoder`() {
+        assertEquals(
+            "step 1: times.max must be at least times.min (got 2, min 3)",
+            messageFor("""{"name":"x","steps":[{"times":{"min":3,"max":2},"text":"t"}]}"""),
+        )
+    }
+
+    @Test
+    fun `times reads into the model, with min 1 and an unbounded max by default`() {
+        val steps = decode(validParallelScenarios.toMap().getValue("steps used a variable number of times")).steps
+        assertNull(steps[0].times)
+        assertEquals(Times(), steps[1].times)
+        assertEquals(Times(min = 1, max = null), steps[1].times)
+        assertEquals(Times(min = 0), steps[2].times)
+        assertEquals(Times(min = 1, max = 3), steps[3].times)
+        assertEquals(Times(min = 0, max = null), steps[5].times)
+        assertEquals(Times(min = 1), steps[6].parallel!!.steps[0].times)
+    }
+
+    @Test
     fun `the Kotlin model enforces the same rules`() {
+        assertFailsWith<IllegalArgumentException> { Step(times = Times(max = 2), parallel = ParallelSection(listOf(Step(text = "b")))) }
+        assertFailsWith<IllegalArgumentException> { Times(min = 3, max = 2) }
+        assertFailsWith<IllegalArgumentException> { Times(min = -1) }
+        assertFailsWith<IllegalArgumentException> { Times(max = 0) }
         assertFailsWith<IllegalArgumentException> {
             ParallelSection(
                 steps = listOf(Step(parallel = ParallelSection(listOf(Step(text = "a"))))),

@@ -1,5 +1,6 @@
 // Where a loaded scenario has got to, and which of its steps a call can take: the step at the
-// position, or the steps of the parallel step or overlap group there.
+// position, the steps of the parallel step or overlap group there, and the windows after it that
+// the call can reach once their minimums allow.
 package com.davidjonesgriz.fakellm
 
 /**
@@ -16,65 +17,102 @@ internal data class Candidate(
 }
 
 /**
- * Where a scenario has got to: [pos], the index of the next step it has not moved past, and [used],
- * the (step, inner step) pairs used among the steps at [pos] while they are not all used.
+ * Where a scenario has got to: [pos], the index of the next step it has not moved past, and
+ * [counts], how many calls each step at or after [pos] has taken, keyed by (step, inner step).
+ *
+ * A step takes from its minimum to its maximum number of calls (exactly one without [Step.times]).
+ * A call can take an open step (below its maximum) in the window at [pos]: the plain step there, the
+ * steps of the parallel step there, or of the whole overlap group there. Once every step in that
+ * window has met its minimum, a call can also reach the window after it, and so on through windows
+ * whose steps all have a minimum of 0. The window at [pos] is tried first.
  */
 internal class Position {
     private var pos = 0
-    private val used = mutableSetOf<Pair<Int, Int>>()
+    private val counts = mutableMapOf<Pair<Int, Int?>, Int>()
 
-    /** The responses at [pos] in [s], the unused ones, and the first unused one whose match holds for the call. */
+    /** The responses in reach in [s], the open ones, and the first open one whose match holds for the call. */
     fun choose(
         s: Scenario?,
         vendor: String,
         req: ParsedRequest,
     ): Choice {
-        val window = s?.takeIf { pos < it.steps.size }?.let { window(it) }.orEmpty()
-        val open = window.filter { it.isOpen() }
-        return Choice(window, open, open.firstOrNull { it.step.match?.holds(vendor, req) ?: true })
+        val reach = s?.takeIf { pos < it.steps.size }?.let { reach(it) }.orEmpty()
+        val open = reach.filter { it.isOpen() }
+        return Choice(reach, open, open.firstOrNull { it.step.match?.holds(vendor, req) ?: true })
     }
 
-    /**
-     * The responses at [pos] in [s]: the plain step there, the steps of the parallel step there, or,
-     * when it sets `overlap`, the steps of every consecutive parallel step from there that sets it.
-     */
-    private fun window(s: Scenario): List<Candidate> = (pos until windowEnd(s)).flatMap { top -> candidatesOf(s.steps[top], top) }
+    /** The windows from [pos] on: each one while every step in the one before it has met its minimum. */
+    private fun reach(s: Scenario): List<Candidate> {
+        val reach = mutableListOf<Candidate>()
+        var start = pos
+        while (start < s.steps.size) {
+            val end = windowEnd(s, start)
+            val window = (start until end).flatMap { top -> candidatesOf(s.steps[top], top) }
+            reach += window
+            if (!window.all { it.isMet() }) break
+            start = end
+        }
+        return reach
+    }
 
-    /** The index just past the steps at [pos]: one step, unless they are an overlap group. */
-    private fun windowEnd(s: Scenario): Int {
-        var end = pos + 1
-        if (s.steps[pos].parallel?.overlap == true) {
+    /** The index just past the window at [start]: one step, unless it starts an overlap group. */
+    private fun windowEnd(
+        s: Scenario,
+        start: Int,
+    ): Int {
+        var end = start + 1
+        if (s.steps[start].parallel?.overlap == true) {
             while (end < s.steps.size && s.steps[end].parallel?.overlap == true) end++
         }
         return end
     }
 
-    private fun Candidate.isOpen(): Boolean = inner == null || (top to inner) !in used
+    private fun Candidate.count(): Int = counts[top to inner] ?: 0
 
-    /** Marks [chosen] used, and moves past the steps at [pos] once every one in [window] is. */
+    private fun Candidate.isOpen(): Boolean = step.maxUses?.let { count() < it } ?: true
+
+    private fun Candidate.isMet(): Boolean = count() >= step.minUses
+
+    /**
+     * Gives [chosen] one more call: moves past the windows before its own (their minimums are met),
+     * counts the call, and moves past its window once every step in it is at its maximum.
+     */
     fun take(
+        s: Scenario,
         chosen: Candidate,
-        window: List<Candidate>,
-    ) {
-        chosen.inner?.let { used += chosen.top to it }
-        if (chosen.inner == null || window.none { it.isOpen() }) {
-            pos = window.last().top + 1
-            used.clear()
+    ): Taken {
+        while (windowEnd(s, pos) <= chosen.top) pos = windowEnd(s, pos)
+        counts.keys.removeAll { it.first < pos }
+        val uses = chosen.count() + 1
+        counts[chosen.top to chosen.inner] = uses
+        val end = windowEnd(s, pos)
+        if ((pos until end).flatMap { top -> candidatesOf(s.steps[top], top) }.none { it.isOpen() }) {
+            pos = end
+            counts.clear()
         }
+        return Taken(chosen, uses.takeIf { chosen.step.times != null })
     }
 
-    /** The 1-based numbers of [s]'s steps not used up: the steps at [pos] with an unused part, and every step after them. */
-    fun unused(s: Scenario): List<Int> {
-        if (pos >= s.steps.size) return emptyList()
-        val end = windowEnd(s)
-        val open = (pos until end).filter { top -> candidatesOf(s.steps[top], top).any { it.isOpen() } }
-        return (open + (end until s.steps.size)).map { it + 1 }
-    }
+    /** The 1-based numbers of [s]'s steps from [pos] on that have a step below its minimum. */
+    fun unused(s: Scenario): List<Int> =
+        (pos until s.steps.size).filter { top -> candidatesOf(s.steps[top], top).any { !it.isMet() } }.map { it + 1 }
 }
 
-/** The responses a call could take ([window]), the unused ones ([open]), and the one it takes, if any. */
+/** A call's step ([candidate]) and, for a step with [Step.times], which of its uses this was. */
+internal data class Taken(
+    val candidate: Candidate,
+    val useNumber: Int?,
+)
+
+/** The fewest calls a step must get: [Times.min], or 1 without `times`. */
+private val Step.minUses: Int get() = times?.min ?: 1
+
+/** The most calls a step can take: [Times.max] (null is unbounded), or 1 without `times`. */
+private val Step.maxUses: Int? get() = if (times == null) 1 else times.max
+
+/** The responses in reach of a call ([reach]), the open ones ([open]), and the one it takes, if any. */
 internal data class Choice(
-    val window: List<Candidate>,
+    val reach: List<Candidate>,
     val open: List<Candidate>,
     val chosen: Candidate?,
 )
@@ -88,7 +126,7 @@ internal fun outcomeOf(
     when {
         choice.chosen != null -> stepOutcome(choice.chosen.step)
         s == null -> if (lenient) "default" else "no-scenario"
-        choice.window.isEmpty() -> "no-more-steps"
+        choice.reach.isEmpty() -> "no-more-steps"
         else -> "no-match"
     }
 

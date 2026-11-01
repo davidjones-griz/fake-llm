@@ -11,8 +11,10 @@ import java.util.regex.PatternSyntaxException
 
 /**
  * The responses of a parallel step: one position in the scenario whose [steps] calls use in any
- * order. A call takes the first unused step whose [Step.match] it satisfies, in listed order, and
- * the scenario moves past the section once every step in it is used. Consecutive sections with
+ * order. A call takes the first open step whose [Step.match] it satisfies, in listed order. The
+ * scenario moves past the section once every step in it is at its maximum (one call, or
+ * [Times.max]), or, once every step has its minimum, when a call it can't take reaches the step
+ * after it. Consecutive sections with
  * [overlap] form one group, searched together: see the scenario reference.
  *
  * @throws IllegalArgumentException when [steps] is empty or one of them is itself a parallel step.

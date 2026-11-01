@@ -1,0 +1,152 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "max-reached",
+  "description": "A step at its max is passed: a third call after the last step gets no-more-steps.",
+  "scenario": {
+    "name": "max-reached",
+    "steps": [
+      {
+        "match": {
+          "lastUser": {
+            "equals": "a"
+          }
+        },
+        "text": "A.",
+        "times": {
+          "max": 2
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "A."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-2",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "A."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no-more-steps",
+          "message": {
+            "$type": "string"
+          },
+          "scenario": "max-reached",
+          "steps": 1,
+          "seq": 3,
+          "vendor": "anthropic",
+          "model": "example-model",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "a\n"
+        }
+      }
+    }
+  ]
+}

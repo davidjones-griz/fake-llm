@@ -3,6 +3,7 @@ package com.davidjonesgriz.fakellm.junit
 import com.davidjonesgriz.fakellm.junit.fixtures.AbortedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.AllStepsUsedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.AlreadyFailingFixture
+import com.davidjonesgriz.fakellm.junit.fixtures.BelowMinimumFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ComposedFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ComposedOptOutFixture
 import com.davidjonesgriz.fakellm.junit.fixtures.ConcurrentMethodsFixture
@@ -349,7 +350,10 @@ class FakeLlmExtensionTest {
         assertEquals(listOf(500), Sink.get("missing:status"))
         val failure = results.failures().getValue("missing(FakeLlmServer)")
         assertIs<AssertionError>(failure)
-        assertContains(failure.message.orEmpty(), "1 step(s) of fake-llm scenario 'fail-then-retry' got no call: step 2.")
+        assertContains(
+            failure.message.orEmpty(),
+            "1 step(s) of fake-llm scenario 'fail-then-retry' got fewer calls than they need: step 2.",
+        )
         assertContains(failure.message.orEmpty(), "@FakeLlmAllowUnusedSteps")
     }
 
@@ -375,14 +379,21 @@ class FakeLlmExtensionTest {
     @Test
     fun `a scenario loaded during the test is the one checked`() {
         val failure = run(InlineUnusedStepsFixture::class.java).failures().values.single()
-        assertContains(failure.message.orEmpty(), "2 step(s) of fake-llm scenario 'three-steps' got no call: steps 2-3.")
+        assertContains(failure.message.orEmpty(), "2 step(s) of fake-llm scenario 'three-steps' got fewer calls than they need: steps 2-3.")
+    }
+
+    @Test
+    fun `a step with times that got fewer calls than its minimum fails the test`() {
+        val failure = run(BelowMinimumFixture::class.java).failures().values.single()
+        assertEquals(listOf(200), Sink.get("belowMinimum:status"))
+        assertContains(failure.message.orEmpty(), "1 step(s) of fake-llm scenario 'twice' got fewer calls than they need: step 1.")
     }
 
     @Test
     fun `unused steps that are not a tail are listed one by one`() {
         val failure = run(NonContiguousUnusedStepsFixture::class.java).failures().values.single()
         assertEquals(listOf(200), Sink.get("partly:status"))
-        assertContains(failure.message.orEmpty(), "2 step(s) of fake-llm scenario 'groups' got no call: steps 1, 3.")
+        assertContains(failure.message.orEmpty(), "2 step(s) of fake-llm scenario 'groups' got fewer calls than they need: steps 1, 3.")
     }
 
     @Test
@@ -404,7 +415,7 @@ class FakeLlmExtensionTest {
     fun `each opt-out turns off its own check only`() {
         val failures = run(OptOutsAreIndependentFixture::class.java).failures()
         assertEquals(setOf("unservedAllowed(FakeLlmServer)", "unusedAllowed(FakeLlmServer)"), failures.keys)
-        assertContains(failures.getValue("unservedAllowed(FakeLlmServer)").message.orEmpty(), "got no call: step 2.")
+        assertContains(failures.getValue("unservedAllowed(FakeLlmServer)").message.orEmpty(), "got fewer calls than they need: step 2.")
         assertContains(failures.getValue("unusedAllowed(FakeLlmServer)").message.orEmpty(), "got no step")
     }
 

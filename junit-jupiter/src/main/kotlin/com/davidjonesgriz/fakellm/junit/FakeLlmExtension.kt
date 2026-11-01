@@ -191,8 +191,8 @@ private fun unusedMessage(
     steps: List<Int>,
 ): String {
     val which = (if (steps.size == 1) "step " else "steps ") + ranges(steps)
-    return "${steps.size} step(s) of fake-llm scenario '$scenario' got no call: $which. " +
-        "The app made fewer calls than the scenario scripts. Remove the steps the test does not need, " +
+    return "${steps.size} step(s) of fake-llm scenario '$scenario' got fewer calls than they need: $which. " +
+        "Remove the steps the test does not need or lower their times.min, " +
         "or annotate a test that leaves steps unused on purpose with @FakeLlmAllowUnusedSteps."
 }
 
