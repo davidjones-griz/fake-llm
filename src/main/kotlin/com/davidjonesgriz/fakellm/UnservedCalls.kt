@@ -57,7 +57,7 @@ private fun noMoreStepsBody(
     errorBody(
         ErrorCode.NO_MORE_STEPS,
         "no more steps: call $n came after the last step of scenario '${s.name}', which has ${s.steps.size} " +
-            (if (s.steps.size == 1) "step" else "steps") + ". The last step does not repeat.",
+            (if (s.steps.size == 1) "step" else "steps") + ". " + lastStepNote(s),
     ) {
         put("scenario", s.name)
         put("steps", s.steps.size)
@@ -84,3 +84,10 @@ private const val PROMPT_PREVIEW_CHARS = 200
 
 /** How many unused steps the no-match message names before "and N more". */
 private const val NO_MATCH_LISTED = 10
+
+/** Why a call after the last step gets nothing: the last step takes one call, or, with `times`, it is at its maximum. */
+private fun lastStepNote(s: Scenario): String {
+    val last = s.steps.last()
+    val repeatable = last.times != null || last.parallel?.steps?.any { it.times != null } == true
+    return if (repeatable) "The last step can't take more calls." else "The last step does not repeat."
+}

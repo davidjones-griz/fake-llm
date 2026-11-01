@@ -35,6 +35,7 @@ public final class com/davidjonesgriz/fakellm/CallRecord {
 	public final fun component12 ()J
 	public final fun component13 ()J
 	public final fun component14 ()Ljava/lang/Integer;
+	public final fun component15 ()Ljava/lang/Integer;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Ljava/lang/String;
@@ -57,6 +58,7 @@ public final class com/davidjonesgriz/fakellm/CallRecord {
 	public final fun getTimestampMs ()J
 	public final fun getToolCalls ()Ljava/util/List;
 	public final fun getToolResults ()Ljava/util/List;
+	public final fun getUseNumber ()Ljava/lang/Integer;
 	public final fun getVendor ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;

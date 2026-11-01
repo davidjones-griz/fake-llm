@@ -214,6 +214,40 @@ class FakeLlmServerTest {
         }
     }
 
+    @Test
+    fun `a fan-out of unknown width takes one repeatable inner step, then the merge call reaches the next step`() {
+        val routes = listOf("anthropic", "openai", RESPONSES_VENDOR, "gemini")
+        val fanOut = Step(text = "summary", match = Match(lastUser = TextMatch(contains = "doc-")), times = Times(min = 1))
+        val merge = Step(text = "merged", match = Match(lastUser = TextMatch(equalTo = "merge")))
+        val engine = ScenarioEngine()
+        val random = java.util.Random(139)
+        withServer(engine) { client, _ ->
+            repeat(20) { round ->
+                val width = 3 + random.nextInt(10)
+                engine.loadInline(Scenario(name = "fan-out", steps = listOf(Step(parallel = ParallelSection(listOf(fanOut))), merge)))
+                val pool = Executors.newFixedThreadPool(width)
+                val start = CountDownLatch(1)
+                val replies =
+                    try {
+                        (1..width)
+                            .map { i ->
+                                pool.submit<String> {
+                                    start.await()
+                                    replyText(client, routes[i % 4], "doc-$i")
+                                }
+                            }.also { start.countDown() }
+                            .map { it.get(15, TimeUnit.SECONDS) }
+                    } finally {
+                        pool.shutdownNow()
+                    }
+                assertEquals(List(width) { "summary" }, replies, "round $round")
+                assertEquals((1..width).toSet(), engine.calls().map { it.useNumber }.toSet(), "round $round")
+                assertEquals("merged", anthropicText(client.post("/anthropic/v1/messages", anthropicBody("merge")).body()))
+                assertEquals(emptyList(), engine.unusedSteps, "round $round")
+            }
+        }
+    }
+
     /** The reply text a [route] call with the user prompt [prompt] gets. */
     private fun replyText(
         client: TestClient,

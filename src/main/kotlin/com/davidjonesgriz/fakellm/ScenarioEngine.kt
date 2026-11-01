@@ -70,6 +70,14 @@ public data class CallRecord internal constructor(
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val innerStep: Int? = null,
+    /**
+     * Which call of a step with [Step.times] this was, from 1. Null for a step without `times` and
+     * when no step served the call. Left out of the JSON when null, so a scenario without `times`
+     * writes the same call log as before.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val useNumber: Int? = null,
 )
 
 /** One tool call a response carried, as [CallRecord.toolCalls] records it. */
@@ -307,8 +315,8 @@ public class ScenarioEngine(
                     )?.let { throw RequestException(ErrorCode.UNSUPPORTED_STEP, it) }
                 }
                 val n = ++callCount
-                choice.chosen?.let { position.take(it, choice.window) }
-                val record = callRecord(n, vendor, req, outcomeOf(choice, s, lenient), choice.chosen)
+                val taken = choice.chosen?.let { position.take(s!!, it) }
+                val record = callRecord(n, vendor, req, outcomeOf(choice, s, lenient), taken)
                 log.add(record)
                 logged = record
                 capture?.let { exchangeLog.add(n to it) }
@@ -360,14 +368,15 @@ private fun rawArgumentsProblem(
     }
 }
 
-/** The log entry for call [n], served by [chosen] (null when no step served it). */
+/** The log entry for call [n], served by [taken]'s step (null when no step served it). */
 private fun callRecord(
     n: Long,
     vendor: String,
     req: ParsedRequest,
     outcome: String,
-    chosen: Candidate?,
+    taken: Taken?,
 ): CallRecord {
+    val chosen = taken?.candidate
     val step = chosen?.step
     return CallRecord(
         seq = n,
@@ -384,6 +393,7 @@ private fun callRecord(
         firstByteDelayMs = step?.firstByteDelayMs ?: 0,
         streamInterChunkDelayMs = step?.let { appliedInterChunkDelayMs(it, req.stream) } ?: 0,
         innerStep = chosen?.inner?.plus(1),
+        useNumber = taken?.useNumber,
     )
 }
 

@@ -732,7 +732,7 @@
     },
     "ParallelSection": {
       "type": "object",
-      "description": "The responses of a parallel step. A call takes the first unused step whose `match` it\nsatisfies, in listed order; a step with no `match` matches any call. The scenario moves past\nthe section once every step in it is used.\n",
+      "description": "The responses of a parallel step. A call takes the first open step whose `match` it\nsatisfies, in listed order; a step with no `match` matches any call. A step is open until it\nhas its calls: one, or `times.max`. The scenario moves past the section once every step in it\nis at its maximum, or, once every step has its `times.min` calls, when a call it can't take\nreaches the step after it.\n",
       "additionalProperties": false,
       "required": [
         "steps"

@@ -46,7 +46,9 @@ info:
     parallel step holds several steps that calls take in any order, each call the first unused one
     it matches, and the scenario moves past it once all are used; consecutive parallel steps with
     `overlap` form one group, searched together. A call that matches none of the steps it could
-    take gets `NoMatchError` and uses nothing. A call is numbered and logged before any wait its step sets
+    take gets `NoMatchError` and uses nothing. A step with `times` takes from `times.min` to
+    `times.max` calls instead of one: the scenario moves past it at its maximum, or, once it has
+    its minimum, when a call it can't take reaches the step after it. A call is numbered and logged before any wait its step sets
     (`firstByteDelayMs`), so a delayed call can finish after a later one. A call after the
     last step gets `NoMoreStepsError`; the last step does not repeat. A request that gets
     `RequestError`, a 404 and the Batches 501 are not calls. That includes a request whose next
@@ -882,8 +884,9 @@ components:
           description: |
             The 1-based numbers of the loaded scenario's steps that are not used up since the last
             load, reset or unload, in order. A parallel step is used up once every one of its steps
-            is, so a partly used one is listed. In a scenario with no `match` and no parallel step
-            these are always the last steps. Empty when none is loaded or every step has served a
+            is, so a partly used one is listed, and a step with `times` until it has its `min` calls.
+            In a scenario with no `match`, no parallel step and no `times` these are always the last
+            steps. Empty when none is loaded or every step has served a
             call. A test can assert it is empty to check the app made every
             scripted call.
         version:
@@ -972,8 +975,8 @@ components:
           minimum: 1
           maximum: 2147483647
           description: |
-            The 1-based step that served the call; in a scenario with no `match` and no parallel
-            step, equal to `seq` whenever it is not null. For a parallel step's step, the parallel
+            The 1-based step that served the call; in a scenario with no `match`, no parallel step
+            and no `times`, equal to `seq` whenever it is not null. For a parallel step's step, the parallel
             step's number, with `innerStep`. Null when no step served it (`outcome` is `default`,
             `no-scenario`, `no-more-steps` or `no-match`).
         innerStep:
@@ -983,6 +986,13 @@ components:
           description: |
             The 1-based step within the parallel `step` that served the call. Present only then:
             absent for a plain step and for a call no step served.
+        useNumber:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: |
+            Which call of a step with `times` this was, from 1. Present only then: absent for a step
+            without `times` and for a call no step served.
         vendor:
           type: string
           enum: [anthropic, openai, openai-responses, gemini]
@@ -1562,9 +1572,11 @@ components:
     ParallelSection:
       type: object
       description: |
-        The responses of a parallel step. A call takes the first unused step whose `match` it
-        satisfies, in listed order; a step with no `match` matches any call. The scenario moves past
-        the section once every step in it is used.
+        The responses of a parallel step. A call takes the first open step whose `match` it
+        satisfies, in listed order; a step with no `match` matches any call. A step is open until it
+        has its calls: one, or `times.max`. The scenario moves past the section once every step in it
+        is at its maximum, or, once every step has its `times.min` calls, when a call it can't take
+        reaches the step after it.
       additionalProperties: false
       required: [steps]
       properties:
