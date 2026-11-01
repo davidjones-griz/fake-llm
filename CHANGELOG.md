@@ -17,6 +17,12 @@ change the public API.
   fan-out. A scenario with no `match` and no parallel step is served as before. In Kotlin, the
   new `Match`, `TextMatch`, `MessageMatch`, `ToolResultMatch`, `ToolsMatch`, `BodyMatch`,
   `HeaderMatch` and `ParallelSection` build them.
+- `times` on a step: it takes from `min` (default 1) to `max` (default unbounded) calls instead of
+  exactly one, on a plain step or a parallel step's step, for a fan-out, poll or retry whose count
+  the test can't know. Once a step has its `min` calls, a call it can't take reaches the step after
+  it; a step below its `min` is unused. In Kotlin, `Times` builds it. `CallRecord.useNumber`
+  (`useNumber` in `GET /control/calls`, the pytest plugin's `use_number`) numbers each use of such a
+  step, and is left out for a step without `times`.
 - The `no-match` 400, for a call that matches none of the steps it could take. It carries the
   call's fields, and its message lists those steps and their rules. The JUnit extension treats it
   as an unserved call.
@@ -29,8 +35,10 @@ change the public API.
 
 ### Changed
 
-- `Step` gains `match` and `parallel`, so its constructor and `copy` change: code compiled against
-  0.6.0 that constructs a `Step` must be recompiled.
+- `Step` gains `match`, `parallel` and `times`, so its constructor and `copy` change: code compiled
+  against 0.6.0 that constructs a `Step` must be recompiled.
+- The JUnit extension's unused-steps message says the steps "got fewer calls than they need", not
+  "got no call", since a step with `times` can be unused after some calls.
 - `unusedSteps` (`GET /health`, `ScenarioEngine.unusedSteps`, `FakeLlmHealth`) lists a parallel
   step until every step in it is used, so it is no longer always the last steps. The JUnit
   extension's unused-steps message lists the steps one by one, with runs written `2-3`.

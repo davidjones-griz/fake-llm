@@ -133,7 +133,8 @@ internal data class Resolution(
  * `match` and no parallel step, call N gets step N. A step with a [Step.match] answers only a call
  * that satisfies it; a parallel step's steps answer calls in any order, each call taking the first
  * unused one it matches, and the scenario moves past it once all are used. A call that matches none
- * of the steps it could take gets HTTP 400 (`no-match`). A call after the last step gets HTTP 400
+ * of the steps it could take gets HTTP 400 (`no-match`). A step with [Step.times] takes from its
+ * minimum to its maximum number of calls (see [Position]). A call after the last step gets HTTP 400
  * (`no-more-steps`), in strict and lenient mode. With no scenario loaded, a call gets HTTP 400 (`no-scenario`), or the
  * canned reply when [lenient] is true. Every call takes a number and one log entry, whatever it is
  * answered with.

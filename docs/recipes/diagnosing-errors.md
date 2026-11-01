@@ -55,6 +55,7 @@ It comes only from a scenario with a [match or a parallel step](../scenarios.md#
 - The call came earlier than the scenario expects: the step it matches is after a parallel step that isn't used up yet, or after a plain step with a `match` that is still next.
 - A rule doesn't say what the test author meant: compare the call's `prompt_preview`, or its entry in `GET /control/exchanges`, with the rules in the message.
 - Two calls match the same step, so the second finds it used.
+- A step with [`times`](../scenarios.md#steps-used-a-variable-number-of-times) hasn't had its `min` calls yet, so the step after it is out of reach. `GET /health`'s `unusedSteps` lists it, and `GET /control/calls` numbers its uses in `useNumber`.
 
 The call takes a number and an entry in the call log, with outcome `no-match`, and uses nothing.
 

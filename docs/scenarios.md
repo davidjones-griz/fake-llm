@@ -155,7 +155,7 @@ With that scenario, an `openai` client created with `timeout=1.0` and `max_retri
 ## Writing scenarios for tests
 
 - Each test owns its scenario, even when that means repeating steps another scenario also has. Changing a scenario then affects only the test that owns it. Name a scenario file after its test, or build it inline with `loadInline`.
-- Script one step per call, in the order the app makes its calls, including every retry and error. A call the scenario has no step for fails with `no-more-steps`, and with the JUnit extension a step no call used fails the test, so a missing or extra call shows up in the test. Without the extension, check `engine.unusedSteps` is empty at the end of the test. Over HTTP, check that `GET /health`'s `unusedSteps` is empty.
+- Script one step per call, in the order the app makes its calls, including every retry and error (or give a step [`times`](#steps-used-a-variable-number-of-times) when the count varies). A call the scenario has no step for fails with `no-more-steps`, and with the JUnit extension a step no call used fails the test, so a missing or extra call shows up in the test. Without the extension, check `engine.unusedSteps` is empty at the end of the test. Over HTTP, check that `GET /health`'s `unusedSteps` is empty.
 - Load the scenario, or reset it, at the start of each test, so its first call gets step 1 and the call log holds only its calls. The JUnit extension does this before each test.
 
 For example, a test whose app retries once after a rate limit scripts both calls, then checks the app's reply and that the app made exactly those two calls:
@@ -268,7 +268,7 @@ How a call is served:
 - A parallel step is one position in the scenario that holds several responses, used in any order.
 - A call that reaches it takes the first unused step whose `match` it satisfies, in listed order. A step with no `match` matches any call.
 - A call uses up its response when it arrives, even if the client later times out or disconnects.
-- The scenario moves past the parallel step only once every step in it is used.
+- The scenario moves past the parallel step only once every step in it is used, or, for steps with [`times`](#steps-used-a-variable-number-of-times), at its `max`, or once each has its `min` calls and a call it can't take reaches the step after it.
 - A plain step with a `match` is served only to a call that satisfies it. A call that doesn't takes nothing, and the step stays next. In a parallel step, a call that doesn't satisfy one step's `match` looks at the others.
 - Within one `match`, every key must hold.
 
@@ -287,7 +287,7 @@ A call that matches none of the unused steps it could take gets HTTP 400 `no-mat
 }
 ```
 
-A call after the last step is still `no-more-steps`, and lenient mode doesn't change `no-match`. A call that arrives earlier than the scenario expects, or a call that never comes, shows up as a `no-match` 400 or a wrong response, and the unused-steps check fails the test: a parallel step counts as unused until every step in it is used (`GET /health`'s `unusedSteps`, `engine.unusedSteps`, and the JUnit extension).
+A call after the last step is still `no-more-steps` (for a last step with `times`, see [the end of the scenario](#steps-used-a-variable-number-of-times)), and lenient mode doesn't change `no-match`. A call that arrives earlier than the scenario expects, or a call that never comes, shows up as a `no-match` 400 or a wrong response, and the unused-steps check fails the test: a parallel step counts as unused until every step in it is used (`GET /health`'s `unusedSteps`, `engine.unusedSteps`, and the JUnit extension).
 
 The call log's `step` is the parallel step's number and `innerStep` the step within it, from 1; `innerStep` is left out for a plain step. The CLI prints it as `step=2.3`.
 
@@ -365,7 +365,66 @@ This covers nested fan-out: each of two calls fans out into sub-calls, and a sub
 
 ### Steps used a variable number of times
 
-A step with `times` takes from `min` to `max` calls instead of exactly one.
+A step with `times` takes from `min` to `max` calls instead of exactly one, for a number of calls the test can't know in advance: a fan-out over however many items the app has, a poll or retry loop the app ends, or a tool loop of no fixed length. It works on a plain step and on a parallel step's steps, not on the parallel step itself.
+
+```json
+{ "times": { "min": 1, "max": 5 }, "match": { "lastUser": { "contains": "status?" } }, "text": "Still running." }
+```
+
+`min` defaults to 1 and `max` to unbounded, so `{"times": {}}` means one call or more. A step without `times` takes exactly one call. A `max` below `min` is rejected when the scenario loads (the JSON Schema can't compare two values, so editors don't flag it).
+
+How a call is served:
+
+- A step is open until it has `max` calls. The scenario moves past a step at its `max` (a parallel step once all its steps are at theirs).
+- The steps at the scenario's position are tried first, as always. Once each of them has its `min` calls, a call they can't take (no step there matches it, or each is at its `max`) can reach the step after them. From there it can go on through steps whose `min` is 0, which count as met before any call.
+- A call that reaches a later step moves the scenario past the earlier ones. A call that matches nothing gets `no-match` and moves nothing.
+- A step that got fewer than `min` calls is unused: `unusedSteps` lists it, and the JUnit extension fails the test. A step with `min` 0 is never unused.
+- The call log's `useNumber` says which call of the step each was, from 1, and the CLI prints it as `use=2`. It is left out for a step without `times`.
+
+A poll loop, where the app asks for the status until it is told the job is done:
+
+```json
+{
+  "name": "poll-until-done",
+  "steps": [
+    { "times": { "min": 1 }, "match": { "lastUser": { "contains": "status?" } }, "text": "Still running." },
+    { "match": { "lastUser": { "contains": "result?" } }, "text": "Done: 42." }
+  ]
+}
+```
+
+A fan-out of unknown width, then a merge call:
+
+```json
+{
+  "name": "summarize-any-number-then-merge",
+  "steps": [
+    { "parallel": { "steps": [
+      { "times": { "min": 1 }, "match": { "lastUser": { "contains": "Summarize" } }, "text": "A summary." } ] } },
+    { "match": { "system": { "contains": "Merge" } }, "text": "All of them, combined." }
+  ]
+}
+```
+
+A retry that may or may not come: with `min` 0, the first call can already reach the next step.
+
+```json
+{
+  "name": "optional-retry",
+  "steps": [
+    { "times": { "min": 0, "max": 2 }, "match": { "lastUser": { "contains": "retry" } }, "error": { "status": 503 } },
+    { "text": "Done." }
+  ]
+}
+```
+
+Things to know when writing these:
+
+- **The repeated calls and the exit call need matches that tell them apart.** The steps at the position come first, so an open step whose `match` fits the exit call takes it too. Poll and retry calls are often identical requests: then `min` below `max` behaves like `max`, and `min` 0 on a step with no `match` only matters at the end of the scenario.
+- **An unbounded step with no `match` takes every call,** so no step after it can be reached; in a parallel step, neither can the steps listed after it.
+- **A late fan-out call** that arrives after the merge call has moved the scenario on gets `no-match`.
+- **The end of the scenario.** A call that a last step with `times` doesn't take, once its `min` is met and before its `max`, gets `no-match`, listing that step. `no-more-steps` comes only once the scenario is past its last step; its message then says the last step can't take more calls. A last step with no `max` never gets there.
+- A step gives the same reply each time it is used. For different replies, script separate steps.
 
 ### Match keys
 
