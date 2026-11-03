@@ -202,7 +202,7 @@ private fun loadScenario(
             val decoded = scenarioLoad { ScenarioLoader.decode(inline) }
             decoded.inlineKey to engine.loadInline(decoded)
         }
-    val displayName = scenario.metadata?.name ?: key
+    val displayName = scenario.displayName(key)
     respond(ex, HTTP_OK, """{"loaded":${jsonString(key)},"name":${jsonString(displayName)},"steps":${scenario.steps.size}}""")
 }
 

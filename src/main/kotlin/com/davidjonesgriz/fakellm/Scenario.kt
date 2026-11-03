@@ -210,16 +210,44 @@ public data class ScenarioMetadata(
     val tags: List<String>? = null,
 ) {
     init {
-        require(name == null || name.isNotBlank()) { "metadata.name must not be ${if (name!!.isEmpty()) "empty" else "blank"}" }
-        require(tags == null || tags.none { it.isBlank() }) { "metadata.tags must not contain an empty or blank tag" }
+        metadataProblem(name, tags, "metadata")?.let { throw IllegalArgumentException(it) }
     }
 }
+
+/**
+ * The first empty or blank [name] or tag of a scenario's or step's metadata at [path], such as
+ * `$.steps[1].metadata.name: must not be blank`; null when there is none. [ScenarioMetadata]'s
+ * `init` and the decoder, which names the JSON path, both apply this one rule.
+ */
+internal fun metadataProblem(
+    name: String?,
+    tags: List<String>?,
+    path: String,
+): String? =
+    name?.let { textProblem(it, "$path.name") }
+        ?: tags?.withIndex()?.firstNotNullOfOrNull { (i, tag) -> textProblem(tag, "$path.tags[$i]") }
+
+private fun textProblem(
+    text: String,
+    at: String,
+): String? =
+    when {
+        text.isEmpty() -> "$at: must not be empty"
+        text.isBlank() -> "$at: must not be blank"
+        else -> null
+    }
 
 /**
  * The key of this scenario when it is loaded inline: its `metadata.name`, or `inline` when it has
  * none. [ScenarioEngine.loadInline] and `POST /control/scenario` both use it.
  */
 internal val Scenario.inlineKey: String get() = metadata?.name ?: INLINE_SCENARIO_KEY
+
+/**
+ * This scenario's display name when it is loaded under [key]: its `metadata.name`, or [key] when it
+ * has none. `GET /health`'s `scenarioName` and the load response's `name`.
+ */
+internal fun Scenario.displayName(key: String): String = metadata?.name ?: key
 
 /**
  * One scripted tool call in a [Step]'s reply.
@@ -456,28 +484,16 @@ internal object ScenarioLoader {
 }
 
 /**
- * The first empty or blank `name` or tag in [metadata], a `metadata` value that passed the shape
- * check, named by its [path]; null when there is none. The model enforces the same rule, without the path.
+ * [metadataProblem] for [metadata], a `metadata` value that passed the shape check, named by its
+ * JSON [path], so the message says where the value is.
  */
 private fun metadataProblem(
     metadata: JsonElement?,
     path: String,
 ): String? {
     val obj = metadata as? JsonObject ?: return null
-
-    fun blankness(
-        value: JsonElement?,
-        at: String,
-    ): String? {
-        val text = (value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
-        return when {
-            text.isEmpty() -> "$at: must not be empty"
-            text.isBlank() -> "$at: must not be blank"
-            else -> null
-        }
-    }
-    return blankness(obj["name"], "$path.name")
-        ?: (obj["tags"] as? JsonArray)?.withIndex()?.firstNotNullOfOrNull { (i, tag) -> blankness(tag, "$path.tags[$i]") }
+    val text = { value: JsonElement? -> (value as? JsonPrimitive)?.takeIf { it.isString }?.content }
+    return metadataProblem(text(obj["name"]), (obj["tags"] as? JsonArray)?.mapNotNull(text), path)
 }
 
 /** A top-level `name` or `description`, which moved into `metadata` in 0.8.0, is rejected with a pointer to it. */

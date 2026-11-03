@@ -306,8 +306,13 @@ class MetadataTest {
             "step 1: \$.steps[0].metadata.tags[0]: must not be empty",
             messageFor("""{"steps":[{"parallel":{"steps":[{"text":"a"}]},"metadata":{"tags":[""]}}]}"""),
         )
-        assertFailsWith<IllegalArgumentException> { ScenarioMetadata(name = " ") }
-        assertFailsWith<IllegalArgumentException> { ScenarioMetadata(tags = listOf("\t")) }
+        // The model applies the same rule, with the same messages, to a scenario built in Kotlin.
+        assertEquals("metadata.name: must not be blank", assertFailsWith<IllegalArgumentException> { ScenarioMetadata(name = " ") }.message)
+        assertEquals("metadata.name: must not be empty", assertFailsWith<IllegalArgumentException> { ScenarioMetadata(name = "") }.message)
+        assertEquals(
+            "metadata.tags[1]: must not be blank",
+            assertFailsWith<IllegalArgumentException> { ScenarioMetadata(tags = listOf("ok", "\t")) }.message,
+        )
     }
 
     @Test

@@ -297,7 +297,7 @@ public class ScenarioEngine(
                 val unused = s?.let { position.unusedCandidates(it) }.orEmpty()
                 ScenarioProgress(
                     key = scenarioKey,
-                    displayName = s?.let { it.metadata?.name ?: scenarioKey },
+                    displayName = s?.displayName(scenarioKey!!),
                     steps = s?.steps?.size,
                     unusedSteps = unused.map { it.top + 1 }.distinct(),
                     unusedStepNames = s?.let { unusedNames(it, unused) }.orEmpty(),
