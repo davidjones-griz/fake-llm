@@ -3,7 +3,7 @@
 `pytest-fake-llm`, in [pytest-fake-llm/](https://github.com/davidjones-griz/fake-llm/tree/main/pytest-fake-llm/), gives a Python project's pytest tests a fake-llm server: it starts the Docker image for the test session, or uses a server that is already running, and unloads it before each test. It needs Python 3.11 or newer and pytest 8 or newer, and has no other dependencies. It is not on PyPI; install it from this repository at a release tag, 0.6.0 or later:
 
 ```bash
-pip install "pytest-fake-llm @ git+https://github.com/davidjones-griz/fake-llm@v0.6.0#subdirectory=pytest-fake-llm"
+pip install "pytest-fake-llm @ git+https://github.com/davidjones-griz/fake-llm@v0.7.0#subdirectory=pytest-fake-llm"
 ```
 
 ```python

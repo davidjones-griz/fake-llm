@@ -20,7 +20,7 @@ jobs:
       fake-llm:
         # A release tag, not latest, so a new release can't change your tests' results unannounced.
         # POST /control/unload, used between tests, needs 0.5.0 or later.
-        image: ghcr.io/davidjones-griz/fake-llm:0.6.0
+        image: ghcr.io/davidjones-griz/fake-llm:0.7.0
         ports:
           - 8080:8080
         # A service takes no command-line arguments, so fake-llm is configured by environment.

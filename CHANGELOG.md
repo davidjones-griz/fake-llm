@@ -7,6 +7,8 @@ change the public API.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-02
+
 ### Added
 
 - Gemini on the Vertex AI paths: `generateContent` and `streamGenerateContent` on
