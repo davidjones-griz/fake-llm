@@ -3,7 +3,7 @@
   "name": "openai-stream-max-tokens",
   "description": "A streamed max_tokens step finishes with finish_reason length.",
   "scenario": {
-    "name": "stream-max-tokens",
+    "metadata": { "name": "stream-max-tokens" },
     "steps": [
       {
         "text": "cut off",

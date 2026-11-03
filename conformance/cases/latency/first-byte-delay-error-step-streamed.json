@@ -3,7 +3,7 @@
   "name": "first-byte-delay-error-step-streamed",
   "description": "A first-byte delay on a streamed request leaves a plain HTTP error step unchanged, and the call log records (50, 0).",
   "scenario": {
-    "name": "overloaded",
+    "metadata": { "name": "overloaded" },
     "steps": [
       {
         "error": {

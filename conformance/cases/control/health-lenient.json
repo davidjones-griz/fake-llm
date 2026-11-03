@@ -20,9 +20,11 @@
         "body": {
           "status": "ok",
           "scenario": "hello",
+          "scenarioName": "hello",
           "lenient": true,
           "steps": 1,
           "unusedSteps": [1],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

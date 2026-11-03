@@ -78,6 +78,14 @@ public data class CallRecord internal constructor(
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val useNumber: Int? = null,
+    /**
+     * The `metadata.name` of the step that served the call: the step within the parallel step for
+     * a call [innerStep] names. Null when that step has no name and when no step served the call.
+     * Left out of the JSON when null, so a scenario without step names writes the same call log as before.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val stepName: String? = null,
 )
 
 /** One tool call a response carried, as [CallRecord.toolCalls] records it. */
@@ -113,11 +121,16 @@ public data class ToolResultRecord internal constructor(
     val isError: Boolean,
 )
 
-/** The loaded scenario's [name], its step count, and the steps no call has used, read together. */
+/**
+ * The loaded scenario's [key] and [displayName], its step count, the steps no call has used and
+ * the names of those that have one, read together.
+ */
 internal data class ScenarioProgress(
-    val name: String?,
+    val key: String?,
+    val displayName: String?,
     val steps: Int?,
     val unusedSteps: List<Int>,
+    val unusedStepNames: Map<Int, String>,
 )
 
 /** One logged call and the [Step] that answers it. See [ScenarioEngine.resolve]. */
@@ -170,6 +183,9 @@ public class ScenarioEngine(
 
     private val lock = Any()
     private var scenario: Scenario? = null
+
+    /** What identifies [scenario]: the name it was loaded by, or for an inline load its `metadata.name` or `inline`. */
+    private var scenarioKey: String? = null
     private var callCount = 0L
 
     /** Where the loaded scenario has got to. */
@@ -188,19 +204,19 @@ public class ScenarioEngine(
      * Loads the scenario [name] and installs it as [loadInline] does. Reads
      * `<scenarioDirectory>/<name>.json` when [scenarioDirectory] is set and that file exists, then
      * the project's classpath resource `/scenarios/<name>.json`, then the bundled scenario. Throws
-     * when the name is not `[A-Za-z0-9_-]+`, no such scenario exists, the file does not decode, or
-     * its declared name differs from [name]; the engine is then unchanged. Empties the call log and
-     * the exchange log.
+     * when the name is not `[A-Za-z0-9_-]+`, no such scenario exists, or the file does not decode;
+     * the engine is then unchanged. The scenario's `metadata.name` may differ from [name], which
+     * stays its key ([currentScenarioKey]). Empties the call log and the exchange log.
      */
-    public fun load(name: String): Scenario = loadInline(ScenarioLoader.load(name, scenarioDirectory))
+    public fun load(name: String): Scenario = ScenarioLoader.load(name, scenarioDirectory).also { replace(it, name) }
 
     /**
      * Installs [s] as the loaded scenario and starts it over, as [reset] does: empties the call log
-     * and the exchange log. By-name [load] delegates here. `POST /control/scenario` with a
-     * `scenario` object does too.
+     * and the exchange log. `POST /control/scenario` with a `scenario` object calls it. Its key
+     * ([currentScenarioKey]) is its `metadata.name`, or `inline` when it has none.
      */
     public fun loadInline(s: Scenario): Scenario {
-        replace(s)
+        replace(s, s.metadata?.name ?: INLINE_SCENARIO_KEY)
         return s
     }
 
@@ -210,7 +226,7 @@ public class ScenarioEngine(
      * and [FakeLlmClient.unload] call it over HTTP.
      */
     public fun unload() {
-        replace(null)
+        replace(null, null)
     }
 
     /**
@@ -218,12 +234,16 @@ public class ScenarioEngine(
      * is call 1 and gets step 1. Keeps the loaded scenario.
      */
     public fun reset() {
-        synchronized(lock) { replace(scenario) }
+        synchronized(lock) { replace(scenario, scenarioKey) }
     }
 
-    private fun replace(s: Scenario?) {
+    private fun replace(
+        s: Scenario?,
+        key: String?,
+    ) {
         synchronized(lock) {
             scenario = s
+            scenarioKey = key
             callCount = 0
             position = Position()
             log = mutableListOf()
@@ -231,8 +251,11 @@ public class ScenarioEngine(
         }
     }
 
-    /** The loaded scenario's name, or null when none is loaded. */
-    public fun currentScenarioName(): String? = synchronized(lock) { scenario?.name }
+    /**
+     * What identifies the loaded scenario, or null when none is loaded: the name [load] was given
+     * (the file name), or for [loadInline] the scenario's `metadata.name`, or `inline` when it has none.
+     */
+    public fun currentScenarioKey(): String? = synchronized(lock) { scenarioKey }
 
     /**
      * The 1-based numbers of the loaded scenario's steps that are not used up since the last load,
@@ -245,11 +268,34 @@ public class ScenarioEngine(
     public val unusedSteps: List<Int>
         get() = progress.unusedSteps
 
-    /** [currentScenarioName], the step count and [unusedSteps], read under one lock. */
+    /**
+     * The `metadata.name` of each step in [unusedSteps] that has one, by its 1-based number, read
+     * under the same lock. A step without a name has no entry. From Java, `getUnusedStepNames()`.
+     */
+    public val unusedStepNames: Map<Int, String>
+        get() = progress.unusedStepNames
+
+    /** [currentScenarioKey], the display name, the step count, [unusedSteps] and their names, read under one lock. */
     internal val progress: ScenarioProgress
         get() =
             synchronized(lock) {
-                ScenarioProgress(scenario?.name, scenario?.steps?.size, scenario?.let { position.unused(it) }.orEmpty())
+                val s = scenario
+                val unused = s?.let { position.unused(it) }.orEmpty()
+                ScenarioProgress(
+                    key = scenarioKey,
+                    displayName = s?.let { it.metadata?.name ?: scenarioKey },
+                    steps = s?.steps?.size,
+                    unusedSteps = unused,
+                    unusedStepNames =
+                        unused
+                            .mapNotNull { n ->
+                                s!!
+                                    .steps[n - 1]
+                                    .metadata
+                                    ?.name
+                                    ?.let { n to it }
+                            }.toMap(),
+                )
             }
 
     /** A snapshot of the call log, in call order. */
@@ -323,7 +369,7 @@ public class ScenarioEngine(
                 log.add(record)
                 logged = record
                 capture?.let { exchangeLog.add(n to it) }
-                Served(n, s, choice)
+                Served(n, s, scenarioKey, choice)
             }
         logged?.let { record -> onCall?.invoke(record) }
         return Resolution(seq = served.seq, step = served.choice.chosen?.step ?: unservedStep(served, vendor, req, lenient))
@@ -334,6 +380,8 @@ public class ScenarioEngine(
 internal data class Served(
     val seq: Long,
     val scenario: Scenario?,
+    /** [scenario]'s key; see [ScenarioEngine.currentScenarioKey]. */
+    val scenarioKey: String?,
     val choice: Choice,
 )
 
@@ -397,6 +445,7 @@ private fun callRecord(
         streamInterChunkDelayMs = step?.let { appliedInterChunkDelayMs(it, req.stream) } ?: 0,
         innerStep = chosen?.inner?.plus(1),
         useNumber = taken?.useNumber,
+        stepName = step?.metadata?.name,
     )
 }
 

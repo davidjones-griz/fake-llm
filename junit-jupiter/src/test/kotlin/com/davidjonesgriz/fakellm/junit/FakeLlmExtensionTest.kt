@@ -390,10 +390,13 @@ class FakeLlmExtensionTest {
     }
 
     @Test
-    fun `unused steps that are not a tail are listed one by one`() {
+    fun `unused steps that are not a tail are listed one by one, with the names of those that have one`() {
         val failure = run(NonContiguousUnusedStepsFixture::class.java).failures().values.single()
         assertEquals(listOf(200), Sink.get("partly:status"))
-        assertContains(failure.message.orEmpty(), "2 step(s) of fake-llm scenario 'groups' got fewer calls than they need: steps 1, 3.")
+        assertContains(
+            failure.message.orEmpty(),
+            "2 step(s) of fake-llm scenario 'groups' got fewer calls than they need: steps 1, 3 (1 'fan-out', 3 'merge').",
+        )
     }
 
     @Test

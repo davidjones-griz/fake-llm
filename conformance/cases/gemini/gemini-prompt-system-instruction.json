@@ -3,7 +3,7 @@
   "name": "gemini-prompt-system-instruction",
   "description": "systemInstruction's part texts come first in the prompt, and set systemShape blocks.",
   "scenario": {
-    "name": "gemini-prompt-system-instruction",
+    "metadata": { "name": "gemini-prompt-system-instruction" },
     "steps": [
       {
         "text": "Noted."

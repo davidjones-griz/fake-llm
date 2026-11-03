@@ -3,7 +3,7 @@
   "name": "openai-stream-no-more-steps",
   "description": "A streamed call after the last step gets the JSON no-more-steps 400, with no event stream.",
   "scenario": {
-    "name": "stream-no-more-steps",
+    "metadata": { "name": "stream-no-more-steps" },
     "steps": [
       {
         "text": "only"

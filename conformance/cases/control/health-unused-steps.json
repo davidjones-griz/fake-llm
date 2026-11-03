@@ -3,7 +3,7 @@
   "name": "health-unused-steps",
   "description": "GET /health reports the loaded scenario's step count and the steps no call has used: all three after the load, the tail as calls use them, none once every step has served a call or after a call past the last step, all three again after a reset, and none after an unload.",
   "scenario": {
-    "name": "three-steps",
+    "metadata": { "name": "three-steps" },
     "steps": [
       {
         "text": "first"
@@ -30,6 +30,7 @@
         "body": {
           "status": "ok",
           "scenario": "three-steps",
+          "scenarioName": "three-steps",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [
@@ -37,6 +38,7 @@
             2,
             3
           ],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }
@@ -100,12 +102,14 @@
         "body": {
           "status": "ok",
           "scenario": "three-steps",
+          "scenarioName": "three-steps",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [
             2,
             3
           ],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }
@@ -213,9 +217,11 @@
         "body": {
           "status": "ok",
           "scenario": "three-steps",
+          "scenarioName": "three-steps",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }
@@ -273,9 +279,11 @@
         "body": {
           "status": "ok",
           "scenario": "three-steps",
+          "scenarioName": "three-steps",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }
@@ -311,6 +319,7 @@
         "body": {
           "status": "ok",
           "scenario": "three-steps",
+          "scenarioName": "three-steps",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [
@@ -318,6 +327,7 @@
             2,
             3
           ],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }
@@ -353,9 +363,11 @@
         "body": {
           "status": "ok",
           "scenario": null,
+          "scenarioName": null,
           "lenient": false,
           "steps": null,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

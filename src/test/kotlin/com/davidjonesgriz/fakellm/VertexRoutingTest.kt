@@ -16,7 +16,10 @@ import kotlin.test.assertTrue
 class VertexRoutingTest {
     private val body = """{"contents":[{"role":"user","parts":[{"text":"Hi"}]}]}"""
 
-    private fun engineWith(vararg steps: Step) = ScenarioEngine().also { it.loadInline(Scenario(name = "vertex", steps = steps.toList())) }
+    private fun engineWith(vararg steps: Step) =
+        ScenarioEngine().also {
+            it.loadInline(Scenario(metadata = ScenarioMetadata(name = "vertex"), steps = steps.toList()))
+        }
 
     private fun modelVersion(json: String): String =
         Json

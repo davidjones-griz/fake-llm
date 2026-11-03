@@ -3,7 +3,7 @@
   "name": "minimum-not-met",
   "description": "Below its min a step holds the scenario: a call for the next step gets no-match, and GET /health lists the step as unused.",
   "scenario": {
-    "name": "minimum-not-met",
+    "metadata": { "name": "minimum-not-met" },
     "steps": [
       {
         "match": {
@@ -122,12 +122,14 @@
         "body": {
           "status": "ok",
           "scenario": "minimum-not-met",
+          "scenarioName": "minimum-not-met",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [
             1,
             2
           ],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

@@ -136,7 +136,7 @@ class MultiProviderDialectTest {
 
     private fun engineWith(vararg steps: Step) =
         ScenarioEngine().also {
-            it.loadInline(Scenario(name = "openai-stream", steps = steps.toList()))
+            it.loadInline(Scenario(metadata = ScenarioMetadata(name = "openai-stream"), steps = steps.toList()))
         }
 
     private fun contentPieces(frames: List<String>): List<String> =

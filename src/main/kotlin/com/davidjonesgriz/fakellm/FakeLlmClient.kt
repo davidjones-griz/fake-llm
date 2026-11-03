@@ -172,7 +172,7 @@ public class FakeLlmClientException internal constructor(
 ) : RuntimeException(message, cause)
 
 /**
- * The server's `GET /health` response: the loaded scenario's name, or null when none is loaded,
+ * The server's `GET /health` response: the loaded scenario's key and display name, or null when none is loaded,
  * whether a call with no scenario loaded gets the canned reply, the scenario's step count and the
  * steps no call has used, and the server's version. Read-only: the constructor and `copy` are
  * internal, so fields added with default values do not break callers.
@@ -180,6 +180,10 @@ public class FakeLlmClientException internal constructor(
 @ConsistentCopyVisibility
 @Serializable
 public data class FakeLlmHealth internal constructor(
+    /**
+     * What identifies the loaded scenario: the name it was loaded by, or for an inline load its
+     * `metadata.name`, or `inline` when it has none. Null when none is loaded.
+     */
     val scenario: String?,
     val lenient: Boolean,
     /** The loaded scenario's step count; null with none loaded, or from a server older than this release. */
@@ -191,6 +195,13 @@ public data class FakeLlmHealth internal constructor(
      * than this release.
      */
     val unusedSteps: List<Int>? = null,
+    /** The scenario's `metadata.name`, or [scenario] when it has none; null with none loaded, or from a server older than 0.8.0. */
+    val scenarioName: String? = null,
+    /**
+     * The `metadata.name` of each step in [unusedSteps] that has one, by its number; empty when none
+     * has. Null from a server older than 0.8.0.
+     */
+    val unusedStepNames: Map<Int, String>? = null,
     /** The server's version, such as `0.5.0`; null from a server older than this release, which does not report it. */
     val version: String? = null,
 )

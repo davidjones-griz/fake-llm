@@ -9,11 +9,13 @@ from support import ANTHROPIC_REQUEST, HELLO, OPENAI_REQUEST, post
 
 
 def test_health_with_no_scenario_loaded(fake_llm):
-    assert fake_llm.client.health() == Health(scenario=None, lenient=False, steps=None, unused_steps=[])
+    assert fake_llm.client.health() == Health(
+        scenario=None, lenient=False, steps=None, unused_steps=[], scenario_name=None, unused_step_names={}
+    )
 
 
 def test_health_reports_the_steps_no_call_has_used(fake_llm):
-    fake_llm.client.load_inline({"name": "two", "steps": [{"text": "a"}, {"text": "b"}]})
+    fake_llm.client.load_inline({"metadata": {"name": "two"}, "steps": [{"text": "a"}, {"text": "b"}]})
     post(f"{fake_llm.anthropic_base_url}/v1/messages", ANTHROPIC_REQUEST)
 
     health = fake_llm.client.health()
@@ -25,6 +27,27 @@ def test_health_from_an_older_server_leaves_the_new_fields_none(stub):
     health = FakeLlmClient(stub(200, '{"status":"ok","scenario":null,"lenient":false}').url).health()
 
     assert (health.steps, health.unused_steps) == (None, None)
+    assert (health.scenario_name, health.unused_step_names) == (None, None)
+
+
+def test_step_names_reach_the_call_log_and_the_unused_steps(fake_llm):
+    fake_llm.client.load_inline(
+        {
+            "metadata": {"name": "Named steps", "tags": ["smoke"]},
+            "steps": [
+                {"metadata": {"name": "greet"}, "text": "a"},
+                {"text": "b"},
+                {"metadata": {"name": "farewell", "description": "the last call"}, "text": "c"},
+            ],
+        }
+    )
+    post(f"{fake_llm.anthropic_base_url}/v1/messages", ANTHROPIC_REQUEST)
+    post(f"{fake_llm.anthropic_base_url}/v1/messages", ANTHROPIC_REQUEST)
+
+    assert [(c.step, c.step_name) for c in fake_llm.client.calls()] == [(1, "greet"), (2, None)]
+    health = fake_llm.client.health()
+    assert (health.scenario, health.scenario_name) == ("Named steps", "Named steps")
+    assert (health.unused_steps, health.unused_step_names) == ([3], {3: "farewell"})
 
 
 def test_scenario_names_are_the_bundled_ones_sorted(fake_llm):
@@ -51,7 +74,7 @@ def test_a_scenario_loaded_by_name_answers_and_its_call_is_logged(fake_llm):
 
 def test_a_call_served_by_a_parallel_step_reports_its_inner_step(fake_llm):
     fake_llm.client.load_inline(
-        {"name": "fan", "steps": [{"parallel": {"steps": [{"match": {"lastUser": {"equals": "no"}}, "text": "x"}, {"text": "any"}]}}]}
+        {"metadata": {"name": "fan"}, "steps": [{"parallel": {"steps": [{"match": {"lastUser": {"equals": "no"}}, "text": "x"}, {"text": "any"}]}}]}
     )
 
     reply = post(f"{fake_llm.anthropic_base_url}/v1/messages", ANTHROPIC_REQUEST)
@@ -64,7 +87,7 @@ def test_a_call_served_by_a_parallel_step_reports_its_inner_step(fake_llm):
 
 
 def test_a_step_with_times_numbers_each_use(fake_llm):
-    fake_llm.client.load_inline({"name": "poll", "steps": [{"times": {"min": 2}, "text": "again"}]})
+    fake_llm.client.load_inline({"metadata": {"name": "poll"}, "steps": [{"times": {"min": 2}, "text": "again"}]})
 
     post(f"{fake_llm.anthropic_base_url}/v1/messages", ANTHROPIC_REQUEST)
     assert fake_llm.client.health().unused_steps == [1]
@@ -77,7 +100,7 @@ def test_a_step_with_times_numbers_each_use(fake_llm):
 def test_an_inline_scenario_logs_tool_calls_and_results(fake_llm):
     fake_llm.client.load_inline(
         {
-            "name": "inline-tools",
+            "metadata": {"name": "inline-tools"},
             "steps": [{"toolCalls": [{"id": "call_1", "name": "get_weather", "arguments": {"city": "Paris"}}]}, {"text": "18 degrees."}],
         }
     )
@@ -116,7 +139,7 @@ def test_an_unknown_scenario_raises_with_the_servers_message(fake_llm):
 
 def test_a_rejected_inline_scenario_raises_with_the_servers_message(fake_llm):
     with pytest.raises(FakeLlmClientError) as raised:
-        fake_llm.client.load_inline({"name": "misspelt", "steps": [{"txt": "a"}]})
+        fake_llm.client.load_inline({"metadata": {"name": "misspelt"}, "steps": [{"txt": "a"}]})
 
     assert (raised.value.status_code, raised.value.server_message) == (400, "step 1: $.steps[0]: unknown field 'txt'")
     assert raised.value.error_code == "invalid-scenario"

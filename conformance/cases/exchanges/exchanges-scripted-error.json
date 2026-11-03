@@ -3,7 +3,7 @@
   "name": "exchanges-scripted-error",
   "description": "A scripted error is recorded with its status, scripted headers and body.",
   "scenario": {
-    "name": "scripted-error",
+    "metadata": { "name": "scripted-error" },
     "steps": [
       {
         "error": {

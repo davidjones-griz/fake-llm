@@ -1,7 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
-  "name": "pipeline-malformed-extraction",
-  "description": "The first record_ticket call's arguments are cut off mid-JSON; the second call's are valid.",
+  "metadata": {
+    "description": "The first record_ticket call's arguments are cut off mid-JSON; the second call's are valid."
+  },
   "steps": [
     { "text": "billing" },
     { "toolCalls": [{ "name": "record_ticket", "rawArguments": "{\"orderId\": \"A-1001\", \"problem\": " }] },

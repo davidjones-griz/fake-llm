@@ -269,7 +269,9 @@ class WireTest {
     @Test
     fun `a streamed anthropic message_delta carries the step's stopSequence, and message_start stays null`() {
         val step = Step(text = "42", stopReason = "stop_sequence", stopSequence = "</answer>")
-        withServer(ScenarioEngine().also { it.loadInline(Scenario(name = "s", steps = listOf(step))) }) { client, _ ->
+        withServer(
+            ScenarioEngine().also { it.loadInline(Scenario(metadata = ScenarioMetadata(name = "s"), steps = listOf(step))) },
+        ) { client, _ ->
             val frames = namedFrames(client.post("/anthropic/v1/messages", anthropicBody("hi", stream = true)).body())
             val start = Json.parseToJsonElement(frames.first { it.first == "message_start" }.second).jsonObject
             assertEquals(JsonNull, start.getValue("message").jsonObject.getValue("stop_sequence"))

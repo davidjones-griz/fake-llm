@@ -3,7 +3,7 @@
   "name": "anthropic-thinking",
   "description": "A thinking step puts a thinking block, with the fixed signature, before the text block.",
   "scenario": {
-    "name": "thinking",
+    "metadata": { "name": "thinking" },
     "steps": [
       {
         "text": "Use olive oil and garlic.",

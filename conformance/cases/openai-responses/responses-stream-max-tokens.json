@@ -3,7 +3,7 @@
   "name": "responses-stream-max-tokens",
   "description": "A streamed max_tokens step ends with response.incomplete, and its message item is incomplete.",
   "scenario": {
-    "name": "responses-stream-max-tokens",
+    "metadata": { "name": "responses-stream-max-tokens" },
     "steps": [
       {
         "text": "cut off",

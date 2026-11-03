@@ -3,7 +3,7 @@
   "name": "gemini-max-tokens",
   "description": "stopReason max_tokens becomes finishReason MAX_TOKENS.",
   "scenario": {
-    "name": "cutoff",
+    "metadata": { "name": "cutoff" },
     "steps": [
       {
         "text": "The recipe is",

@@ -3,7 +3,7 @@
   "name": "openai-stream-include-usage",
   "description": "With stream_options.include_usage every chunk carries a null usage, and a usage chunk with no choices comes before [DONE].",
   "scenario": {
-    "name": "stream-include-usage",
+    "metadata": { "name": "stream-include-usage" },
     "steps": [
       {
         "text": "Hi."

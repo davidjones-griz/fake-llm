@@ -3,7 +3,7 @@
   "name": "first-byte-delay-responses-stream",
   "description": "A first-byte and inter-chunk delay leave an OpenAI Responses stream unchanged, and the call log records (50, 20).",
   "scenario": {
-    "name": "responses-stream-text",
+    "metadata": { "name": "responses-stream-text" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

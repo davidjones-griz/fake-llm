@@ -8,7 +8,7 @@ import support
 
 pytestmark = pytest.mark.docker
 
-GREETING = '{"name": "greeting", "steps": [{"text": "Hello from the directory."}]}'
+GREETING = '{"metadata": {"name": "greeting"}, "steps": [{"text": "Hello from the directory."}]}'
 CALL_GREETING = """
 import json, urllib.request
 import pytest

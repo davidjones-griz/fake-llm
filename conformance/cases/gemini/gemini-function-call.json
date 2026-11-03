@@ -3,7 +3,7 @@
   "name": "gemini-function-call",
   "description": "A tool-call step is functionCall parts, with an id only when scripted, and finishReason STOP; the functionResponse parts the next request sends back are logged.",
   "scenario": {
-    "name": "gemini-function-call",
+    "metadata": { "name": "gemini-function-call" },
     "steps": [
       {
         "toolCalls": [

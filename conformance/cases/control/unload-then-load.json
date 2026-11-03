@@ -3,7 +3,7 @@
   "name": "unload-then-load",
   "description": "Unloading twice succeeds, and a load afterwards starts that scenario at step 1 with call 1.",
   "scenario": {
-    "name": "two-steps",
+    "metadata": { "name": "two-steps" },
     "steps": [
       {
         "text": "first"
@@ -109,6 +109,7 @@
         },
         "body": {
           "loaded": "hello",
+          "name": "hello",
           "steps": 1
         }
       }

@@ -213,7 +213,7 @@ jobs:
           # A scenario with a misspelt field is not: exit 1 (2 would be a usage error), naming the file and the field.
           mkdir "$RUNNER_TEMP/bad-scenarios"
           cat > "$RUNNER_TEMP/bad-scenarios/misspelt.json" <<'JSON'
-          {"name": "misspelt", "steps": [{"text": "a"}, {"text": "b", "stopReasn": "max_tokens"}]}
+          {"metadata": {"name": "misspelt"}, "steps": [{"text": "a"}, {"text": "b", "stopReasn": "max_tokens"}]}
           JSON
           rc=0
           docker run --rm -v "$RUNNER_TEMP/bad-scenarios:/scenarios:ro" fake-llm:ci validate /scenarios 2>"$RUNNER_TEMP/validate.err" || rc=$?

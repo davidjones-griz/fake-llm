@@ -3,7 +3,7 @@
   "name": "gemini-stream-error-blank-body",
   "description": "A streamed error with a blank body sends the generic INTERNAL error body.",
   "scenario": {
-    "name": "gemini-stream-error-blank-body",
+    "metadata": { "name": "gemini-stream-error-blank-body" },
     "steps": [
       {
         "error": {

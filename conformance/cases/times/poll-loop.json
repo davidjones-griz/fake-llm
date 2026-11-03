@@ -3,7 +3,7 @@
   "name": "poll-loop",
   "description": "A step with times min 1 and no max takes every status call; the first call it does not match reaches the next step. The call log numbers each use.",
   "scenario": {
-    "name": "poll-loop",
+    "metadata": { "name": "poll-loop" },
     "steps": [
       {
         "match": {
@@ -175,11 +175,13 @@
         "body": {
           "status": "ok",
           "scenario": "poll-loop",
+          "scenarioName": "poll-loop",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [
             2
           ],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }
@@ -329,9 +331,11 @@
         "body": {
           "status": "ok",
           "scenario": "poll-loop",
+          "scenarioName": "poll-loop",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

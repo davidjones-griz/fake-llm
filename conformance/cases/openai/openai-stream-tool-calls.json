@@ -3,7 +3,7 @@
   "name": "openai-stream-tool-calls",
   "description": "A streamed tool call comes after the content chunks: a header chunk with the id and name, then the argument text in streamChunkChars pieces, then finish_reason tool_calls.",
   "scenario": {
-    "name": "openai-stream-tool-calls",
+    "metadata": { "name": "openai-stream-tool-calls" },
     "steps": [
       {
         "text": "Checking.",

@@ -13,7 +13,7 @@
         },
         "body": {
           "scenario": {
-            "name": "inline",
+            "metadata": { "name": "inline" },
             "steps": [
               {
                 "text": "a"
@@ -32,6 +32,7 @@
         },
         "body": {
           "loaded": "inline",
+          "name": "inline",
           "steps": 2
         }
       }

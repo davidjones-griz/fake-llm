@@ -37,7 +37,10 @@ class ErrorBodyTest {
 
     private fun message(body: JsonObject) = body.getValue("message").jsonPrimitive.content
 
-    private fun engineWith(vararg steps: Step) = ScenarioEngine().also { it.loadInline(Scenario(name = "example", steps = steps.toList())) }
+    private fun engineWith(vararg steps: Step) =
+        ScenarioEngine().also {
+            it.loadInline(Scenario(metadata = ScenarioMetadata(name = "example"), steps = steps.toList()))
+        }
 
     @Test
     fun `no-more-steps carries the scenario, its step count and the call fields`() {
@@ -146,8 +149,11 @@ class ErrorBodyTest {
             val unknown = errorBody(client.post("/control/scenario", """{"name":"no-such-scenario"}"""), "unknown-scenario")
             assertTrue(message(unknown).startsWith("unknown scenario 'no-such-scenario'"), message(unknown))
             errorBody(client.post("/control/scenario", """{"name":"not a name"}"""), "invalid-scenario")
-            errorBody(client.post("/control/scenario", """{"scenario":{"name":"x","steps":[]}}"""), "invalid-scenario")
-            errorBody(client.post("/control/scenario", """{"scenario":{"name":"x","steps":[{"txt":"a"}]}}"""), "invalid-scenario")
+            errorBody(client.post("/control/scenario", """{"scenario":{"metadata":{"name":"x"},"steps":[]}}"""), "invalid-scenario")
+            errorBody(
+                client.post("/control/scenario", """{"scenario":{"metadata":{"name":"x"},"steps":[{"txt":"a"}]}}"""),
+                "invalid-scenario",
+            )
         }
     }
 

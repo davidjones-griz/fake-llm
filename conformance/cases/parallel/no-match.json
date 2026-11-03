@@ -3,7 +3,7 @@
   "name": "no-match",
   "description": "A call that matches none of the steps it could take gets the no-match 400 with its call fields, takes a number and a log entry, and uses nothing: a plain step with a match stays next, and a partly used parallel step stays unused.",
   "scenario": {
-    "name": "plain-match",
+    "metadata": { "name": "plain-match" },
     "steps": [
       {
         "match": {
@@ -215,11 +215,13 @@
         "body": {
           "status": "ok",
           "scenario": "plain-match",
+          "scenarioName": "plain-match",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [
             2
           ],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

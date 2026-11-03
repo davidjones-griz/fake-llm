@@ -3,7 +3,7 @@
   "name": "openai-tool-calls",
   "description": "A tool-call step is message.tool_calls with the argument text (rawArguments verbatim), content null and finish_reason tool_calls; the tool messages the next request sends back are logged, and the null content adds no prompt text.",
   "scenario": {
-    "name": "openai-tool-calls",
+    "metadata": { "name": "openai-tool-calls" },
     "steps": [
       {
         "toolCalls": [

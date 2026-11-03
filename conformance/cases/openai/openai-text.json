@@ -3,7 +3,7 @@
   "name": "openai-text",
   "description": "A text step is one chat completion.",
   "scenario": {
-    "name": "text",
+    "metadata": { "name": "text" },
     "steps": [
       {
         "text": "Billing."

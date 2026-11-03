@@ -22,7 +22,7 @@ class ScenarioLoaderTest {
     @Test
     fun `an invalid step in a scenario file is reported by its 1-based number`() {
         withScenarioDir { dir ->
-            writeScenario(dir, "bad", """{"name":"bad","steps":[{"text":"ok"},{"text":"x","error":{"status":500}}]}""")
+            writeScenario(dir, "bad", """{"metadata":{"name":"bad"},"steps":[{"text":"ok"},{"text":"x","error":{"status":500}}]}""")
             val failure = assertFailsWith<IllegalArgumentException> { ScenarioLoader.load("bad", dir) }
             assertTrue(failure.message!!.startsWith("step 2: "), failure.message)
         }
@@ -30,7 +30,7 @@ class ScenarioLoaderTest {
 
     @Test
     fun `an invalid inline step is reported by its number`() {
-        val inline = Json.parseToJsonElement("""{"name":"bad","steps":[{"text":"ok"},{"text":"ok"},{}]}""")
+        val inline = Json.parseToJsonElement("""{"metadata":{"name":"bad"},"steps":[{"text":"ok"},{"text":"ok"},{}]}""")
         val failure = assertFailsWith<IllegalArgumentException> { ScenarioLoader.decode(inline) }
         assertTrue(failure.message!!.startsWith("step 3: "), failure.message)
     }
@@ -38,9 +38,9 @@ class ScenarioLoaderTest {
     @Test
     fun `a scenario with no steps, or in the removed rules format, does not load`() {
         withScenarioDir { dir ->
-            writeScenario(dir, "empty", """{"name":"empty","steps":[]}""")
+            writeScenario(dir, "empty", """{"metadata":{"name":"empty"},"steps":[]}""")
             assertFailsWith<IllegalArgumentException> { ScenarioLoader.load("empty", dir) }
-            writeScenario(dir, "old", """{"name":"old","rules":[{"role":"r","respond":[{"text":"x"}]}]}""")
+            writeScenario(dir, "old", """{"metadata":{"name":"old"},"rules":[{"role":"r","respond":[{"text":"x"}]}]}""")
             val old = assertFailsWith<IllegalArgumentException> { ScenarioLoader.load("old", dir) }
             assertTrue(old.message!!.contains("rules"), old.message)
         }
@@ -73,7 +73,7 @@ class ScenarioLoaderTest {
         withScenarioDir { dir ->
             writeScenario(dir, "local-only", singleReply("local-only", text = "from the directory"))
             val classpath = ScenarioLoader.load("refusal", dir)
-            assertEquals("refusal", classpath.name)
+            assertEquals(null, classpath.metadata?.name, "the bundled refusal has no display name")
             assertEquals("I can't help with that request.", classpath.onlyText())
             assertEquals("from the directory", ScenarioLoader.load("local-only", dir).onlyText())
         }
@@ -93,13 +93,15 @@ class ScenarioLoaderTest {
     }
 
     @Test
-    fun `a scenario file whose declared name differs from the file name is rejected`() {
+    fun `a load by name finds the file by its name, whatever its metadata name says or when it has none`() {
         withScenarioDir { dir ->
-            writeScenario(dir, "hello", singleReply("not-hello", text = "x"))
-            val failure = assertFailsWith<IllegalStateException> { ScenarioLoader.load("hello", dir) }
-            assertTrue(failure.message!!.contains("hello"))
-            assertTrue(failure.message!!.contains("not-hello"))
-            assertTrue(failure.message!!.contains("must match"))
+            writeScenario(dir, "hello", singleReply("Not hello at all", text = "x"))
+            writeScenario(dir, "unnamed", """{"steps":[{"text":"y"}]}""")
+            val renamed = ScenarioLoader.load("hello", dir)
+            assertEquals("x", renamed.onlyText())
+            assertEquals("Not hello at all", renamed.metadata?.name)
+            assertEquals("y", ScenarioLoader.load("unnamed", dir).onlyText())
+            assertEquals(null, ScenarioLoader.load("unnamed", dir).metadata)
         }
     }
 
@@ -136,9 +138,16 @@ class ScenarioLoaderTest {
                 assertEquals("project hello", ScenarioLoader.load("hello", dir, loader).onlyText(), "the project beats the bundled file")
                 assertEquals("project refusal", ScenarioLoader.load("refusal", null, loader).onlyText())
                 assertEquals(BUNDLED_HELLO, ScenarioLoader.load("hello", null).onlyText(), "without the project, the bundled file")
-                assertEquals("hello", ScenarioLoader.load("hello", null, loader).name)
+                assertEquals("hello", ScenarioLoader.load("hello", null, loader).metadata?.name)
                 // The project's loader sees no bundled files, which are read through ScenarioLoader itself.
-                assertEquals("rate-limit-429", ScenarioLoader.load("rate-limit-429", null, loader).name)
+                assertEquals(
+                    429,
+                    ScenarioLoader
+                        .load("rate-limit-429", null, loader)
+                        .steps[0]
+                        .error
+                        ?.status,
+                )
             }
         }
     }
@@ -276,7 +285,7 @@ class ScenarioLoaderTest {
     private fun singleReply(
         name: String,
         text: String,
-    ): String = """{ "name": "$name", "steps": [ { "text": "$text" } ] }"""
+    ): String = """{ "metadata": {"name": "$name"}, "steps": [ { "text": "$text" } ] }"""
 
     private companion object {
         const val BUNDLED_HELLO = "Hello. I can help with the weather, a simple recipe, or a short how-to."

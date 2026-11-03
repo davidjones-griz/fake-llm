@@ -3,7 +3,7 @@
   "name": "section-in-any-order",
   "description": "Three calls take a parallel step's three steps in the order they arrive, each by its own match; the merge call, on another route, then takes the next step. The call log names each call's step and inner step.",
   "scenario": {
-    "name": "summarize-three-then-merge",
+    "metadata": { "name": "summarize-three-then-merge" },
     "steps": [
       {
         "parallel": {
@@ -327,9 +327,11 @@
         "body": {
           "status": "ok",
           "scenario": "summarize-three-then-merge",
+          "scenarioName": "summarize-three-then-merge",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

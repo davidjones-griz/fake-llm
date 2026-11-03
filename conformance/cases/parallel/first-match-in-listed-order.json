@@ -3,7 +3,7 @@
   "name": "first-match-in-listed-order",
   "description": "Of two steps that match doc-a, the first doc-a call takes the one listed first (a 429) and its retry the next; doc-b takes its own step in between.",
   "scenario": {
-    "name": "parallel-with-a-429-retry",
+    "metadata": { "name": "parallel-with-a-429-retry" },
     "steps": [
       {
         "parallel": {
@@ -180,9 +180,11 @@
         "body": {
           "status": "ok",
           "scenario": "parallel-with-a-429-retry",
+          "scenarioName": "parallel-with-a-429-retry",
           "lenient": false,
           "steps": 1,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

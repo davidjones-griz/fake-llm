@@ -3,7 +3,7 @@
   "name": "fan-out-of-unknown-width",
   "description": "A parallel step whose one step has times min 1 answers however many fan-out calls arrive; the merge call matches none of them and reaches the next step.",
   "scenario": {
-    "name": "fan-out-width",
+    "metadata": { "name": "fan-out-width" },
     "steps": [
       {
         "parallel": {
@@ -228,9 +228,11 @@
         "body": {
           "status": "ok",
           "scenario": "fan-out-width",
+          "scenarioName": "fan-out-width",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

@@ -3,7 +3,7 @@
   "name": "responses-thinking",
   "description": "A step's thinking is a reasoning item, rs_fake_<seq> with one summary_text part, first in output, before the message. reasoning_tokens stays 0.",
   "scenario": {
-    "name": "responses-thinking",
+    "metadata": { "name": "responses-thinking" },
     "steps": [
       {
         "text": "Billing.",

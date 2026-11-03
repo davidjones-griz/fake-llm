@@ -3,7 +3,7 @@
   "name": "requests-that-are-not-calls",
   "description": "An unparseable body, an incomplete body, an unknown path and the Batches route get their responses, take no step and are not logged.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

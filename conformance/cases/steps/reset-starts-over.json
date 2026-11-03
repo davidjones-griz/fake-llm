@@ -3,7 +3,7 @@
   "name": "reset-starts-over",
   "description": "Reset keeps the scenario and puts it back at step 1: the call log empties and numbering restarts at 1.",
   "scenario": {
-    "name": "two-steps",
+    "metadata": { "name": "two-steps" },
     "steps": [
       {
         "text": "first"
@@ -88,9 +88,11 @@
         "body": {
           "status": "ok",
           "scenario": "two-steps",
+          "scenarioName": "two-steps",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [1, 2],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

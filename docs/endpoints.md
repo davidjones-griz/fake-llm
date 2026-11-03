@@ -35,7 +35,7 @@ Every error fake-llm sends itself, whatever its status, has the same structure: 
 | `invalid-request` | 400 | Valid JSON the route rejects: no `messages` or `contents` array, an invalid `cache_control`, a Gemini `streamGenerateContent` request without `alt=sse`, an embeddings request outside the rules, a count_tokens body the Messages route rejects, or a `POST /control/scenario` body that has an unknown field, lacks exactly one of `name` and `scenario`, or has a `name` that is not a non-blank string or a `scenario` that is not an object. | No |
 | `unsupported-step` | 400 | The step the call chose has a tool call with `rawArguments` that the request's format can't carry: a buffered Anthropic request, or a Gemini request. The step stays unused. | No |
 | `unknown-scenario` | 400 | A load by name found no such scenario. | No |
-| `invalid-scenario` | 400 | A scenario failed to load: an illegal name, a scenario that doesn't decode or validate, or a file whose declared name differs from its file name. | No |
+| `invalid-scenario` | 400 | A scenario failed to load: an illegal name, or a scenario that doesn't decode or validate, such as one with a top-level `name` (now `metadata.name`). | No |
 | `exception` | 400 | Any other failure. | No |
 | `unauthorized` | 401 | A `/control/` request without the configured control token, or with a different one; see [Control token](control-api.md#control-token). The message says how to send it, and the response has `WWW-Authenticate: Bearer`. | No |
 | `no-route` | 404 | A method and path that no route serves, including a known path with another method. The message names the method and path. | No |

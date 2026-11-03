@@ -192,12 +192,12 @@ class CaseRunnerTest {
             CaseRunner(
                 url,
             ).run(case(get(ExpectedResponse(200)), scenario = JsonPrimitive("hello"), server = ServerSettings(controlToken = "t")))
-            CaseRunner(url).run(case(get(ExpectedResponse(200)), scenario = json("""{"name":"s","steps":[{"text":"x"}]}""")))
+            CaseRunner(url).run(case(get(ExpectedResponse(200)), scenario = json("""{"metadata":{"name":"s"},"steps":[{"text":"x"}]}""")))
         }
         assertEquals("/control/scenario", received[0].path)
         assertEquals("""{"name":"hello"}""", received[0].body)
         assertEquals("Bearer t", received[0].headers["authorization"])
-        assertEquals("""{"scenario":{"name":"s","steps":[{"text":"x"}]}}""", received[2].body)
+        assertEquals("""{"scenario":{"metadata":{"name":"s"},"steps":[{"text":"x"}]}}""", received[2].body)
         assertEquals(null, received[2].headers["authorization"])
     }
 

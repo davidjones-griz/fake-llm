@@ -102,7 +102,7 @@ public fun main(args: Array<String>) {
     if (config.callLog) engine.onCall = { println(callLogLine(it)) }
     config.scenario?.let { engine.load(it) }
     val server = startFakeLlmServer(config.port, engine)
-    println("fake-llm listening on :${server.port} (scenario=${engine.currentScenarioName() ?: "none"})")
+    println("fake-llm listening on :${server.port} (scenario=${engine.currentScenarioKey() ?: "none"})")
     Runtime.getRuntime().addShutdownHook(Thread { server.close() })
 }
 

@@ -3,7 +3,7 @@
   "name": "anthropic-stop-sequence",
   "description": "A step's stopSequence is the buffered message's stop_sequence, after stop_reason stop_sequence. The text is sent as written.",
   "scenario": {
-    "name": "anthropic-stop-sequence",
+    "metadata": { "name": "anthropic-stop-sequence" },
     "steps": [
       {
         "text": "42",

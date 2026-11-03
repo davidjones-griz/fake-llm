@@ -3,7 +3,7 @@
   "name": "gemini-stream-error-after-chunks",
   "description": "streamErrorAfterChunks sends that many filler chunks, then the error body as a data frame, with no chunk carrying finishReason.",
   "scenario": {
-    "name": "gemini-stream-error-after-chunks",
+    "metadata": { "name": "gemini-stream-error-after-chunks" },
     "steps": [
       {
         "error": {

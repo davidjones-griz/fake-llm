@@ -3,7 +3,7 @@
   "name": "usage-anthropic",
   "description": "A step with usage reports its input and output tokens in a buffered Anthropic message; the cache figures stay 0.",
   "scenario": {
-    "name": "text",
+    "metadata": { "name": "text" },
     "steps": [
       {
         "text": "Billing questions go to the billing team.",

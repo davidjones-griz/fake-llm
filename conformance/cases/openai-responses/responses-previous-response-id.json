@@ -3,7 +3,7 @@
   "name": "responses-previous-response-id",
   "description": "previous_response_id, store and conversation are accepted and ignored: each call takes the next step, and only the request's own input is logged.",
   "scenario": {
-    "name": "responses-previous-response-id",
+    "metadata": { "name": "responses-previous-response-id" },
     "steps": [
       {
         "text": "Sunny."

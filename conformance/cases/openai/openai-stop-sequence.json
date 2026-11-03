@@ -3,7 +3,7 @@
   "name": "openai-stop-sequence",
   "description": "Other formats have no field for the matched sequence: stop_sequence is Chat Completions finish_reason stop, OpenAI Responses status completed and Gemini finishReason STOP, with nothing else changed.",
   "scenario": {
-    "name": "openai-stop-sequence",
+    "metadata": { "name": "openai-stop-sequence" },
     "steps": [
       {
         "text": "42",

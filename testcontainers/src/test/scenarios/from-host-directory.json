@@ -1,7 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
-  "name": "from-host-directory",
-  "description": "One step, for the Testcontainers module's test of a scenario directory copied from the host.",
+  "metadata": {
+    "description": "One step, for the Testcontainers module's test of a scenario directory copied from the host."
+  },
   "steps": [
     {
       "text": "Loaded from the host."

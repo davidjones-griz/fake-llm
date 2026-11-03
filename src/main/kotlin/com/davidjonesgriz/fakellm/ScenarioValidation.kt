@@ -14,8 +14,9 @@ import kotlin.io.path.readText
 /**
  * `fake-llm validate <file|dir>...`: checks scenario files with the checks a load by name makes,
  * without starting a server. A directory means its `*.json` files, not its subdirectories. Every
- * file is checked: `ok <path>` goes to [out] for a valid one, and `<path>: <problem>` to [err] for
- * an invalid one, followed by a summary on [out].
+ * file is checked: `ok <path> key=<key>` goes to [out] for a valid one, where the key is the file
+ * name a load by name takes, with ` name=<json string>` after it when the scenario has a
+ * `metadata.name`; `<path>: <problem>` goes to [err] for an invalid one. A summary on [out] follows.
  *
  * Returns the exit code: 0 when every file is valid, 1 when any is invalid, and 2 for a usage
  * error (no paths, a path that does not exist, a directory with no `.json` files, or a flag), in
@@ -35,9 +36,21 @@ internal fun validateScenarios(
         }
     val invalid =
         files.count { file ->
-            val problem = scenarioFileProblem(file)
-            if (problem == null) out.println("ok $file") else err.println("$file: $problem")
-            problem != null
+            scenarioFileCheck(file).fold(
+                onSuccess = { scenario ->
+                    val name =
+                        scenario.metadata
+                            ?.name
+                            ?.let { " name=${jsonString(it)}" }
+                            .orEmpty()
+                    out.println("ok $file key=${file.nameWithoutExtension}$name")
+                    false
+                },
+                onFailure = { e ->
+                    err.println("$file: ${e.message}")
+                    true
+                },
+            )
         }
     out.println("${files.size} ${if (files.size == 1) "file" else "files"}: ${files.size - invalid} valid, $invalid invalid")
     return if (invalid == 0) 0 else EXIT_INVALID
@@ -80,17 +93,16 @@ private fun jsonFiles(dir: Path): List<Path> =
         entries.filter { it.isRegularFile() && it.extension == "json" }.sorted().toList()
     }
 
-/** Why [file] would not load by name, or null when it would. */
-private fun scenarioFileProblem(file: Path): String? =
+/** [file] as a load by name would read it, or the failure that says why it would not load. */
+private fun scenarioFileCheck(file: Path): Result<Scenario> =
     try {
-        ScenarioLoader.decodeFile(file.nameWithoutExtension, file.readText())
-        null
+        Result.success(ScenarioLoader.decodeFile(file.nameWithoutExtension, file.readText()))
     } catch (e: IllegalArgumentException) {
-        e.message
+        Result.failure(e)
     } catch (e: IllegalStateException) {
-        e.message
+        Result.failure(e)
     } catch (e: IOException) {
-        "cannot read the file: $e"
+        Result.failure(IOException("cannot read the file: $e", e))
     }
 
 private const val EXIT_INVALID = 1

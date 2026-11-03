@@ -26,7 +26,7 @@ class ParallelFormatTest {
         validParallelScenarios.forEach { (why, body) ->
             val scenario = decode(body)
             withScenarioDir { dir ->
-                val file = dir.resolve("${scenario.name}.json").also { it.writeText(body) }
+                val file = dir.resolve("${scenario.metadata!!.name}.json").also { it.writeText(body) }
                 val out = ByteArrayOutputStream()
                 val err = ByteArrayOutputStream()
                 assertEquals(0, validateScenarios(listOf(file.toString()), PrintStream(out, true), PrintStream(err, true)), "$why: $err")
@@ -62,11 +62,13 @@ class ParallelFormatTest {
     fun `a nested parallel step and a parallel step with a sibling are named with their step and path`() {
         assertEquals(
             "step 2.1: \$.steps[1].parallel.steps[0].parallel: a parallel step cannot contain another parallel step",
-            messageFor("""{"name":"x","steps":[{"text":"a"},{"parallel":{"steps":[{"parallel":{"steps":[{"text":"b"}]}}]}}]}"""),
+            messageFor(
+                """{"metadata":{"name":"x"},"steps":[{"text":"a"},{"parallel":{"steps":[{"parallel":{"steps":[{"text":"b"}]}}]}}]}""",
+            ),
         )
         assertEquals(
-            "step 1: \$.steps[0]: a parallel step has only the key 'parallel', got 'match'",
-            messageFor("""{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}]},"match":{"model":"m"}}]}"""),
+            "step 1: \$.steps[0]: a parallel step has only the keys 'parallel' and 'metadata', got 'match'",
+            messageFor("""{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"text":"a"}]},"match":{"model":"m"}}]}"""),
         )
     }
 
@@ -75,23 +77,23 @@ class ParallelFormatTest {
         assertEquals(
             "step 2.3: \$.steps[1].parallel.steps[2].match.lastUser.regex: expected a string, got 1",
             messageFor(
-                """{"name":"x","steps":[{"text":"a"},{"parallel":{"steps":[{"text":"b"},{"text":"c"},
+                """{"metadata":{"name":"x"},"steps":[{"text":"a"},{"parallel":{"steps":[{"text":"b"},{"text":"c"},
                 {"text":"d","match":{"lastUser":{"regex":1}}}]}}]}""",
             ),
         )
         assertEquals(
             "step 1.2: a step must set either error or a reply: text, toolCalls or both",
-            messageFor("""{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"},{}]}}]}"""),
+            messageFor("""{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"text":"a"},{}]}}]}"""),
         )
         assertEquals(
             "step 1: a parallel step's steps must not be empty",
-            messageFor("""{"name":"x","steps":[{"parallel":{"steps":[]}}]}"""),
+            messageFor("""{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[]}}]}"""),
         )
     }
 
     @Test
     fun `match rules are checked when the scenario loads`() {
-        fun matchMessage(match: String) = messageFor("""{"name":"x","steps":[{"match":$match,"text":"t"}]}""")
+        fun matchMessage(match: String) = messageFor("""{"metadata":{"name":"x"},"steps":[{"match":$match,"text":"t"}]}""")
         assertEquals("step 1: a match must set at least one key", matchMessage("{}"))
         assertEquals("step 1: a text match sets exactly one of contains, equals and regex", matchMessage("""{"prompt":{}}"""))
         assertEquals(
@@ -126,20 +128,20 @@ class ParallelFormatTest {
     @Test
     fun `a regex that does not compile is rejected by the decoder`() {
         assertContains(
-            messageFor("""{"name":"x","steps":[{"match":{"lastUser":{"regex":"(unclosed"}},"text":"t"}]}"""),
+            messageFor("""{"metadata":{"name":"x"},"steps":[{"match":{"lastUser":{"regex":"(unclosed"}},"text":"t"}]}"""),
             "step 1: regex '(unclosed' does not compile: Unclosed group",
         )
-        decode("""{"name":"x","steps":[{"match":{"lastUser":{"regex":"(?i)a++"}},"text":"t"}]}""")
+        decode("""{"metadata":{"name":"x"},"steps":[{"match":{"lastUser":{"regex":"(?i)a++"}},"text":"t"}]}""")
     }
 
     @Test
     fun `times rules are checked when the scenario loads, naming the field`() {
-        fun timesMessage(times: String) = messageFor("""{"name":"x","steps":[{"text":"a"},{"times":$times,"text":"t"}]}""")
+        fun timesMessage(times: String) = messageFor("""{"metadata":{"name":"x"},"steps":[{"text":"a"},{"times":$times,"text":"t"}]}""")
         assertEquals("step 2: times.min must not be negative, got -1", timesMessage("""{"min":-1}"""))
         assertEquals("step 2: times.max must be at least 1, got 0", timesMessage("""{"max":0}"""))
         assertEquals(
             "step 1.1: times.min must not be negative, got -2",
-            messageFor("""{"name":"x","steps":[{"parallel":{"steps":[{"times":{"min":-2},"text":"a"}]}}]}"""),
+            messageFor("""{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"times":{"min":-2},"text":"a"}]}}]}"""),
         )
         assertEquals("step 2: \$.steps[1].times.min: must not be null", timesMessage("""{"min":null}"""))
     }
@@ -153,7 +155,7 @@ class ParallelFormatTest {
     fun `a times max below its min is rejected by the decoder`() {
         assertEquals(
             "step 1: times.max must be at least times.min (got 2, min 3)",
-            messageFor("""{"name":"x","steps":[{"times":{"min":3,"max":2},"text":"t"}]}"""),
+            messageFor("""{"metadata":{"name":"x"},"steps":[{"times":{"min":3,"max":2},"text":"t"}]}"""),
         )
     }
 

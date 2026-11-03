@@ -3,7 +3,7 @@
   "name": "usage-gemini-stream",
   "description": "A Gemini stream reports the step's counts in usageMetadata on its last chunk only.",
   "scenario": {
-    "name": "gemini-stream-text",
+    "metadata": { "name": "gemini-stream-text" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

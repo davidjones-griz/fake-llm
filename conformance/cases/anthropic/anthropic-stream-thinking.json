@@ -3,7 +3,7 @@
   "name": "anthropic-stream-thinking",
   "description": "A streamed thinking step sends the thinking block, its signature, then the text block.",
   "scenario": {
-    "name": "stream-thinking",
+    "metadata": { "name": "stream-thinking" },
     "steps": [
       {
         "text": "Simmer it.",

@@ -3,7 +3,7 @@
   "name": "gemini-error-step",
   "description": "An error step is sent as scripted.",
   "scenario": {
-    "name": "error",
+    "metadata": { "name": "error" },
     "steps": [
       {
         "error": {

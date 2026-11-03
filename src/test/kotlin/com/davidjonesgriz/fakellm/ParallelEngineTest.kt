@@ -15,7 +15,10 @@ class ParallelEngineTest {
 
     private fun on(text: String) = Step(text = text.uppercase(), match = Match(lastUser = TextMatch(equalTo = text)))
 
-    private fun engine(vararg steps: Step) = ScenarioEngine().also { it.loadInline(Scenario(name = "p", steps = steps.toList())) }
+    private fun engine(vararg steps: Step) =
+        ScenarioEngine().also {
+            it.loadInline(Scenario(metadata = ScenarioMetadata(name = "p"), steps = steps.toList()))
+        }
 
     private fun section(
         vararg steps: Step,
@@ -219,7 +222,10 @@ class ParallelEngineTest {
 
     @Test
     fun `lenient mode does not change no-match`() {
-        val e = ScenarioEngine(lenient = true).also { it.loadInline(Scenario(name = "p", steps = listOf(on("a")))) }
+        val e =
+            ScenarioEngine(
+                lenient = true,
+            ).also { it.loadInline(Scenario(metadata = ScenarioMetadata(name = "p"), steps = listOf(on("a")))) }
         assertEquals("no-match", e.call("b"))
     }
 

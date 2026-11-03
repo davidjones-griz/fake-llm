@@ -3,7 +3,7 @@
   "name": "no-more-steps",
   "description": "A call after the last step gets the no-more-steps 400.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

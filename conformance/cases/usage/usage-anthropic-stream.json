@@ -3,7 +3,7 @@
   "name": "usage-anthropic-stream",
   "description": "A streamed Anthropic reply reports the step's input tokens on message_start and its output tokens on message_delta.",
   "scenario": {
-    "name": "stream",
+    "metadata": { "name": "stream" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

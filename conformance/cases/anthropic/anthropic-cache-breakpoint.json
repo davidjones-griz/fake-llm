@@ -3,7 +3,7 @@
   "name": "anthropic-cache-breakpoint",
   "description": "A cache_control breakpoint in the request reports the fixed cache token counts.",
   "scenario": {
-    "name": "cache",
+    "metadata": { "name": "cache" },
     "steps": [
       {
         "text": "Cached."

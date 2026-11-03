@@ -3,7 +3,7 @@
   "name": "exchanges-buffered",
   "description": "A buffered call's exchange: the request as received and the JSON reply as written.",
   "scenario": {
-    "name": "buffered",
+    "metadata": { "name": "buffered" },
     "steps": [
       {
         "text": "Mild and dry tomorrow."

@@ -3,7 +3,7 @@
   "name": "openai-stream-error-step",
   "description": "An error step without streamErrorAfterChunks is a plain HTTP error even when the request is streamed.",
   "scenario": {
-    "name": "stream-error-step",
+    "metadata": { "name": "stream-error-step" },
     "steps": [
       {
         "error": {

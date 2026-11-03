@@ -3,7 +3,7 @@
   "name": "usage-responses-stream",
   "description": "A streamed Response keeps usage null on response.created and response.in_progress, and reports the step's counts on response.completed.",
   "scenario": {
-    "name": "responses-stream-text",
+    "metadata": { "name": "responses-stream-text" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

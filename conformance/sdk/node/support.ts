@@ -192,11 +192,11 @@ export class Fake {
     const response = await fetch(`${this.baseUrl}/control/scenario`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ scenario: { name: this.name, steps } }),
+      body: JSON.stringify({ scenario: { metadata: { name: this.name }, steps } }),
     });
     const text = await response.text();
     assert.equal(response.status, 200, text);
-    assert.deepEqual(JSON.parse(text), { loaded: this.name, steps: steps.length });
+    assert.deepEqual(JSON.parse(text), { loaded: this.name, name: this.name, steps: steps.length });
   }
 
   /** Removes the loaded scenario and empties the call log; calls then get the no-scenario 400. */

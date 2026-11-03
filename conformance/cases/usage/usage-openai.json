@@ -3,7 +3,7 @@
   "name": "usage-openai",
   "description": "A buffered chat completion reports the step's prompt, completion and total tokens.",
   "scenario": {
-    "name": "text",
+    "metadata": { "name": "text" },
     "steps": [
       {
         "text": "Billing.",

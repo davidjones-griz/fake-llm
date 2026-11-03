@@ -114,26 +114,26 @@ class PrecedenceFixture {
         engine: ScenarioEngine,
         info: TestInfo,
     ) {
-        Sink.add("precedence:beforeEach:${info.testMethod.get().name}", engine.currentScenarioName())
+        Sink.add("precedence:beforeEach:${info.testMethod.get().name}", engine.currentScenarioKey())
     }
 
     @Test
     fun classScenario(server: FakeLlmServer) {
-        Sink.add("precedence:classScenario", server.engine.currentScenarioName())
+        Sink.add("precedence:classScenario", server.engine.currentScenarioKey())
         Sink.add("precedence:port", server.port)
     }
 
     @Test
     @FakeLlmScenario("refusal")
     fun methodScenario(engine: ScenarioEngine) {
-        Sink.add("precedence:methodScenario", engine.currentScenarioName())
+        Sink.add("precedence:methodScenario", engine.currentScenarioKey())
     }
 
     @Nested
     inner class Inherits {
         @Test
         fun enclosingScenario(server: FakeLlmServer) {
-            Sink.add("precedence:enclosingScenario", server.engine.currentScenarioName())
+            Sink.add("precedence:enclosingScenario", server.engine.currentScenarioKey())
             Sink.add("precedence:port", server.port)
         }
     }
@@ -143,13 +143,13 @@ class PrecedenceFixture {
     inner class Overrides {
         @Test
         fun nestedClassScenario(engine: ScenarioEngine) {
-            Sink.add("precedence:nestedClassScenario", engine.currentScenarioName())
+            Sink.add("precedence:nestedClassScenario", engine.currentScenarioKey())
         }
 
         @Test
         @FakeLlmScenario("thinking-stream")
         fun nestedMethodScenario(engine: ScenarioEngine) {
-            Sink.add("precedence:nestedMethodScenario", engine.currentScenarioName())
+            Sink.add("precedence:nestedMethodScenario", engine.currentScenarioKey())
         }
     }
 }
@@ -164,7 +164,7 @@ class PrecedenceFixture {
 class NoScenarioFixture {
     @Test
     fun unloaded(server: FakeLlmServer) {
-        Sink.add("noScenario", server.engine.currentScenarioName())
+        Sink.add("noScenario", server.engine.currentScenarioKey())
         Sink.add("noScenario:status", post(server))
     }
 
@@ -343,7 +343,7 @@ abstract class AnnotatedBase : FakeLlmBase()
 class InheritedFixture : AnnotatedBase() {
     @Test
     fun inherited(server: FakeLlmServer) {
-        Sink.add("inherited", server.engine.currentScenarioName())
+        Sink.add("inherited", server.engine.currentScenarioKey())
     }
 }
 
@@ -370,13 +370,13 @@ class ComposedFixture {
     @Test
     fun classScenario(server: FakeLlmServer) {
         Sink.add("composed:lenient", server.engine.lenient)
-        Sink.add("composed:classScenario", server.engine.currentScenarioName())
+        Sink.add("composed:classScenario", server.engine.currentScenarioKey())
     }
 
     @Test
     @RefusalScenario
     fun methodScenario(engine: ScenarioEngine) {
-        Sink.add("composed:methodScenario", engine.currentScenarioName())
+        Sink.add("composed:methodScenario", engine.currentScenarioKey())
     }
 }
 
@@ -391,7 +391,7 @@ class InterfaceFixture : FakeLlmInterface {
     @Test
     fun fromInterface(server: FakeLlmServer) {
         Sink.add("interface:lenient", server.engine.lenient)
-        Sink.add("interface:scenario", server.engine.currentScenarioName())
+        Sink.add("interface:scenario", server.engine.currentScenarioKey())
     }
 }
 

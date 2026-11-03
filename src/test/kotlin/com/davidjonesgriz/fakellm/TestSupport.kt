@@ -156,170 +156,185 @@ internal fun writeScenario(
  */
 internal val invalidScenarios =
     listOf(
-        "no steps" to """{"name":"x","steps":[]}""",
-        "no name" to """{"steps":[{"text":"t"}]}""",
-        "an unknown field" to """{"name":"x","steps":[{"text":"t"}],"extra":1}""",
-        "the removed rules format" to """{"name":"x","rules":[{"role":"r","respond":[{"text":"t"}]}]}""",
-        "a null steps list" to """{"name":"x","steps":null}""",
-        "a step with text and error" to """{"name":"x","steps":[{"text":"t","error":{"status":500}}]}""",
-        "a step with neither" to """{"name":"x","steps":[{}]}""",
-        "a step with both null" to """{"name":"x","steps":[{"text":null,"error":null}]}""",
+        "no steps" to """{"metadata":{"name":"x"},"steps":[]}""",
+        "a top-level name, now metadata.name" to """{"name":"x","steps":[{"text":"t"}]}""",
+        "a top-level description, now metadata.description" to """{"description":"d","steps":[{"text":"t"}]}""",
+        "an unknown key in the scenario's metadata" to """{"metadata":{"name":"x","owner":"me"},"steps":[{"text":"t"}]}""",
+        "an unknown key in a step's metadata" to """{"steps":[{"text":"t","metadata":{"title":"x"}}]}""",
+        "metadata in a match" to """{"steps":[{"text":"t","match":{"model":"m","metadata":{"name":"x"}}}]}""",
+        "metadata in a text match" to """{"steps":[{"text":"t","match":{"lastUser":{"contains":"a","metadata":{}}}}]}""",
+        "metadata in an error" to """{"steps":[{"error":{"status":500,"metadata":{"name":"x"}}}]}""",
+        "metadata in a tool call" to """{"steps":[{"toolCalls":[{"name":"f","metadata":{"name":"x"}}]}]}""",
+        "metadata in a parallel section" to """{"steps":[{"parallel":{"steps":[{"text":"a"}],"metadata":{"name":"x"}}}]}""",
+        "an empty metadata name" to """{"metadata":{"name":""},"steps":[{"text":"t"}]}""",
+        "an empty tag" to """{"steps":[{"text":"t","metadata":{"tags":["ok",""]}}]}""",
+        "a tag that is not a string" to """{"steps":[{"text":"t","metadata":{"tags":[1]}}]}""",
+        "tags that are not a list" to """{"steps":[{"text":"t","metadata":{"tags":"smoke"}}]}""",
+        "null tags" to """{"steps":[{"text":"t","metadata":{"tags":null}}]}""",
+        "metadata that is not an object" to """{"metadata":"x","steps":[{"text":"t"}]}""",
+        "a metadata name that is not a string" to """{"steps":[{"text":"t","metadata":{"name":2}}]}""",
+        "an unknown field" to """{"metadata":{"name":"x"},"steps":[{"text":"t"}],"extra":1}""",
+        "the removed rules format" to """{"metadata":{"name":"x"},"rules":[{"role":"r","respond":[{"text":"t"}]}]}""",
+        "a null steps list" to """{"metadata":{"name":"x"},"steps":null}""",
+        "a step with text and error" to """{"metadata":{"name":"x"},"steps":[{"text":"t","error":{"status":500}}]}""",
+        "a step with neither" to """{"metadata":{"name":"x"},"steps":[{}]}""",
+        "a step with both null" to """{"metadata":{"name":"x"},"steps":[{"text":null,"error":null}]}""",
         "thinking on an error step" to
-            """{"name":"x","steps":[{"thinking":"h","error":{"status":500}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"thinking":"h","error":{"status":500}}]}""",
         "streamErrorAfterChunks on a text step" to
-            """{"name":"x","steps":[{"text":"t","streamErrorAfterChunks":2}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"text":"t","streamErrorAfterChunks":2}]}""",
         "streamErrorAfterChunks of 0" to
-            """{"name":"x","steps":[{"error":{"status":500},"streamErrorAfterChunks":0}]}""",
-        "streamChunkChars of 0" to """{"name":"x","steps":[{"text":"t","streamChunkChars":0}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"error":{"status":500},"streamErrorAfterChunks":0}]}""",
+        "streamChunkChars of 0" to """{"metadata":{"name":"x"},"steps":[{"text":"t","streamChunkChars":0}]}""",
         "streamChunkChars past Int" to
-            """{"name":"x","steps":[{"text":"t","streamChunkChars":3000000000}]}""",
-        "a negative delay" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":-1}]}""",
-        "an unknown field in a step" to """{"name":"x","steps":[{"text":"t","extra":1}]}""",
-        "an error status of 42" to """{"name":"x","steps":[{"error":{"status":42}}]}""",
-        "an error status of 600" to """{"name":"x","steps":[{"error":{"status":600}}]}""",
-        "an error with no status" to """{"name":"x","steps":[{"error":{"body":"b"}}]}""",
-        "an unknown field in an error" to """{"name":"x","steps":[{"error":{"status":500,"extra":1}}]}""",
-        "a null description" to """{"name":"x","description":null,"steps":[{"text":"t"}]}""",
-        "a null stopReason" to """{"name":"x","steps":[{"text":"t","stopReason":null}]}""",
-        "a delay above the cap" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":600001}]}""",
-        "a negative first-byte delay" to """{"name":"x","steps":[{"text":"t","firstByteDelayMs":-1}]}""",
-        "a first-byte delay above the cap" to """{"name":"x","steps":[{"text":"t","firstByteDelayMs":600001}]}""",
-        "a null first-byte delay" to """{"name":"x","steps":[{"text":"t","firstByteDelayMs":null}]}""",
-        "a null delay" to """{"name":"x","steps":[{"text":"t","streamInterChunkDelayMs":null}]}""",
-        "a null error body" to """{"name":"x","steps":[{"error":{"status":500,"body":null}}]}""",
-        "null error headers" to """{"name":"x","steps":[{"error":{"status":500,"headers":null}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"text":"t","streamChunkChars":3000000000}]}""",
+        "a negative delay" to """{"metadata":{"name":"x"},"steps":[{"text":"t","streamInterChunkDelayMs":-1}]}""",
+        "an unknown field in a step" to """{"metadata":{"name":"x"},"steps":[{"text":"t","extra":1}]}""",
+        "an error status of 42" to """{"metadata":{"name":"x"},"steps":[{"error":{"status":42}}]}""",
+        "an error status of 600" to """{"metadata":{"name":"x"},"steps":[{"error":{"status":600}}]}""",
+        "an error with no status" to """{"metadata":{"name":"x"},"steps":[{"error":{"body":"b"}}]}""",
+        "an unknown field in an error" to """{"metadata":{"name":"x"},"steps":[{"error":{"status":500,"extra":1}}]}""",
+        "a null stopReason" to """{"metadata":{"name":"x"},"steps":[{"text":"t","stopReason":null}]}""",
+        "a delay above the cap" to """{"metadata":{"name":"x"},"steps":[{"text":"t","streamInterChunkDelayMs":600001}]}""",
+        "a negative first-byte delay" to """{"metadata":{"name":"x"},"steps":[{"text":"t","firstByteDelayMs":-1}]}""",
+        "a first-byte delay above the cap" to """{"metadata":{"name":"x"},"steps":[{"text":"t","firstByteDelayMs":600001}]}""",
+        "a null first-byte delay" to """{"metadata":{"name":"x"},"steps":[{"text":"t","firstByteDelayMs":null}]}""",
+        "a null delay" to """{"metadata":{"name":"x"},"steps":[{"text":"t","streamInterChunkDelayMs":null}]}""",
+        "a null error body" to """{"metadata":{"name":"x"},"steps":[{"error":{"status":500,"body":null}}]}""",
+        "null error headers" to """{"metadata":{"name":"x"},"steps":[{"error":{"status":500,"headers":null}}]}""",
         "a non-string error header" to
-            """{"name":"x","steps":[{"error":{"status":500,"headers":{"a":1}}}]}""",
-        "a quoted integer" to """{"name":"x","steps":[{"text":"t","streamChunkChars":"24"}]}""",
-        "a quoted error status" to """{"name":"x","steps":[{"error":{"status":"500"}}]}""",
-        "a null \$schema" to """{"${'$'}schema":null,"name":"x","steps":[{"text":"t"}]}""",
-        "a numeric \$schema" to """{"${'$'}schema":1,"name":"x","steps":[{"text":"t"}]}""",
-        "\$schema in a step" to """{"name":"x","steps":[{"${'$'}schema":"s","text":"t"}]}""",
-        "toolCalls with an error" to """{"name":"x","steps":[{"toolCalls":[{"name":"f"}],"error":{"status":500}}]}""",
-        "an empty toolCalls list" to """{"name":"x","steps":[{"toolCalls":[]}]}""",
-        "a null toolCalls with no text" to """{"name":"x","steps":[{"toolCalls":null}]}""",
-        "a tool call without a name" to """{"name":"x","steps":[{"toolCalls":[{"arguments":{}}]}]}""",
-        "an empty tool name" to """{"name":"x","steps":[{"toolCalls":[{"name":""}]}]}""",
-        "an empty tool call id" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","id":""}]}]}""",
-        "arguments and rawArguments" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","arguments":{},"rawArguments":"{}"}]}]}""",
-        "array arguments" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","arguments":[1]}]}]}""",
-        "object rawArguments" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","rawArguments":{}}]}]}""",
-        "max_tokens with toolCalls" to """{"name":"x","steps":[{"toolCalls":[{"name":"f"}],"stopReason":"max_tokens"}]}""",
-        "an unknown field in a tool call" to """{"name":"x","steps":[{"toolCalls":[{"name":"f","input":{}}]}]}""",
-        "usage on an error step" to """{"name":"x","steps":[{"error":{"status":500},"usage":{"inputTokens":1}}]}""",
-        "a negative inputTokens" to """{"name":"x","steps":[{"text":"t","usage":{"inputTokens":-1}}]}""",
-        "an unknown field in usage" to """{"name":"x","steps":[{"text":"t","usage":{"cachedTokens":1}}]}""",
-        "stopSequence without stopReason stop_sequence" to """{"name":"x","steps":[{"text":"t","stopSequence":"END"}]}""",
-        "an empty stopSequence" to """{"name":"x","steps":[{"text":"t","stopReason":"stop_sequence","stopSequence":""}]}""",
-        "outputTokens past Int" to """{"name":"x","steps":[{"text":"t","usage":{"outputTokens":3000000000}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"error":{"status":500,"headers":{"a":1}}}]}""",
+        "a quoted integer" to """{"metadata":{"name":"x"},"steps":[{"text":"t","streamChunkChars":"24"}]}""",
+        "a quoted error status" to """{"metadata":{"name":"x"},"steps":[{"error":{"status":"500"}}]}""",
+        "a null \$schema" to """{"${'$'}schema":null,"metadata":{"name":"x"},"steps":[{"text":"t"}]}""",
+        "a numeric \$schema" to """{"${'$'}schema":1,"metadata":{"name":"x"},"steps":[{"text":"t"}]}""",
+        "\$schema in a step" to """{"metadata":{"name":"x"},"steps":[{"${'$'}schema":"s","text":"t"}]}""",
+        "toolCalls with an error" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":[{"name":"f"}],"error":{"status":500}}]}""",
+        "an empty toolCalls list" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":[]}]}""",
+        "a null toolCalls with no text" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":null}]}""",
+        "a tool call without a name" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":[{"arguments":{}}]}]}""",
+        "an empty tool name" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":[{"name":""}]}]}""",
+        "an empty tool call id" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":[{"name":"f","id":""}]}]}""",
+        "arguments and rawArguments" to
+            """{"metadata":{"name":"x"},"steps":[{"toolCalls":[{"name":"f","arguments":{},"rawArguments":"{}"}]}]}""",
+        "array arguments" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":[{"name":"f","arguments":[1]}]}]}""",
+        "object rawArguments" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":[{"name":"f","rawArguments":{}}]}]}""",
+        "max_tokens with toolCalls" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":[{"name":"f"}],"stopReason":"max_tokens"}]}""",
+        "an unknown field in a tool call" to """{"metadata":{"name":"x"},"steps":[{"toolCalls":[{"name":"f","input":{}}]}]}""",
+        "usage on an error step" to """{"metadata":{"name":"x"},"steps":[{"error":{"status":500},"usage":{"inputTokens":1}}]}""",
+        "a negative inputTokens" to """{"metadata":{"name":"x"},"steps":[{"text":"t","usage":{"inputTokens":-1}}]}""",
+        "an unknown field in usage" to """{"metadata":{"name":"x"},"steps":[{"text":"t","usage":{"cachedTokens":1}}]}""",
+        "stopSequence without stopReason stop_sequence" to """{"metadata":{"name":"x"},"steps":[{"text":"t","stopSequence":"END"}]}""",
+        "an empty stopSequence" to """{"metadata":{"name":"x"},"steps":[{"text":"t","stopReason":"stop_sequence","stopSequence":""}]}""",
+        "outputTokens past Int" to """{"metadata":{"name":"x"},"steps":[{"text":"t","usage":{"outputTokens":3000000000}}]}""",
         "a parallel step inside a parallel step" to
-            """{"name":"x","steps":[{"parallel":{"steps":[{"parallel":{"steps":[{"text":"a"}]}}]}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"parallel":{"steps":[{"text":"a"}]}}]}}]}""",
         "a parallel step with a sibling key" to
-            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}]},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"text":"a"}]},"text":"t"}]}""",
         "a parallel step with an explicit default beside it" to
-            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}]},"stopReason":"end_turn"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"text":"a"}]},"stopReason":"end_turn"}]}""",
         "a parallel step with a null sibling" to
-            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}]},"text":null}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"text":"a"}]},"text":null}]}""",
         "match on a parallel step" to
-            """{"name":"x","steps":[{"match":{"model":"m"},"parallel":{"steps":[{"text":"a"}]}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"model":"m"},"parallel":{"steps":[{"text":"a"}]}}]}""",
         "a null parallel and nothing else" to
-            """{"name":"x","steps":[{"parallel":null}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":null}]}""",
         "an empty parallel steps list" to
-            """{"name":"x","steps":[{"parallel":{"steps":[]}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[]}}]}""",
         "a parallel section without steps" to
-            """{"name":"x","steps":[{"parallel":{"overlap":true}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"overlap":true}}]}""",
         "an unknown field in a parallel section" to
-            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}],"x":1}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"text":"a"}],"x":1}}]}""",
         "overlap as a string" to
-            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}],"overlap":"yes"}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"text":"a"}],"overlap":"yes"}}]}""",
         "an inner step with neither a reply nor an error" to
-            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"},{}]}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"text":"a"},{}]}}]}""",
         "an empty match" to
-            """{"name":"x","steps":[{"match":{},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{},"text":"t"}]}""",
         "a match whose only key is null" to
-            """{"name":"x","steps":[{"match":{"model":null},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"model":null},"text":"t"}]}""",
         "an unknown key in a match" to
-            """{"name":"x","steps":[{"match":{"modle":"m"},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"modle":"m"},"text":"t"}]}""",
         "a text match with two operators" to
-            """{"name":"x","steps":[{"match":{"lastUser":{"contains":"a","equals":"b"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"lastUser":{"contains":"a","equals":"b"}},"text":"t"}]}""",
         "a text match with no operator" to
-            """{"name":"x","steps":[{"match":{"lastUser":{}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"lastUser":{}},"text":"t"}]}""",
         "a text match whose only operator is null" to
-            """{"name":"x","steps":[{"match":{"system":{"contains":null}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"system":{"contains":null}},"text":"t"}]}""",
         "a message match with index and role" to
-            """{"name":"x","steps":[{"match":{"message":{"index":0,"role":"user","contains":"a"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"message":{"index":0,"role":"user","contains":"a"}},"text":"t"}]}""",
         "a message match with neither index nor role" to
-            """{"name":"x","steps":[{"match":{"message":{"contains":"a"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"message":{"contains":"a"}},"text":"t"}]}""",
         "a message match with no text operator" to
-            """{"name":"x","steps":[{"match":{"message":{"index":0}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"message":{"index":0}},"text":"t"}]}""",
         "a quoted message index" to
-            """{"name":"x","steps":[{"match":{"message":{"index":"0","contains":"a"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"message":{"index":"0","contains":"a"}},"text":"t"}]}""",
         "an unknown route" to
-            """{"name":"x","steps":[{"match":{"route":"bedrock"},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"route":"bedrock"},"text":"t"}]}""",
         "stream as a string" to
-            """{"name":"x","steps":[{"match":{"stream":"true"},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"stream":"true"},"text":"t"}]}""",
         "a negative messageCount" to
-            """{"name":"x","steps":[{"match":{"messageCount":-1},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"messageCount":-1},"text":"t"}]}""",
         "a body path without $" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"metadata.user","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"metadata.user","equals":1}},"text":"t"}]}""",
         "a body path that is only $" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$","equals":1}},"text":"t"}]}""",
         "a body path with a wildcard" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$.a[*]","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$.a[*]","equals":1}},"text":"t"}]}""",
         "a body path with an unclosed quote" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$['a]","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$['a]","equals":1}},"text":"t"}]}""",
         "a body match without equals" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$.a"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$.a"}},"text":"t"}]}""",
         "an empty tools match" to
-            """{"name":"x","steps":[{"match":{"tools":{}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"tools":{}},"text":"t"}]}""",
         "an unknown tool choice" to
-            """{"name":"x","steps":[{"match":{"tools":{"choice":"maybe"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"tools":{"choice":"maybe"}},"text":"t"}]}""",
         "choiceTool with choice auto" to
-            """{"name":"x","steps":[{"match":{"tools":{"choice":"auto","choiceTool":"f"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"tools":{"choice":"auto","choiceTool":"f"}},"text":"t"}]}""",
         "an empty choiceTool" to
-            """{"name":"x","steps":[{"match":{"tools":{"choiceTool":""}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"tools":{"choiceTool":""}},"text":"t"}]}""",
         "an empty toolResult match" to
-            """{"name":"x","steps":[{"match":{"toolResult":{}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"toolResult":{}},"text":"t"}]}""",
         "a toolResult match whose only key is null" to
-            """{"name":"x","steps":[{"match":{"toolResult":{"id":null}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"toolResult":{"id":null}},"text":"t"}]}""",
         "an empty header name" to
-            """{"name":"x","steps":[{"match":{"header":{"name":"","contains":"a"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"header":{"name":"","contains":"a"}},"text":"t"}]}""",
         "a header name with a space" to
-            """{"name":"x","steps":[{"match":{"header":{"name":"x trace","contains":"a"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"header":{"name":"x trace","contains":"a"}},"text":"t"}]}""",
         "a body path index of ten digits" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$[1234567890]","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$[1234567890]","equals":1}},"text":"t"}]}""",
         "a body path with a bad escape" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$['a\\b']","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$['a\\b']","equals":1}},"text":"t"}]}""",
         "a body path name starting with a digit" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$.1a","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$.1a","equals":1}},"text":"t"}]}""",
         "a body path with a double dot" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$..a","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$..a","equals":1}},"text":"t"}]}""",
         "a body path name with a space" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$.a b","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$.a b","equals":1}},"text":"t"}]}""",
         "a body path ending in a newline" to
-            """{"name":"x","steps":[{"match":{"body":{"path":"$.a\n","equals":1}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"body":{"path":"$.a\n","equals":1}},"text":"t"}]}""",
         "a header name ending in a newline" to
-            """{"name":"x","steps":[{"match":{"header":{"name":"x-trace\n","contains":"a"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"header":{"name":"x-trace\n","contains":"a"}},"text":"t"}]}""",
         "a tools match whose only key is null" to
-            """{"name":"x","steps":[{"match":{"tools":{"declares":null}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"tools":{"declares":null}},"text":"t"}]}""",
         "a header match whose only operator is null" to
-            """{"name":"x","steps":[{"match":{"header":{"name":"x","contains":null}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"header":{"name":"x","contains":null}},"text":"t"}]}""",
         "a negative times.min" to
-            """{"name":"x","steps":[{"times":{"min":-1},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"times":{"min":-1},"text":"t"}]}""",
         "a times.max of 0" to
-            """{"name":"x","steps":[{"times":{"max":0},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"times":{"max":0},"text":"t"}]}""",
         "times.max as a string" to
-            """{"name":"x","steps":[{"times":{"max":"3"},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"times":{"max":"3"},"text":"t"}]}""",
         "an unknown key in times" to
-            """{"name":"x","steps":[{"times":{"min":1,"count":2},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"times":{"min":1,"count":2},"text":"t"}]}""",
         "a null times.min" to
-            """{"name":"x","steps":[{"times":{"min":null},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"times":{"min":null},"text":"t"}]}""",
         "times on a parallel step" to
-            """{"name":"x","steps":[{"parallel":{"steps":[{"text":"a"}]},"times":{"max":2}}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"parallel":{"steps":[{"text":"a"}]},"times":{"max":2}}]}""",
         "times as a number" to
-            """{"name":"x","steps":[{"times":2,"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"times":2,"text":"t"}]}""",
         "a header match with no operator" to
-            """{"name":"x","steps":[{"match":{"header":{"name":"x-trace"}},"text":"t"}]}""",
+            """{"metadata":{"name":"x"},"steps":[{"match":{"header":{"name":"x-trace"}},"text":"t"}]}""",
     )
 
 /**
@@ -328,19 +343,28 @@ internal val invalidScenarios =
  */
 internal val validParallelScenarios =
     listOf(
+        "metadata on the scenario and on every kind of step" to
+            """{"metadata":{"name":"note-summary","description":"Single note","tags":["smoke"]},"steps":[
+              {"metadata":{"name":"summarize-note","tags":["happy-path"]},"text":"ok"},
+              {"metadata":{"name":"rate-limited","description":"One 429 first"},"error":{"status":429}},
+              {"metadata":{"description":"Two tool results can arrive in either order","tags":["race"]},"parallel":{"steps":[
+                {"metadata":{"name":"side-a"},"match":{"lastUser":{"contains":"a"}},"text":"a"},
+                {"metadata":{"name":"side-b","description":null},"text":"b"}]}},
+              {"metadata":null,"text":"no metadata"},
+              {"metadata":{},"text":"empty metadata"}]}""",
         "the issue's fan-out and merge" to
-            """{"name":"summarize-three-then-merge","steps":[{"parallel":{"steps":[
+            """{"metadata":{"name":"summarize-three-then-merge"},"steps":[{"parallel":{"steps":[
               {"match":{"lastUser":{"contains":"doc-a"}},"text":"Summary of A."},
               {"match":{"lastUser":{"contains":"doc-b"}},"text":"Summary of B."},
               {"match":{"lastUser":{"contains":"doc-c"}},"text":"Summary of C."}]}},
               {"match":{"system":{"contains":"Merge"}},"text":"A, B and C, combined."}]}""",
         "the issue's 429 and retry" to
-            """{"name":"parallel-with-a-429-retry","steps":[{"parallel":{"steps":[
+            """{"metadata":{"name":"parallel-with-a-429-retry"},"steps":[{"parallel":{"steps":[
               {"match":{"lastUser":{"contains":"doc-a"}},"error":{"status":429,"body":"{\"type\":\"error\"}","headers":{"retry-after":"1"}}},
               {"match":{"lastUser":{"contains":"doc-a"}},"text":"Summary of A."},
               {"match":{"lastUser":{"contains":"doc-b"}},"text":"Summary of B."}]}}]}""",
         "a nested fan-out in an overlap group" to
-            """{"name":"nested","steps":[
+            """{"metadata":{"name":"nested"},"steps":[
               {"parallel":{"overlap":true,"steps":[{"match":{"lastUser":{"equals":"plan a"}},"text":"A"},
                 {"match":{"lastUser":{"equals":"plan b"}},"text":"B"}]}},
               {"parallel":{"overlap":true,"steps":[{"match":{"lastUser":{"equals":"a1"}},"text":"A1"},
@@ -348,7 +372,7 @@ internal val validParallelScenarios =
               {"parallel":{"overlap":true,"steps":[{"match":{"lastUser":{"equals":"b1"}},"text":"B1"}]}},
               {"text":"merged"}]}""",
         "every match key" to
-            """{"name":"keys","steps":[{"match":{"route":"anthropic","model":"m","stream":false,
+            """{"metadata":{"name":"keys"},"steps":[{"match":{"route":"anthropic","model":"m","stream":false,
               "system":{"contains":"s"},"lastUser":{"equals":"u"},"prompt":{"regex":"^s"},
               "message":{"index":-1,"contains":"u"},"messageCount":1,"hasSystem":true,
               "toolResult":{"id":"t1","name":"f","content":{"contains":"x"},"isError":false},
@@ -356,7 +380,7 @@ internal val validParallelScenarios =
               "body":{"path":"$.metadata['user \\'id'][-1].a","equals":{"a":[1,null]}},
               "header":{"name":"x-trace","contains":"a"}},"text":"t"}]}""",
         "explicit nulls the decoder reads as absent" to
-            """{"name":"nulls","steps":[
+            """{"metadata":{"name":"nulls"},"steps":[
               {"match":{"lastUser":{"contains":"a","equals":null,"regex":null},"model":null},"text":"t"},
               {"parallel":{"overlap":false,"steps":[{"text":"a","match":null,"parallel":null}]}},
               {"match":{"message":{"role":"user","index":null,"equals":"x"}},"text":"t"},
@@ -366,16 +390,16 @@ internal val validParallelScenarios =
               {"match":{"tools":{"choiceTool":"f"}},"text":"t"},
               {"match":{"header":{"name":"X-Trace","regex":"a+","contains":null}},"text":"t"}]}""",
         "body paths the decoder and the schema both accept" to
-            """{"name":"paths","steps":[{"match":{"body":{"path":"$['a\\\\b']","equals":1}},"text":"t"},
+            """{"metadata":{"name":"paths"},"steps":[{"match":{"body":{"path":"$['a\\\\b']","equals":1}},"text":"t"},
               {"match":{"body":{"path":"$[-0]","equals":1}},"text":"t"},{"match":{"body":{"path":"$['']","equals":1}},"text":"t"},
               {"match":{"body":{"path":"$.a-b[123456789]._x","equals":1}},"text":"t"}]}""",
         "steps used a variable number of times" to
-            """{"name":"times","steps":[{"times":null,"text":"once"},{"times":{},"match":{"lastUser":{"contains":"poll"}},"text":"p"},
+            """{"metadata":{"name":"times"},"steps":[{"times":null,"text":"once"},{"times":{},"match":{"lastUser":{"contains":"poll"}},"text":"p"},
               {"times":{"min":0},"match":{"lastUser":{"contains":"retry"}},"text":"r"},{"times":{"max":3,"min":1},"text":"t"},
               {"times":{"min":2,"max":2},"error":{"status":503}},{"times":{"max":null,"min":0},"text":"u"},
               {"parallel":{"steps":[{"times":{"min":1},"match":{"lastUser":{"contains":"doc-"}},"text":"s"},{"text":"x"}]}}]}""",
         "a lone overlap section and one with no matches" to
-            """{"name":"lone","steps":[{"parallel":{"overlap":true,"steps":[{"text":"x"},{"text":"y"}]}},
+            """{"metadata":{"name":"lone"},"steps":[{"parallel":{"overlap":true,"steps":[{"text":"x"},{"text":"y"}]}},
               {"parallel":{"steps":[{"text":"z"}]}}]}""",
     ) + docScenarios("docs/scenarios.md", "Parallel calls")
 
@@ -395,7 +419,7 @@ private fun docScenarios(
         Regex("```json\n(.*?)\n```", RegexOption.DOT_MATCHES_ALL)
             .findAll(text.substring(start, end))
             .map { it.groupValues[1] }
-            .filter { "\"steps\"" in it && "\"name\"" in it }
+            .filter { "\"steps\"" in it && "\"metadata\"" in it }
             .toList()
     check(blocks.size >= 3) { "expected the scenario examples in $page's $section section, found ${blocks.size}" }
     return blocks.mapIndexed { i, block -> "$page example ${i + 1}" to block }

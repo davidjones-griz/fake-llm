@@ -3,7 +3,7 @@
   "name": "anthropic-tool-use",
   "description": "A tool-call step is tool_use blocks after the text, with stop_reason tool_use; the tool results the next request sends back are logged with their tool names.",
   "scenario": {
-    "name": "anthropic-tool-use",
+    "metadata": { "name": "anthropic-tool-use" },
     "steps": [
       {
         "text": "Checking.",

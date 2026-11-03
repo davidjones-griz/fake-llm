@@ -3,7 +3,7 @@
   "name": "responses-max-tokens",
   "description": "max_tokens makes the Response and its message item incomplete, with reason max_output_tokens.",
   "scenario": {
-    "name": "responses-max-tokens",
+    "metadata": { "name": "responses-max-tokens" },
     "steps": [
       {
         "text": "cut off",

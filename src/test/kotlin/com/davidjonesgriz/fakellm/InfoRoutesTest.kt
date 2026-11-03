@@ -36,7 +36,11 @@ class InfoRoutesTest {
 
     @Test
     fun `count_tokens answers 100 input tokens for any body the Messages route accepts, and takes no step`() {
-        withServer(ScenarioEngine().also { it.loadInline(Scenario(name = "one", steps = listOf(Step(text = "only")))) }) { client, engine ->
+        withServer(
+            ScenarioEngine().also {
+                it.loadInline(Scenario(metadata = ScenarioMetadata(name = "one"), steps = listOf(Step(text = "only"))))
+            },
+        ) { client, engine ->
             val response = client.post(countPath, anthropicBody("a long prompt ".repeat(50)))
             assertEquals(200, response.statusCode())
             assertEquals(listOf("application/json"), response.headers().allValues("content-type"))
@@ -80,7 +84,10 @@ class InfoRoutesTest {
     @Test
     fun `the answers are the same with no scenario, with one loaded, and in lenient mode`() {
         val strict = ScenarioEngine()
-        val loaded = ScenarioEngine().also { it.loadInline(Scenario(name = "one", steps = listOf(Step(text = "only")))) }
+        val loaded =
+            ScenarioEngine().also {
+                it.loadInline(Scenario(metadata = ScenarioMetadata(name = "one"), steps = listOf(Step(text = "only"))))
+            }
         val lenient = ScenarioEngine(lenient = true)
         listOf(strict, loaded, lenient).forEach { engine ->
             withServer(engine) { client, _ ->

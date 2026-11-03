@@ -110,9 +110,9 @@ class Fake:
 
     def load(self, steps):
         """Loads the steps as an inline scenario, which starts it over and empties the call log."""
-        response = httpx.post(f"{self.base_url}/control/scenario", json={"scenario": {"name": self.name, "steps": steps}})
+        response = httpx.post(f"{self.base_url}/control/scenario", json={"scenario": {"metadata": {"name": self.name}, "steps": steps}})
         assert response.status_code == 200, response.text
-        assert response.json() == {"loaded": self.name, "steps": len(steps)}
+        assert response.json() == {"loaded": self.name, "name": self.name, "steps": len(steps)}
 
     def unload(self):
         """Removes the loaded scenario and empties the call log; calls then get the no-scenario 400."""

@@ -3,7 +3,7 @@
   "name": "exchanges-stream-error",
   "description": "A mid-stream error is recorded up to and including the error frame.",
   "scenario": {
-    "name": "stream-error",
+    "metadata": { "name": "stream-error" },
     "steps": [
       {
         "error": {

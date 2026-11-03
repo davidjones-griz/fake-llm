@@ -3,7 +3,7 @@
   "name": "gemini-batch-embed",
   "description": "Gemini batchEmbedContents gets one embedding per request, in order; an invalid batch gets the invalid-request 400; none is a call.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

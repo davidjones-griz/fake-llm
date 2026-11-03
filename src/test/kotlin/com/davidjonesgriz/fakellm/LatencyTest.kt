@@ -20,7 +20,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LatencyTest {
-    private fun engineWith(vararg steps: Step) = ScenarioEngine().also { it.loadInline(Scenario(name = "latency", steps = steps.toList())) }
+    private fun engineWith(vararg steps: Step) =
+        ScenarioEngine().also { it.loadInline(Scenario(metadata = ScenarioMetadata(name = "latency"), steps = steps.toList())) }
 
     private fun timedMs(block: () -> Unit): Long {
         val started = System.nanoTime()

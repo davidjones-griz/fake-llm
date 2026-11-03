@@ -13,7 +13,7 @@
         },
         "body": {
           "scenario": {
-            "name": "empty",
+            "metadata": { "name": "empty" },
             "steps": []
           }
         }

@@ -3,7 +3,7 @@
   "name": "anthropic-error-step",
   "description": "An error step is sent as scripted: its status, its body and its headers.",
   "scenario": {
-    "name": "rate-limit",
+    "metadata": { "name": "rate-limit" },
     "steps": [
       {
         "error": {

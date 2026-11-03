@@ -14,6 +14,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import java.net.http.HttpResponse
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -36,7 +37,7 @@ class FakeLlmServerTest {
             put(
                 "scenario",
                 buildJsonObject {
-                    put("name", "inline-steps")
+                    putJsonObject("metadata") { put("name", "inline-steps") }
                     put("steps", buildJsonArray { texts.forEach { add(buildJsonObject { put("text", it) }) } })
                 },
             )
@@ -188,7 +189,7 @@ class FakeLlmServerTest {
         val engine = ScenarioEngine()
         withServer(engine) { client, _ ->
             repeat(25) { round ->
-                engine.loadInline(Scenario(name = "fan-out", steps = listOf(section, Step(text = "merged"))))
+                engine.loadInline(Scenario(metadata = ScenarioMetadata(name = "fan-out"), steps = listOf(section, Step(text = "merged"))))
                 val pool = Executors.newFixedThreadPool(docs.size)
                 val start = CountDownLatch(1)
                 val replies =
@@ -224,7 +225,12 @@ class FakeLlmServerTest {
         withServer(engine) { client, _ ->
             repeat(20) { round ->
                 val width = 3 + random.nextInt(10)
-                engine.loadInline(Scenario(name = "fan-out", steps = listOf(Step(parallel = ParallelSection(listOf(fanOut))), merge)))
+                engine.loadInline(
+                    Scenario(
+                        metadata = ScenarioMetadata(name = "fan-out"),
+                        steps = listOf(Step(parallel = ParallelSection(listOf(fanOut))), merge),
+                    ),
+                )
                 val pool = Executors.newFixedThreadPool(width)
                 val start = CountDownLatch(1)
                 val replies =
@@ -405,7 +411,7 @@ class FakeLlmServerTest {
 
     @Test
     fun `loading a scenario requires exactly one of name or scenario`() {
-        val inline = """{"name":"inline","steps":[{"text":"t"}]}"""
+        val inline = """{"metadata":{"name":"inline"},"steps":[{"text":"t"}]}"""
         withServer { client, engine ->
             val both = client.post("/control/scenario", """{"name":"hello","scenario":$inline}""")
             assertEquals(400, both.statusCode())
@@ -430,41 +436,46 @@ class FakeLlmServerTest {
             val extraField = client.post("/control/scenario", """{"name":"hello","extra":1}""")
             assertEquals(400, extraField.statusCode())
             assertContains(errorMessage(extraField.body()), "unknown field(s) [extra]")
-            assertEquals(null, engine.currentScenarioName(), "a rejected body loads nothing")
+            assertEquals(null, engine.currentScenarioKey(), "a rejected body loads nothing")
         }
     }
 
     @Test
     fun `an inline scenario may name the scenario schema in a top-level $schema key`() {
         withServer { client, engine ->
-            val withSchema = """{"scenario":{"${'$'}schema":"https://example.invalid/s.json","name":"s","steps":[{"text":"t"}]}}"""
+            val withSchema =
+                """{"scenario":{"${'$'}schema":"https://example.invalid/s.json","metadata":{"name":"s"},"steps":[{"text":"t"}]}}"""
             val loaded = client.post("/control/scenario", withSchema)
             assertEquals(200, loaded.statusCode(), loaded.body())
-            assertEquals("s", engine.currentScenarioName())
+            assertEquals("s", engine.currentScenarioKey())
         }
     }
 
     @Test
     fun `an inline scenario with an invalid step, no steps, or rules is rejected`() {
         withServer { client, engine ->
-            val badStatus = """{"scenario":{"name":"s","steps":[{"text":"ok"},{"error":{"status":42}}]}}"""
+            val badStatus = """{"scenario":{"metadata":{"name":"s"},"steps":[{"text":"ok"},{"error":{"status":42}}]}}"""
             val status = client.post("/control/scenario", badStatus)
             assertEquals(400, status.statusCode(), status.body())
             assertContains(errorMessage(status.body()), "step 2: ")
             assertContains(errorMessage(status.body()), "HTTP status")
 
-            val misspelt = """{"scenario":{"name":"s","steps":[{"text":"ok"},{"text":"x","stopReasn":"max_tokens"}]}}"""
+            val misspelt = """{"scenario":{"metadata":{"name":"s"},"steps":[{"text":"ok"},{"text":"x","stopReasn":"max_tokens"}]}}"""
             val field = client.post("/control/scenario", misspelt)
             assertEquals(400, field.statusCode(), field.body())
             assertEquals("step 2: \$.steps[1]: unknown field 'stopReasn'", errorMessage(field.body()))
 
-            val noSteps = client.post("/control/scenario", """{"scenario":{"name":"s","steps":[]}}""")
+            val noSteps = client.post("/control/scenario", """{"scenario":{"metadata":{"name":"s"},"steps":[]}}""")
             assertEquals(400, noSteps.statusCode(), noSteps.body())
 
-            val rules = client.post("/control/scenario", """{"scenario":{"name":"s","rules":[{"role":"r","respond":[{"text":"t"}]}]}}""")
+            val rules =
+                client.post(
+                    "/control/scenario",
+                    """{"scenario":{"metadata":{"name":"s"},"rules":[{"role":"r","respond":[{"text":"t"}]}]}}""",
+                )
             assertEquals(400, rules.statusCode(), rules.body())
             assertContains(errorMessage(rules.body()), "rules")
-            assertEquals(null, engine.currentScenarioName())
+            assertEquals(null, engine.currentScenarioKey())
         }
     }
 
@@ -473,7 +484,7 @@ class FakeLlmServerTest {
         withServer { client, engine ->
             val headers = mapOf("X-Retry-Hint" to "1", "x-retry-hint" to "2")
             engine.loadInline(
-                Scenario(name = "h", steps = listOf(Step(error = ErrorStep(429, "{}", headers)))),
+                Scenario(metadata = ScenarioMetadata(name = "h"), steps = listOf(Step(error = ErrorStep(429, "{}", headers)))),
             )
             val resp = client.post("/anthropic/v1/messages", anthropicBody("hi"))
             assertEquals(listOf("1", "2"), resp.headers().allValues("x-retry-hint").sorted())

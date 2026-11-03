@@ -3,7 +3,7 @@
   "name": "unload",
   "description": "Unload removes the scenario and empties the call log: health reports no scenario, and the next call is call 1 and gets the strict no-scenario 400.",
   "scenario": {
-    "name": "two-steps",
+    "metadata": { "name": "two-steps" },
     "steps": [
       {
         "text": "first"
@@ -88,9 +88,11 @@
         "body": {
           "status": "ok",
           "scenario": null,
+          "scenarioName": null,
           "lenient": false,
           "steps": null,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

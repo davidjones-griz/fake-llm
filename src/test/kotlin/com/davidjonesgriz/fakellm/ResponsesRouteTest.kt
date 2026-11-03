@@ -17,7 +17,7 @@ class ResponsesRouteTest {
     private val path = "/openai/v1/responses"
 
     private fun engineWith(vararg steps: Step) =
-        ScenarioEngine().also { it.loadInline(Scenario(name = "responses", steps = steps.toList())) }
+        ScenarioEngine().also { it.loadInline(Scenario(metadata = ScenarioMetadata(name = "responses"), steps = steps.toList())) }
 
     private fun contentType(resp: HttpResponse<String>) = resp.headers().firstValue("content-type").orElse("")
 
