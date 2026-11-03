@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.File
 import java.nio.file.Path
@@ -25,12 +26,15 @@ import java.nio.file.Path
  */
 @Serializable
 public data class Scenario(
-    val name: String,
-    val description: String = "",
     val steps: List<Step>,
+    /**
+     * What the scenario is called and for. [ScenarioMetadata.name] is a display name: a load by
+     * name finds the file by its file name, whatever this says.
+     */
+    val metadata: ScenarioMetadata? = null,
 ) {
     init {
-        require(steps.isNotEmpty()) { "scenario '$name' has no steps" }
+        require(steps.isNotEmpty()) { "a scenario must have at least one step" }
     }
 
     public companion object {
@@ -38,8 +42,7 @@ public data class Scenario(
          * Decodes [text], one scenario in the scenario file format, with the checks and messages of
          * an inline load (`POST /control/scenario` with `{"scenario": …}`): an unknown field is an
          * error, a top-level `$schema` string is ignored, and a failing step is named by its 1-based
-         * number. Unlike a load by name, the scenario's `name` need not match a file name. From
-         * Java, `Scenario.fromJson(text)`.
+         * number. From Java, `Scenario.fromJson(text)`.
          *
          * @throws IllegalArgumentException when [text] is not JSON or not a valid scenario. The
          *   message text is diagnostic, not part of the API.
@@ -52,7 +55,7 @@ public data class Scenario(
 /**
  * One step of a [Scenario]: a reply ([text], [toolCalls] or both, optionally with [thinking] and
  * [usage]) or a scripted [error], optionally with a [match]; or a [parallel] step, which sets nothing
- * else.
+ * else. Any step, a parallel step too, can carry [metadata].
  *
  * @throws IllegalArgumentException when a value is invalid, including when a step sets both or
  *   neither of a reply and [error], or a parallel step sets anything else. The message text is
@@ -133,6 +136,11 @@ public data class Step(
      * is exactly once. Not on a parallel step; on its steps, yes.
      */
     val times: Times? = null,
+    /**
+     * What the step is called and for. It never changes how the step is served. [ScenarioMetadata.name]
+     * is copied into the call log ([CallRecord.stepName]) when this step answers a call.
+     */
+    val metadata: ScenarioMetadata? = null,
 ) {
     init {
         if (parallel != null) requireOnlyParallel() else requireReplyOrError()
@@ -143,7 +151,7 @@ public data class Step(
             match == null && times == null && text == null && toolCalls == null && error == null && thinking == null && usage == null &&
                 stopSequence == null && stopReason == "end_turn" && streamChunkChars == DEFAULT_STREAM_CHUNK_CHARS &&
                 streamInterChunkDelayMs == 0L && firstByteDelayMs == 0L && streamErrorAfterChunks == null
-        require(untouched) { "a parallel step sets nothing but parallel" }
+        require(untouched) { "a parallel step sets nothing but parallel and metadata" }
     }
 
     private fun requireReplyOrError() {
@@ -179,6 +187,67 @@ public data class Step(
         require(stopSequence == null || stopSequence.isNotEmpty()) { "stopSequence must not be empty" }
     }
 }
+
+/**
+ * Information about a [Scenario] or a [Step]: what it is called, why it exists, and labels for
+ * finding it. It never changes how a scenario runs: matching, replies, order and pass/fail are the
+ * same with or without it. Only these three fields are defined; any other key is rejected.
+ *
+ * @throws IllegalArgumentException when [name] or a tag is empty or blank. The message text is
+ *   diagnostic, not part of the API.
+ */
+@Serializable
+public data class ScenarioMetadata(
+    /**
+     * A display name. On a step, it is copied into the call log and named in unused-step reports;
+     * names need not be unique. On a scenario, it is shown beside the file name, and identifies an
+     * inline load.
+     */
+    val name: String? = null,
+    /** A note for people reading the scenario: why it exists, why a group runs in parallel. */
+    val description: String? = null,
+    /** Labels for search and filtering; null, the default, is none. fake-llm stores them and does not act on them. */
+    val tags: List<String>? = null,
+) {
+    init {
+        metadataProblem(name, tags, "metadata")?.let { throw IllegalArgumentException(it) }
+    }
+}
+
+/**
+ * The first empty or blank [name] or tag of a scenario's or step's metadata at [path], such as
+ * `$.steps[1].metadata.name: must not be blank`; null when there is none. [ScenarioMetadata]'s
+ * `init` and the decoder, which names the JSON path, both apply this one rule.
+ */
+internal fun metadataProblem(
+    name: String?,
+    tags: List<String>?,
+    path: String,
+): String? =
+    name?.let { textProblem(it, "$path.name") }
+        ?: tags?.withIndex()?.firstNotNullOfOrNull { (i, tag) -> textProblem(tag, "$path.tags[$i]") }
+
+private fun textProblem(
+    text: String,
+    at: String,
+): String? =
+    when {
+        text.isEmpty() -> "$at: must not be empty"
+        text.isBlank() -> "$at: must not be blank"
+        else -> null
+    }
+
+/**
+ * The key of this scenario when it is loaded inline: its `metadata.name`, or `inline` when it has
+ * none. [ScenarioEngine.loadInline] and `POST /control/scenario` both use it.
+ */
+internal val Scenario.inlineKey: String get() = metadata?.name ?: INLINE_SCENARIO_KEY
+
+/**
+ * This scenario's display name when it is loaded under [key]: its `metadata.name`, or [key] when it
+ * has none. `GET /health`'s `scenarioName` and the load response's `name`.
+ */
+internal fun Scenario.displayName(key: String): String = metadata?.name ?: key
 
 /**
  * One scripted tool call in a [Step]'s reply.
@@ -314,19 +383,15 @@ internal object ScenarioLoader {
 
     /**
      * Decodes [text], the content of the file `<name>.json`, with the checks a load by name makes:
-     * [name] must be a legal scenario name, and the scenario must declare it. Used by [load] and by
-     * the `validate` command.
+     * [name] must be a legal scenario name. The scenario's `metadata.name` is a display name and may
+     * differ from it. Used by [load] and by the `validate` command.
      */
     fun decodeFile(
         name: String,
         text: String,
     ): Scenario {
         require(name.matches(SCENARIO_NAME)) { "'$name' is not a legal scenario name ([A-Za-z0-9_-]+)" }
-        val scenario = decode(ScenarioShape.parse(json, text))
-        check(scenario.name == name) {
-            "scenario file $name.json declares name '${scenario.name}' — file name and declared name must match"
-        }
-        return scenario
+        return decode(ScenarioShape.parse(json, text))
     }
 
     /**
@@ -337,6 +402,7 @@ internal object ScenarioLoader {
      */
     internal fun decode(element: JsonElement): Scenario {
         val root = withoutSchemaKey(element)
+        requireNoMovedKeys(root)
         ((root as? JsonObject)?.get("steps") as? JsonArray)?.forEachIndexed { i, step ->
             parallelSteps(step, i)?.forEachIndexed { j, inner ->
                 decodeStep(json, inner, "step ${i + 1}.${j + 1}", "$.steps[$i].parallel.steps[$j]")
@@ -344,6 +410,7 @@ internal object ScenarioLoader {
             decodeStep(json, step, "step ${i + 1}", "$.steps[$i]")
         }
         ScenarioShape.require(root, Scenario.serializer().descriptor, "$")
+        metadataProblem((root as? JsonObject)?.get("metadata"), "$.metadata")?.let { throw IllegalArgumentException(it) }
         return try {
             json.decodeFromJsonElement(root)
         } catch (e: IllegalArgumentException) {
@@ -416,6 +483,25 @@ internal object ScenarioLoader {
     private val defaultLoader: ClassLoader = ScenarioLoader::class.java.classLoader
 }
 
+/**
+ * [metadataProblem] for [metadata], a `metadata` value that passed the shape check, named by its
+ * JSON [path], so the message says where the value is.
+ */
+private fun metadataProblem(
+    metadata: JsonElement?,
+    path: String,
+): String? {
+    val obj = metadata as? JsonObject ?: return null
+    val text = { value: JsonElement? -> (value as? JsonPrimitive)?.takeIf { it.isString }?.content }
+    return metadataProblem(text(obj["name"]), (obj["tags"] as? JsonArray)?.mapNotNull(text), path)
+}
+
+/** A top-level `name` or `description`, which moved into `metadata` in 0.8.0, is rejected with a pointer to it. */
+private fun requireNoMovedKeys(root: JsonElement) {
+    val moved = MOVED_KEYS.firstOrNull { (root as? JsonObject)?.containsKey(it) == true } ?: return
+    throw IllegalArgumentException("$: unknown field '$moved': a scenario's $moved is now metadata.$moved")
+}
+
 /** Checks and decodes one step on its own, so a problem is reported with its [label] (`step 2` or `step 2.3`). */
 private fun decodeStep(
     json: Json,
@@ -425,6 +511,7 @@ private fun decodeStep(
 ) {
     try {
         ScenarioShape.require(step, Step.serializer().descriptor, path)
+        metadataProblem((step as? JsonObject)?.get("metadata"), "$path.metadata")?.let { throw IllegalArgumentException(it) }
         json.decodeFromJsonElement<Step>(step)
     } catch (e: IllegalArgumentException) {
         throw IllegalArgumentException("$label: ${ScenarioShape.decodeFailure(e)}", e)
@@ -433,7 +520,7 @@ private fun decodeStep(
 
 /**
  * The inner steps of [step], the scenario's step [i], when it is a parallel step, after the two
- * rules that need the step's path: a parallel step has no other key, and none of its steps is a
+ * rules that need the step's path: a parallel step has no other key but `metadata`, and none of its steps is a
  * parallel step. A `parallel` of `null` is absent, as everywhere in the format.
  */
 private fun parallelSteps(
@@ -442,8 +529,10 @@ private fun parallelSteps(
 ): JsonArray? {
     val obj = step as? JsonObject
     val parallel = obj?.valueOrNull("parallel")
-    val other = obj?.keys?.firstOrNull { it != "parallel" }
-    require(parallel == null || other == null) { "step ${i + 1}: $.steps[$i]: a parallel step has only the key 'parallel', got '$other'" }
+    val other = obj?.keys?.firstOrNull { it != "parallel" && it != "metadata" }
+    require(parallel == null || other == null) {
+        "step ${i + 1}: $.steps[$i]: a parallel step has only the keys 'parallel' and 'metadata', got '$other'"
+    }
     val inner = ((parallel as? JsonObject)?.get("steps") as? JsonArray)
     inner?.forEachIndexed { j, s ->
         require((s as? JsonObject)?.valueOrNull("parallel") == null) {
@@ -457,6 +546,12 @@ private fun parallelSteps(
 private const val SCHEMA_KEY = "\$schema"
 
 private val SCENARIO_NAME = Regex("[A-Za-z0-9_-]+")
+
+/** The scenario keys that moved into `metadata`. */
+private val MOVED_KEYS = listOf("name", "description")
+
+/** The identifier of a scenario loaded inline that has no `metadata.name`. */
+internal const val INLINE_SCENARIO_KEY = "inline"
 
 /** The project's scenarios, as a ClassLoader resource path (no leading slash). */
 private const val PROJECT_SCENARIOS = "scenarios"

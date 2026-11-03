@@ -3,7 +3,7 @@
   "name": "responses-stream-raw-arguments",
   "description": "A streamed tool call without text starts at output_index 0 and sends rawArguments verbatim.",
   "scenario": {
-    "name": "responses-stream-raw-arguments",
+    "metadata": { "name": "responses-stream-raw-arguments" },
     "steps": [
       {
         "toolCalls": [

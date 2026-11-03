@@ -54,6 +54,7 @@
         },
         "body": {
           "loaded": "hello",
+          "name": "hello",
           "steps": 1
         }
       }

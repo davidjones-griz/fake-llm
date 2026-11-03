@@ -3,7 +3,7 @@
   "name": "gemini-stream-text",
   "description": "A streamed text step is data-only frames, one text part per chunk; only the last chunk carries finishReason and usageMetadata, and the call is logged once.",
   "scenario": {
-    "name": "gemini-stream-text",
+    "metadata": { "name": "gemini-stream-text" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

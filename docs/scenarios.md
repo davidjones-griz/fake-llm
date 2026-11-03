@@ -4,13 +4,14 @@ A scenario is the script a fake-llm server follows: an ordered list of steps, wh
 
 ## Scenario files
 
-A scenario file is JSON. Unknown keys are rejected. `name` is required, `description` defaults to an empty string, and `steps` must be non-empty. Integers are plain JSON integers: `"24"`, `24.0` and `2e1` are rejected. For a load by name, the file is `<dir>/<name>.json`, the classpath resource `/scenarios/<name>.json`, or a bundled scenario, in that order; the declared `name` must equal the file name, and the name must match `[A-Za-z0-9_-]+`.
+A scenario file is JSON. Unknown keys are rejected. `steps` is required and must be non-empty; the optional [`metadata`](#metadata) says what the scenario is called and for. Integers are plain JSON integers: `"24"`, `24.0` and `2e1` are rejected. For a load by name, the file is `<dir>/<name>.json`, the classpath resource `/scenarios/<name>.json`, or a bundled scenario, in that order, and the name must match `[A-Za-z0-9_-]+`. The file name is what a load by name looks up; `metadata.name` is a display name and may differ from it.
 
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
-  "name": "example",
-  "description": "A rate limit, then the answer.",
+  "metadata": {
+    "description": "A rate limit, then the answer."
+  },
   "steps": [
     {
       "error": {
@@ -80,7 +81,7 @@ A tool loop is two steps: the tool call, then the reply after the app sends the 
 
 ```json
 {
-  "name": "weather-tool",
+  "metadata": {"name": "weather-tool"},
   "steps": [
     { "toolCalls": [{ "name": "get_weather", "arguments": { "city": "Paris" } }] },
     { "text": "It is 18 degrees in Paris." }
@@ -147,7 +148,7 @@ A call is numbered and logged when it arrives, before the wait, and the wait run
 A client whose timeout is shorter than `firstByteDelayMs` times out. Its call was logged once, when it arrived, and stays in the log. The server finishes the wait (it does not stop early), its response goes nowhere, and the next request is served normally with the next step. A client that retries the request, such as the `openai` SDK with its default `max_retries`, makes a new call, which gets the next step. A client that disconnects between streamed chunks is handled the same way.
 
 ```json
-{ "name": "slow-provider", "steps": [{ "text": "slow", "firstByteDelayMs": 5000 }] }
+{ "metadata": {"name": "slow-provider"}, "steps": [{ "text": "slow", "firstByteDelayMs": 5000 }] }
 ```
 
 With that scenario, an `openai` client created with `timeout=1.0` and `max_retries=0` raises `openai.APITimeoutError`.
@@ -167,7 +168,7 @@ class MyClientTest {
     fun `retries once after a rate limit`(engine: ScenarioEngine, server: FakeLlmServer) {
         engine.loadInline(
             Scenario(
-                name = "retries-once-after-a-rate-limit",
+                metadata = ScenarioMetadata(name = "retries-once-after-a-rate-limit"),
                 steps =
                     listOf(
                         Step(error = ErrorStep(status = 429, headers = mapOf("retry-after" to "0"))),
@@ -185,18 +186,56 @@ class MyClientTest {
 
 For a whole pipeline, see `TicketPipelineTest` in [examples/](https://github.com/davidjones-griz/fake-llm/blob/main/examples/). `TicketPipeline` makes three calls, each to a different vendor's API: it classifies a support ticket (Anthropic), extracts its details with a forced tool call (OpenAI Chat Completions), and streams a summary (Gemini). Each test's scenario file scripts every call in order, including a rate limit, tool-call arguments that are not valid JSON, a summary cut off at `max_tokens`, and a call after the last step.
 
+## Metadata
+
+`metadata` holds information about a scenario and its steps: what each is called, why it exists, and labels for finding it. It can go on the scenario and on any step: a reply step, an error step, a parallel step, and each step inside a parallel step. It never changes how a scenario runs: matching, replies, the order of steps and whether a test passes are the same with it or without it.
+
+```json
+{
+  "metadata": {
+    "name": "Note summary, happy path",
+    "description": "Single note, one model call, then two tool results in either order",
+    "tags": ["smoke"]
+  },
+  "steps": [
+    { "metadata": { "name": "summarize-note", "tags": ["happy-path"] }, "text": "ok" },
+    {
+      "metadata": { "description": "Two tool results can arrive in either order", "tags": ["race"] },
+      "parallel": {
+        "steps": [
+          { "metadata": { "name": "side-a" }, "match": { "lastUser": { "contains": "a" } }, "text": "a" },
+          { "metadata": { "name": "side-b" }, "text": "b" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+It has three fields, all optional; any other key in `metadata` is rejected, as everywhere in the format (see [ScenarioMetadata fields](#scenariometadata-fields)):
+
+- `name`: a display name. On a step, it is copied into the call log as `stepName` when the step answers a call, and the CLI's call line ends with ` name="<name>"`. A test can then find a call by the step that answered it, which keeps working when a step is added before it: positions such as `step 2.1` shift, names don't. Unnamed steps keep only their position. `GET /health`'s `unusedStepNames` and the JUnit extension's unused-step failure name the unused steps that have one, the steps of a parallel step included (`2.1 'side-a'`). Names need not be unique. On the scenario, `name` is shown as `GET /health`'s `scenarioName` and the load response's `name`; a load by name defaults it to the file name, and for an inline load it is also the key (`GET /health`'s `scenarioSource` says which kind of load it was).
+- `description`: a note for people reading the file, such as why a group of steps runs in parallel.
+- `tags`: labels for search and filtering. fake-llm stores them and does not act on them yet.
+
+A `name` or tag that is empty or only whitespace is rejected, with its step and path, such as `step 2: $.steps[1].metadata.name: must not be blank`. A `null` field is the same as an absent one, `tags` included.
+
+`metadata` is not allowed inside `match`, `error`, `toolCalls` or any other part of a step: only on the scenario and on a step itself.
+
+Before 0.8.0 a scenario had top-level `name` and `description` keys; they are now `metadata.name` and `metadata.description`, and a file that still has them at the top level is rejected with a message that says so. The declared name no longer has to match the file name.
+
 ## Scenario schema and `validate`
 
 [schema/scenario.schema.json](https://github.com/davidjones-griz/fake-llm/blob/main/schema/scenario.schema.json) is a JSON Schema (2020-12) for scenario files, generated from the [OpenAPI spec](https://github.com/davidjones-griz/fake-llm/blob/main/openapi/fake-llm.yaml)'s `Scenario` schema. A top-level `"$schema"` key pointing at it, as in the example above, lets VS Code and IntelliJ check a scenario file and complete its field names as you type. The server ignores the key; it is allowed only at the top level, not in a step. JSON Schema counts `24.0` and `2e1` as integers, so an editor accepts them; the server and `validate` reject them. The URL follows `main`; inside a repository that has a copy of the schema, a relative path such as `"../schema/scenario.schema.json"` also works, offline too.
 
-`validate` checks scenario files without starting a server, with the same checks as a load by name, including that the declared `name` matches the file name (so a file meant only for an inline load is reported if its name differs). A directory means its `*.json` files, not its subdirectories:
+`validate` checks scenario files without starting a server, with the same checks as a load by name. A directory means its `*.json` files, not its subdirectories:
 
 ```bash
 java -jar build/libs/fake-llm-all.jar validate src/test/scenarios
 docker run --rm -v "$PWD/scenarios:/scenarios:ro" ghcr.io/davidjones-griz/fake-llm:0.7.0 validate /scenarios
 ```
 
-Each valid file gets an `ok <path>` line, and each invalid one a `<path>: <problem>` line on stderr, such as `scenarios/weather.json: step 2: $.steps[1]: unknown field 'stopReasn'`. Every file is checked, with the first problem in each reported. The exit code is 0 when every file is valid, 1 when any is invalid, and 2 for a usage error: no paths, a path that does not exist, a directory with no `.json` files, or a flag. (The server's own usage errors exit 1.)
+Each valid file gets an `ok <path> key=<key>` line, where the key is the file name a load by name takes, followed by ` name="<metadata.name>"` when the scenario has one, such as `ok scenarios/weather.json key=weather name="Weather, happy path"`. Each invalid one gets a `<path>: <problem>` line on stderr, such as `scenarios/weather.json: step 2: $.steps[1]: unknown field 'stopReasn'`. Every file is checked, with the first problem in each reported. The exit code is 0 when every file is valid, 1 when any is invalid, and 2 for a usage error: no paths, a path that does not exist, a directory with no `.json` files, or a flag. (The server's own usage errors exit 1.)
 
 ## Bundled scenarios
 
@@ -229,19 +268,21 @@ curl -s -X POST http://localhost:8080/control/scenario \
 ```
 
 ```json
-{"loaded":"hello","steps":1}
+{"loaded":"hello","name":"hello","steps":1}
 ```
 
-An inline scenario is decoded with the same strict rules as a file. The name does not have to match a file:
+`loaded` is the scenario's key, the name it was loaded by, which `GET /health` reports as `scenario`. `name` is its display name: its `metadata.name`, or the key when it has none.
+
+An inline scenario is decoded with the same strict rules as a file. It has no file name, so its key is its `metadata.name`, or `inline` when it has none:
 
 ```bash
 curl -s -X POST http://localhost:8080/control/scenario \
   -H 'content-type: application/json' \
-  -d '{"scenario":{"name":"inline","steps":[{"text":"ok"}]}}'
+  -d '{"scenario":{"metadata":{"name":"inline"},"steps":[{"text":"ok"}]}}'
 ```
 
 ```json
-{"loaded":"inline","steps":1}
+{"loaded":"inline","name":"inline","steps":1}
 ```
 
 Sending both `name` and `scenario`, or neither, is HTTP 400 `invalid-request`. A name that finds no scenario is `unknown-scenario`, and an illegal name or a scenario the decoder rejects is `invalid-scenario`, with the reason in `message`, such as `{"fake_llm_error":"invalid-scenario","message":"step 2: $.steps[1]: unknown field 'stopReasn'"}`.
@@ -295,7 +336,7 @@ Three summaries in parallel, then a merge call:
 
 ```json
 {
-  "name": "summarize-three-then-merge",
+  "metadata": {"name": "summarize-three-then-merge"},
   "steps": [
     {
       "parallel": {
@@ -315,7 +356,7 @@ Two parallel calls where one is rate limited and retried. Both responses for `do
 
 ```json
 {
-  "name": "parallel-with-a-429-retry",
+  "metadata": {"name": "parallel-with-a-429-retry"},
   "steps": [
     {
       "parallel": {
@@ -348,7 +389,7 @@ This covers nested fan-out: each of two calls fans out into sub-calls, and a sub
 
 ```json
 {
-  "name": "nested-fan-out",
+  "metadata": {"name": "nested-fan-out"},
   "steps": [
     { "parallel": { "overlap": true, "steps": [
       { "match": { "lastUser": { "equals": "plan a" } }, "text": "A" },
@@ -385,7 +426,7 @@ A poll loop, where the app asks for the status until it is told the job is done:
 
 ```json
 {
-  "name": "poll-until-done",
+  "metadata": {"name": "poll-until-done"},
   "steps": [
     { "times": { "min": 1 }, "match": { "lastUser": { "contains": "status?" } }, "text": "Still running." },
     { "match": { "lastUser": { "contains": "result?" } }, "text": "Done: 42." }
@@ -397,7 +438,7 @@ A fan-out of unknown width, then a merge call:
 
 ```json
 {
-  "name": "summarize-any-number-then-merge",
+  "metadata": {"name": "summarize-any-number-then-merge"},
   "steps": [
     { "parallel": { "steps": [
       { "times": { "min": 1 }, "match": { "lastUser": { "contains": "Summarize" } }, "text": "A summary." } ] } },
@@ -410,7 +451,7 @@ A call that may or may not come, such as a clarifying question the app asks only
 
 ```json
 {
-  "name": "optional-clarification",
+  "metadata": {"name": "optional-clarification"},
   "steps": [
     { "times": { "min": 0, "max": 1 }, "match": { "lastUser": { "contains": "Is anything unclear" } }, "text": "No, it's clear." },
     { "text": "Done." }
@@ -454,15 +495,14 @@ Types are JSON types. Integers are plain JSON integers. A field with no default 
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `name` | string | required | The scenario's name, `[A-Za-z0-9_-]+` for a load by name, where it must equal the file name. |
-| `description` | string | `""` | What the scenario is for. |
+| `metadata` | [ScenarioMetadata](#scenariometadata-fields) or null | none | What the scenario is called and for. `name` is a display name, which defaults to the file name for a load by name; an inline load with no `name` is identified as `inline`. See [Metadata](#metadata). |
 | `steps` | array of [Step](#step-fields), at least one | required | The replies, in call order: call N gets step N, unless a step has a `match` or is a parallel step (see [Parallel calls](#parallel-calls)). |
 
 A top-level `$schema` key is allowed and ignored; see [Scenario schema and `validate`](#scenario-schema-and-validate).
 
 ### Step fields
 
-Each step is a reply (`text`, `toolCalls`, or both) or an `error`, optionally with a `match`; or a parallel step, whose only key is `parallel`.
+Each step is a reply (`text`, `toolCalls`, or both) or an `error`, optionally with a `match`; or a parallel step, whose only keys are `parallel` and `metadata`. Any step can carry `metadata`.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -478,8 +518,19 @@ Each step is a reply (`text`, `toolCalls`, or both) or an `error`, optionally wi
 | `toolCalls` | array of [ToolCall](#toolcall-fields), at least one, or null | none | Tool calls the reply makes, in order, after any `text`. See [Tool calls](#tool-calls). |
 | `usage` | [TokenUsage](#tokenusage-fields) or null | none (100 input, 50 output) | Token counts the reply reports. Legal only on a reply step. Every format, buffered and streamed, reports them where it reports usage; totals are the sum. The Anthropic cache figures don't change. |
 | `match` | [Match](#match-fields) or null | none | Only a call that satisfies it takes this step. On a plain step, a call that doesn't takes nothing and gets the `no-match` 400, and the step stays next, unless it has `times` and its `min` calls, when the call can reach the step after it. See [Parallel calls](#parallel-calls). |
-| `parallel` | [ParallelSection](#parallelsection-fields) or null | none | Makes this a parallel step: one position holding several responses, used in any order. A parallel step has no other key. See [Parallel calls](#parallel-calls). |
+| `parallel` | [ParallelSection](#parallelsection-fields) or null | none | Makes this a parallel step: one position holding several responses, used in any order. A parallel step has no other key but `metadata`. See [Parallel calls](#parallel-calls). |
 | `times` | [Times](#times-fields) or null | none (exactly once) | How many calls this step takes. Not on a parallel step; on its steps, yes. See [Steps used a variable number of times](#steps-used-a-variable-number-of-times). |
+| `metadata` | [ScenarioMetadata](#scenariometadata-fields) or null | none | What the step is called and for. It never changes how the step is served. `name` is copied into the call log's `stepName`. See [Metadata](#metadata). |
+
+### ScenarioMetadata fields
+
+The `metadata` of a scenario or a step. Only these keys are allowed. See [Metadata](#metadata).
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `name` | string or null, not empty or blank | none | A display name. A step's is copied into the call log as `stepName` and named in unused-step reports; names need not be unique. A scenario's is shown beside its key, defaults to the file name for a load by name, and is the key of an inline load. |
+| `description` | string or null | none | A note for people reading the file. |
+| `tags` | array of strings, none empty or blank, or null | none | Labels for search and filtering. Stored, not acted on. |
 
 ### ErrorStep fields
 

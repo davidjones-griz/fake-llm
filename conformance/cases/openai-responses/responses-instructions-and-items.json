@@ -3,7 +3,7 @@
   "name": "responses-instructions-and-items",
   "description": "String instructions set the string system shape and come first in the prompt sample; every input item counts, and only text parts add prompt text.",
   "scenario": {
-    "name": "responses-instructions-and-items",
+    "metadata": { "name": "responses-instructions-and-items" },
     "steps": [
       {
         "text": "Short."

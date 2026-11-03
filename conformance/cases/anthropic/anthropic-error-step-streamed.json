@@ -3,7 +3,7 @@
   "name": "anthropic-error-step-streamed",
   "description": "An error step without streamErrorAfterChunks is a plain HTTP error even when the request streams.",
   "scenario": {
-    "name": "overloaded",
+    "metadata": { "name": "overloaded" },
     "steps": [
       {
         "error": {

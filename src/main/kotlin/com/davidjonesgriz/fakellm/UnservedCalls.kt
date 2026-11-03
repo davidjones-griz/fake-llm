@@ -15,7 +15,7 @@ internal fun unservedStep(
     val n = served.seq
     val loaded = served.scenario
     return when {
-        loaded != null && served.choice.reach.isEmpty() -> errorStep(noMoreStepsBody(loaded, n, vendor, req))
+        loaded != null && served.choice.reach.isEmpty() -> errorStep(noMoreStepsBody(loaded, served.scenarioKey!!, n, vendor, req))
         loaded != null -> errorStep(noMatchBody(n, vendor, req, served.choice.open))
         lenient -> Step(text = CANNED_ASSISTANT_TEXT)
         else -> errorStep(noScenarioBody(n, vendor, req))
@@ -50,16 +50,17 @@ private fun noMatchBody(
 
 private fun noMoreStepsBody(
     s: Scenario,
+    key: String,
     n: Long,
     vendor: String,
     req: ParsedRequest,
 ): String =
     errorBody(
         ErrorCode.NO_MORE_STEPS,
-        "no more steps: call $n came after the last step of scenario '${s.name}', which has ${s.steps.size} " +
+        "no more steps: call $n came after the last step of scenario '$key', which has ${s.steps.size} " +
             (if (s.steps.size == 1) "step" else "steps") + ". " + lastStepNote(s),
     ) {
-        put("scenario", s.name)
+        put("scenario", key)
         put("steps", s.steps.size)
         putCallFields(n, vendor, req)
     }

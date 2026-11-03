@@ -104,12 +104,12 @@ public class FakeLlmExtension
             val engine = serverFor(context).server.engine
             if (!allowsUnservedCalls(context)) {
                 val unserved = engine.calls().filter { it.outcome in UNSERVED }
-                if (unserved.isNotEmpty()) throw AssertionError(unservedMessage(engine.currentScenarioName(), unserved))
+                if (unserved.isNotEmpty()) throw AssertionError(unservedMessage(engine.currentScenarioKey(), unserved))
             }
             // A test that already failed often stopped before its last calls, so its unused steps add nothing.
             if (failure == null && !allowsUnusedSteps(context)) {
                 val unused = engine.unusedSteps
-                if (unused.isNotEmpty()) throw AssertionError(unusedMessage(engine.currentScenarioName(), unused))
+                if (unused.isNotEmpty()) throw AssertionError(unusedMessage(engine.currentScenarioKey(), unused, engine.unusedStepNames))
             }
         }
 
@@ -189,8 +189,11 @@ private fun allowsUnusedSteps(context: ExtensionContext): Boolean =
 private fun unusedMessage(
     scenario: String?,
     steps: List<Int>,
+    names: Map<String, String>,
 ): String {
-    val which = (if (steps.size == 1) "step " else "steps ") + ranges(steps)
+    val named = names.map { (label, name) -> "$label '$name'" }
+    val which =
+        (if (steps.size == 1) "step " else "steps ") + ranges(steps) + (if (named.isEmpty()) "" else " (${named.joinToString(", ")})")
     return "${steps.size} step(s) of fake-llm scenario '$scenario' got fewer calls than they need: $which. " +
         "Remove the steps the test does not need or lower their times.min, " +
         "or annotate a test that leaves steps unused on purpose with @FakeLlmAllowUnusedSteps."

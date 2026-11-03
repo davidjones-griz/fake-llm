@@ -3,7 +3,7 @@
   "name": "max-reached",
   "description": "A step at its max is passed: a third call after the last step gets no-more-steps.",
   "scenario": {
-    "name": "max-reached",
+    "metadata": { "name": "max-reached" },
     "steps": [
       {
         "match": {

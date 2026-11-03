@@ -3,7 +3,7 @@
   "name": "openai-embeddings-base64",
   "description": "encoding_format base64 gives the same vector as little-endian float32 bytes, base64-encoded.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

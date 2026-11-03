@@ -13,7 +13,7 @@
         },
         "body": {
           "scenario": {
-            "name": "bad",
+            "metadata": { "name": "bad" },
             "steps": [
               {
                 "parallel": {

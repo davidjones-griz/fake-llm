@@ -97,7 +97,7 @@ class ScenarioSchemaTest {
     @Test
     fun `the schema accepts a top-level $schema and explicit nulls on nullable fields`() {
         val valid =
-            """{"${'$'}schema":"${ScenarioSchemaGenerator.ID}","name":"x","steps":[
+            """{"${'$'}schema":"${ScenarioSchemaGenerator.ID}","metadata":{"name":"x"},"steps":[
               {"text":null,"thinking":null,"usage":null,"error":{"status":500}},{"text":"t","error":null,"streamErrorAfterChunks":null},
               {"text":"t","toolCalls":null,"stopSequence":null},{"toolCalls":[{"name":"f","arguments":null,"rawArguments":null,"id":null}]}
             ]}"""
@@ -107,7 +107,7 @@ class ScenarioSchemaTest {
     @Test
     fun `the schema and the decoder accept stopReason stop_sequence with or without a stopSequence`() {
         val valid =
-            """{"name":"x","steps":[{"text":"t","stopReason":"stop_sequence"},""" +
+            """{"metadata":{"name":"x"},"steps":[{"text":"t","stopReason":"stop_sequence"},""" +
                 """{"text":"t","stopReason":"stop_sequence","stopSequence":"</answer>"}]}"""
         assertEquals(emptyList(), errors(valid))
         assertEquals(listOf(null, "</answer>"), Scenario.fromJson(valid).steps.map { it.stopSequence })
@@ -179,11 +179,14 @@ class ScenarioSchemaTest {
         val nullable =
             doctored("Scenario") { s ->
                 s.withProperties {
-                    JsonObject(it + ("name" to Json.parseToJsonElement("""{"type":["string","null"]}""")))
+                    JsonObject(it + ("steps" to Json.parseToJsonElement("""{"type":["array","null"]}""")))
                 }
             }
-        assertContains(modelDrift(nullable).joinToString(), "Scenario.name: nullable in the model false, in the spec true")
-        val required = doctored("Scenario") { s -> JsonObject(s + ("required" to JsonArray(listOf(JsonPrimitive("name"))))) }
+        assertContains(modelDrift(nullable).joinToString(), "Scenario.steps: nullable in the model false, in the spec true")
+        val required =
+            doctored("Scenario") { s ->
+                JsonObject(s + ("required" to JsonArray(listOf(JsonPrimitive("steps"), JsonPrimitive("metadata")))))
+            }
         assertContains(modelDrift(required).joinToString(), "Scenario: required")
     }
 
@@ -209,6 +212,7 @@ class ScenarioSchemaTest {
                 ToolCall.serializer().descriptor,
                 ErrorStep.serializer().descriptor,
                 TokenUsage.serializer().descriptor,
+                ScenarioMetadata.serializer().descriptor,
             )
         return models.flatMap { descriptor ->
             val name = descriptor.serialName.substringAfterLast('.')

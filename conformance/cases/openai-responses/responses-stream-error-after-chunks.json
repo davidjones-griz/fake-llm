@@ -3,7 +3,7 @@
   "name": "responses-stream-error-after-chunks",
   "description": "streamErrorAfterChunks opens the message, sends that many filler deltas, then event error with the scripted body, and nothing after it.",
   "scenario": {
-    "name": "responses-stream-error-after-chunks",
+    "metadata": { "name": "responses-stream-error-after-chunks" },
     "steps": [
       {
         "error": {

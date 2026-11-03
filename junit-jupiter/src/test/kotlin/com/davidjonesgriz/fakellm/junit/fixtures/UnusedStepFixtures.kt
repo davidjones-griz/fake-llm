@@ -5,6 +5,7 @@ import com.davidjonesgriz.fakellm.Match
 import com.davidjonesgriz.fakellm.ParallelSection
 import com.davidjonesgriz.fakellm.Scenario
 import com.davidjonesgriz.fakellm.ScenarioEngine
+import com.davidjonesgriz.fakellm.ScenarioMetadata
 import com.davidjonesgriz.fakellm.Step
 import com.davidjonesgriz.fakellm.Times
 import com.davidjonesgriz.fakellm.junit.FakeLlmAllowUnservedCalls
@@ -85,7 +86,7 @@ class InlineUnusedStepsFixture {
         engine: ScenarioEngine,
         server: FakeLlmServer,
     ) {
-        engine.loadInline(Scenario(name = "three-steps", steps = List(3) { Step(text = "reply ${it + 1}") }))
+        engine.loadInline(Scenario(metadata = ScenarioMetadata(name = "three-steps"), steps = List(3) { Step(text = "reply ${it + 1}") }))
         post(server)
     }
 }
@@ -110,7 +111,7 @@ class OptOutsAreIndependentFixture {
     }
 }
 
-/** A parallel step left partly unused, with a later step unused too: the unused steps are 1 and 3. */
+/** A parallel step left partly unused, with a later step unused too: the unused steps are 1 and 3, both named. */
 @Fixture
 @FakeLlmTest
 class NonContiguousUnusedStepsFixture {
@@ -119,15 +120,18 @@ class NonContiguousUnusedStepsFixture {
         engine: ScenarioEngine,
         server: FakeLlmServer,
     ) {
-        val on = { model: String -> Step(text = model, match = Match(model = model)) }
+        val on = { model: String -> Step(text = model, match = Match(model = model), metadata = ScenarioMetadata(name = "side-$model")) }
         engine.loadInline(
             Scenario(
-                name = "groups",
+                metadata = ScenarioMetadata(name = "groups"),
                 steps =
                     listOf(
-                        Step(parallel = ParallelSection(listOf(on("a"), on("b")), overlap = true)),
+                        Step(
+                            parallel = ParallelSection(listOf(on("a"), on("b")), overlap = true),
+                            metadata = ScenarioMetadata(name = "fan-out"),
+                        ),
                         Step(parallel = ParallelSection(listOf(on("c")), overlap = true)),
-                        Step(text = "after"),
+                        Step(text = "after", metadata = ScenarioMetadata(name = "merge")),
                     ),
             ),
         )
@@ -140,7 +144,9 @@ class NonContiguousUnusedStepsFixture {
 @FakeLlmTest
 class NoMatchFixture {
     private fun load(engine: ScenarioEngine) =
-        engine.loadInline(Scenario(name = "matched", steps = listOf(Step(text = "a", match = Match(model = "a")))))
+        engine.loadInline(
+            Scenario(metadata = ScenarioMetadata(name = "matched"), steps = listOf(Step(text = "a", match = Match(model = "a")))),
+        )
 
     @Test
     fun unmatched(
@@ -173,7 +179,9 @@ class BelowMinimumFixture {
         engine: ScenarioEngine,
         server: FakeLlmServer,
     ) {
-        engine.loadInline(Scenario(name = "twice", steps = listOf(Step(text = "again", times = Times(min = 2)))))
+        engine.loadInline(
+            Scenario(metadata = ScenarioMetadata(name = "twice"), steps = listOf(Step(text = "again", times = Times(min = 2)))),
+        )
         Sink.add("belowMinimum:status", post(server))
     }
 }

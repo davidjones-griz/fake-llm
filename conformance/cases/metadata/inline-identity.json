@@ -1,0 +1,70 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "inline-identity",
+  "description": "A scenario's name and description live in metadata: a top-level name is invalid-scenario, with a message that says where it went.",
+  "server": {
+    "lenient": false,
+    "fresh": true
+  },
+  "scenario": null,
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenario": {
+            "name": "old-style",
+            "steps": [
+              {
+                "text": "a"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "invalid-scenario",
+          "message": "$: unknown field 'name': a scenario's name is now metadata.name"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenario": {
+            "steps": [
+              {
+                "text": "a"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "loaded": "inline",
+          "name": "inline",
+          "steps": 1
+        }
+      }
+    }
+  ]
+}

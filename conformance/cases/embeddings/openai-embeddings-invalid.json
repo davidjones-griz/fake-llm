@@ -3,7 +3,7 @@
   "name": "openai-embeddings-invalid",
   "description": "An invalid input, size or encoding gets the invalid-request 400 and is not a call.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

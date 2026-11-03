@@ -94,7 +94,7 @@ internal fun parseRequestObject(
 
 /**
  * Runs a scenario [load]: an unknown name is `unknown-scenario`, and any other failure (an illegal
- * name, a file or inline scenario that does not decode, a mismatched declared name) is
+ * name, a file or inline scenario that does not decode) is
  * `invalid-scenario`.
  */
 internal inline fun <T> scenarioLoad(load: () -> T): T =

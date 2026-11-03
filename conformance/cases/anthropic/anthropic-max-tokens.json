@@ -3,7 +3,7 @@
   "name": "anthropic-max-tokens",
   "description": "stopReason max_tokens is copied to stop_reason.",
   "scenario": {
-    "name": "cutoff",
+    "metadata": { "name": "cutoff" },
     "steps": [
       {
         "text": "The recipe is {\"name\":",

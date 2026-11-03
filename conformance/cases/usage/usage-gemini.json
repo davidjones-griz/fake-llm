@@ -3,7 +3,7 @@
   "name": "usage-gemini",
   "description": "A buffered Gemini response reports the step's counts in usageMetadata.",
   "scenario": {
-    "name": "text",
+    "metadata": { "name": "text" },
     "steps": [
       {
         "text": "Billing.",

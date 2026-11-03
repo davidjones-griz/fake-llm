@@ -41,7 +41,7 @@ try (FakeLlmServer server = FakeLlm.startFakeLlmServer(0, engine, null)) {
 }
 ```
 
-`engine.exchanges()` returns each call's full request and response; see [`GET /control/exchanges`](control-api.md#get-controlexchanges). `engine.unusedSteps` lists the steps not used up since the last load, reset or unload; a parallel step is listed until every step in it is used, and a step with `times` until it has its `min` calls.
+`engine.exchanges()` returns each call's full request and response; see [`GET /control/exchanges`](control-api.md#get-controlexchanges). `engine.unusedSteps` lists the steps not used up since the last load, reset or unload; a parallel step is listed until every step in it is used, and a step with `times` until it has its `min` calls. `engine.unusedStepNames` maps those of them that have a [`metadata.name`](scenarios.md#metadata) to it, by label (`"2"`, or `"2.1"` for a step of a parallel step), and each `CallRecord`'s `stepName` is the name of the step that served it. `engine.currentScenarioKey()` is the loaded scenario's key: the name `load` was given, or for `loadInline` its `metadata.name`, or `inline` when it has none.
 
 A scenario for calls made in parallel can be built in code too: a step's `match` takes a `Match`, and a parallel step a `ParallelSection` (see [Parallel calls](scenarios.md#parallel-calls)). In Kotlin, `equals` is `equalTo`. A step's `times` takes a `Times(min, max)`, such as `Step(text = "Still running.", times = Times(min = 1))`:
 
@@ -49,14 +49,20 @@ A scenario for calls made in parallel can be built in code too: a step's `match`
 val doc = { d: String -> Step(text = "Summary of $d.", match = Match(lastUser = TextMatch(contains = d))) }
 engine.loadInline(
     Scenario(
-        name = "fan-out",
+        metadata = ScenarioMetadata(name = "fan-out"),
         steps = listOf(
             Step(parallel = ParallelSection(listOf(doc("doc-a"), doc("doc-b")))),
-            Step(text = "Both, combined.", match = Match(system = TextMatch(contains = "Merge"))),
+            Step(
+                text = "Both, combined.",
+                match = Match(system = TextMatch(contains = "Merge")),
+                metadata = ScenarioMetadata(name = "merge"),
+            ),
         ),
     ),
 )
 ```
+
+`metadata` takes a `ScenarioMetadata(name, description, tags)` on the scenario and on any step; it never changes how the scenario runs. A step's `name` comes back as `stepName` on the calls it served, so `engine.calls().single { it.stepName == "merge" }` finds the merge call wherever it falls (see [Metadata](scenarios.md#metadata)).
 
 `engine.load(name)` finds `/scenarios/<name>.json` on the classpath, so a test project can keep its scenarios in `src/test/resources/scenarios/`. `engine.loadInline(Scenario(...))` takes a scenario built in code. Each `ScenarioEngine` has its own scenario, call log, exchange log, and optional scenario directory. An engine created with `ScenarioEngine(scenarioDirectory = Path.of("src/test/scenarios"))` (from Java, `new ScenarioEngine(false, dir)`) reads `<directory>/<name>.json` first, as the command-line server does with `--scenario-dir`; a relative path resolves against the working directory, which in a Gradle test is the project directory. For scenario files kept elsewhere, point the engine's scenario directory at them, so they get the same checks and messages as any load by name.
 
@@ -65,7 +71,7 @@ engine.loadInline(
 ```java
 engine.loadInline(Scenario.fromJson("""
         {
-          "name": "rate-limited-once",
+          "metadata": {"name": "rate-limited-once"},
           "steps": [
             {"error": {"status": 429, "headers": {"retry-after": "0"}}},
             {"text": "Recovered."}
@@ -93,7 +99,7 @@ FakeLlmClient("http://localhost:8080", controlToken = System.getenv("FAKE_LLM_CO
 }
 ```
 
-From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's name, whether the server is lenient, `steps` and `unusedSteps`, and `version`, the server's version (each null against a server older than this release), and `scenarioNames()` lists what the server can load by name. `unload()` returns the server to the state it has when started without a scenario: no scenario loaded and empty logs. Against a server older than 0.5.0 it fails with status 404. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
+From Java, `new FakeLlmClient(baseUrl)` or `new FakeLlmClient(baseUrl, token)`, in a `try`-with-resources block. `health()` returns the loaded scenario's key (`scenario`), whether the server is lenient, `steps` and `unusedSteps`, and `version`, the server's version (each null against a server older than this release), and from 0.8.0 `scenarioName`, `scenarioSource` (`file` or `inline`) and `unusedStepNames`, and `scenarioNames()` lists what the server can load by name. `unload()` returns the server to the state it has when started without a scenario: no scenario loaded and empty logs. Against a server older than 0.5.0 it fails with status 404. When a token is set, every request carries `Authorization: Bearer <token>`; a blank token counts as none, as a blank `FAKE_LLM_CONTROL_TOKEN` does on the server. The constructor rejects a `baseUrl` that is not an `http://` or `https://` URL with a host and a valid port (or that has a query or fragment), and a timeout that is not positive, with `IllegalArgumentException`.
 
 Every failed call throws `FakeLlmClientException`. `statusCode` is the HTTP status, or null when no response arrived (a refused connection, a timeout or an interrupt, kept as the `cause`). For an error status, `serverMessage` is the server's explanation, verbatim, such as `unknown scenario 'x' — ...`, and `errorCode` is its [code](endpoints.md#fake-llms-error-responses), for any status, such as `unknown-scenario` or `no-route` (null for a server older than 0.7.0). A 401 says whether the token was missing or rejected.
 

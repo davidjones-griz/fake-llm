@@ -3,7 +3,7 @@
   "name": "gemini-embed-content",
   "description": "Gemini embedContent gets the same vector as the OpenAI route for the same text and size, and is not a call.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

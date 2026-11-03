@@ -3,7 +3,7 @@
   "name": "responses-text",
   "description": "A buffered Responses call is one completed Response with a message item; the call is logged as openai-responses with the request's own input.",
   "scenario": {
-    "name": "responses-text",
+    "metadata": { "name": "responses-text" },
     "steps": [
       {
         "text": "Mild and dry tomorrow."

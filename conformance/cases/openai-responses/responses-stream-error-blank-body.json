@@ -3,7 +3,7 @@
   "name": "responses-stream-error-blank-body",
   "description": "A streamed error with a blank body sends the API's own error event at the next sequence number.",
   "scenario": {
-    "name": "responses-stream-error-blank-body",
+    "metadata": { "name": "responses-stream-error-blank-body" },
     "steps": [
       {
         "error": {

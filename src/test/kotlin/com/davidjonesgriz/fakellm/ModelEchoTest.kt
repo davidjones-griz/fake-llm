@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 /** Every vendor reply names the request's model, as the providers do. */
 class ModelEchoTest {
     private fun engineWith(vararg steps: Step) =
-        ScenarioEngine().also { it.loadInline(Scenario(name = "model-echo", steps = steps.toList())) }
+        ScenarioEngine().also { it.loadInline(Scenario(metadata = ScenarioMetadata(name = "model-echo"), steps = steps.toList())) }
 
     private fun field(
         body: String,

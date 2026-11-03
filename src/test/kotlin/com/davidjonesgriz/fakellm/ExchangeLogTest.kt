@@ -27,7 +27,7 @@ class ExchangeLogTest {
     private val serverJson = Json { encodeDefaults = true }
 
     private fun engineWith(vararg steps: Step) =
-        ScenarioEngine().also { it.loadInline(Scenario(name = "exchanges", steps = steps.toList())) }
+        ScenarioEngine().also { it.loadInline(Scenario(metadata = ScenarioMetadata(name = "exchanges"), steps = steps.toList())) }
 
     private fun JsonObject.obj(key: String) = getValue(key).jsonObject
 
@@ -235,7 +235,7 @@ class ExchangeLogTest {
 
     @Test
     fun `load, reset and unload empty the exchange log`() {
-        val scenario = Scenario(name = "s", steps = listOf(Step(text = "a"), Step(text = "b")))
+        val scenario = Scenario(metadata = ScenarioMetadata(name = "s"), steps = listOf(Step(text = "a"), Step(text = "b")))
         withServer(ScenarioEngine(lenient = true)) { client, engine ->
             listOf<() -> Unit>({ engine.loadInline(scenario) }, { engine.reset() }, { engine.unload() }).forEach { clear ->
                 client.post("/anthropic/v1/messages", anthropicBody("Hi"))

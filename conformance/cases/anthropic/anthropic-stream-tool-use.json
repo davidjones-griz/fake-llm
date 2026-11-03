@@ -3,7 +3,7 @@
   "name": "anthropic-stream-tool-use",
   "description": "A streamed tool call is a tool_use block whose arguments arrive as input_json_delta pieces, after the thinking block, with stop_reason tool_use.",
   "scenario": {
-    "name": "anthropic-stream-tool-use",
+    "metadata": { "name": "anthropic-stream-tool-use" },
     "steps": [
       {
         "thinking": "Look it up.",

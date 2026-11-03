@@ -18,7 +18,7 @@ class TokenUsageTest {
         val engine = ScenarioEngine()
         engine.loadInline(
             Scenario(
-                name = "usage",
+                metadata = ScenarioMetadata(name = "usage"),
                 steps =
                     listOf(
                         Step(text = "a", usage = TokenUsage(1200, 340)),
@@ -54,7 +54,15 @@ class TokenUsageTest {
     @Test
     fun `scripted usage on every stream`() {
         val engine = ScenarioEngine()
-        engine.loadInline(Scenario(name = "usage", steps = List(4) { Step(text = "streamed reply", usage = TokenUsage(1200, 340)) }))
+        engine.loadInline(
+            Scenario(
+                metadata = ScenarioMetadata(name = "usage"),
+                steps =
+                    List(4) {
+                        Step(text = "streamed reply", usage = TokenUsage(1200, 340))
+                    },
+            ),
+        )
         withServer(engine) { client, _ ->
             val anthropic = namedFrames(client.post(ANTHROPIC, anthropicBody("hi", stream = true)).body()).toMap()
             assertEquals(
@@ -112,7 +120,7 @@ class TokenUsageTest {
     @Test
     fun `a step without usage is unchanged`() {
         val engine = ScenarioEngine()
-        engine.loadInline(Scenario(name = "plain", steps = List(4) { Step(text = "x") }))
+        engine.loadInline(Scenario(metadata = ScenarioMetadata(name = "plain"), steps = List(4) { Step(text = "x") }))
         withServer(engine) { client, _ ->
             assertEquals(
                 json("""{"input_tokens":100,"output_tokens":50,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}"""),
@@ -133,7 +141,9 @@ class TokenUsageTest {
     @Test
     fun `the cache figures do not follow usage`() {
         val engine = ScenarioEngine()
-        engine.loadInline(Scenario(name = "cached", steps = listOf(Step(text = "x", usage = TokenUsage(1, 2)))))
+        engine.loadInline(
+            Scenario(metadata = ScenarioMetadata(name = "cached"), steps = listOf(Step(text = "x", usage = TokenUsage(1, 2)))),
+        )
         withServer(engine) { client, _ ->
             val request =
                 """{"model":"m","max_tokens":64,"system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral"}}],""" +
@@ -161,7 +171,7 @@ class TokenUsageTest {
 
     private fun openAiUsage(usage: TokenUsage): JsonElement? {
         val engine = ScenarioEngine()
-        engine.loadInline(Scenario(name = "one", steps = listOf(Step(text = "x", usage = usage))))
+        engine.loadInline(Scenario(metadata = ScenarioMetadata(name = "one"), steps = listOf(Step(text = "x", usage = usage))))
         var result: JsonElement? = null
         withServer(engine) { client, _ -> result = body(client.post(OPENAI, OPENAI_BODY).body())["usage"] }
         return result

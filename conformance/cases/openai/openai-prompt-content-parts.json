@@ -3,7 +3,7 @@
   "name": "openai-prompt-content-parts",
   "description": "Message content given as an array of parts adds each part's string text to the prompt, in order; other parts add nothing. A developer message counts as a system prompt.",
   "scenario": {
-    "name": "openai-prompt-content-parts",
+    "metadata": { "name": "openai-prompt-content-parts" },
     "steps": [
       {
         "text": "Noted."

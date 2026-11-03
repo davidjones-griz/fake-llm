@@ -51,7 +51,7 @@ class SummarizerJavaTest {
     void retriesOnceAfterARateLimit() {
         server.getEngine().loadInline(Scenario.fromJson("""
                 {
-                  "name": "rate-limited-once",
+                  "metadata": {"name": "rate-limited-once"},
                   "steps": [
                     {"error": {"status": 429, "headers": {"retry-after": "0"}}},
                     {"text": "Recovered."}

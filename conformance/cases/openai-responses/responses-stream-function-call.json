@@ -3,7 +3,7 @@
   "name": "responses-stream-function-call",
   "description": "A streamed tool call is a function_call item after the message, with its argument text as delta events.",
   "scenario": {
-    "name": "responses-stream-function-call",
+    "metadata": { "name": "responses-stream-function-call" },
     "steps": [
       {
         "text": "Checking.",

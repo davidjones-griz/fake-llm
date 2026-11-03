@@ -3,7 +3,7 @@
   "name": "responses-thinking-tool-only",
   "description": "Thinking with tool calls and no text: output is the reasoning item, then the function_call items.",
   "scenario": {
-    "name": "responses-thinking-tool-only",
+    "metadata": { "name": "responses-thinking-tool-only" },
     "steps": [
       {
         "thinking": "Need the weather.",

@@ -3,7 +3,7 @@
   "name": "usage-partial-and-zero",
   "description": "An unset count keeps its default (100 input tokens), and zero counts are allowed; the total is the sum.",
   "scenario": {
-    "name": "partial-and-zero",
+    "metadata": { "name": "partial-and-zero" },
     "steps": [
       {
         "text": "Partial.",

@@ -33,12 +33,16 @@ class ScenarioValidationTest {
     @Test
     fun `valid files exit 0 and are each reported ok`() {
         withScenarioDir { dir ->
-            val a = dir.write("a.json", """{"name":"a","steps":[{"text":"t"}]}""")
-            val b = dir.write("b.json", """{"${'$'}schema":"../schema/scenario.schema.json","name":"b","steps":[{"text":"t"}]}""")
+            val a = dir.write("a.json", """{"steps":[{"text":"t"}]}""")
+            val b =
+                dir.write(
+                    "b.json",
+                    """{"${'$'}schema":"../schema/scenario.schema.json","metadata":{"name":"Shown as B"},"steps":[{"text":"t"}]}""",
+                )
             val outcome = validate(a, b)
             assertEquals(0, outcome.code)
-            assertContains(outcome.out, "ok $a\n")
-            assertContains(outcome.out, "ok $b\n")
+            assertContains(outcome.out, "ok $a key=a\n")
+            assertContains(outcome.out, "ok $b key=b name=\"Shown as B\"\n")
             assertContains(outcome.out, "2 files: 2 valid, 0 invalid")
             assertEquals("", outcome.err)
         }
@@ -47,7 +51,7 @@ class ScenarioValidationTest {
     @Test
     fun `an invalid file exits 1, naming the file, the step and the field`() {
         withScenarioDir { dir ->
-            val bad = dir.write("bad.json", """{"name":"bad","steps":[{"text":"a"},{"text":"b","stopReasn":"max_tokens"}]}""")
+            val bad = dir.write("bad.json", """{"metadata":{"name":"bad"},"steps":[{"text":"a"},{"text":"b","stopReasn":"max_tokens"}]}""")
             val outcome = validate(bad)
             assertEquals(1, outcome.code)
             assertEquals("$bad: step 2: \$.steps[1]: unknown field 'stopReasn'\n", outcome.err)
@@ -58,30 +62,30 @@ class ScenarioValidationTest {
     @Test
     fun `a directory means its json files, and every file is checked`() {
         withScenarioDir { dir ->
-            val good = dir.write("good.json", """{"name":"good","steps":[{"text":"t"}]}""")
-            val renamed = dir.write("renamed.json", """{"name":"other","steps":[{"text":"t"}]}""")
-            val illegal = dir.write("has space.json", """{"name":"has space","steps":[{"text":"t"}]}""")
-            val broken = dir.write("broken.json", "{\"name\": \"broken\",\n\"steps\": [")
+            val good = dir.write("good.json", """{"metadata":{"name":"good"},"steps":[{"text":"t"}]}""")
+            val renamed = dir.write("renamed.json", """{"metadata":{"name":"other"},"steps":[{"text":"t"}]}""")
+            val illegal = dir.write("has space.json", """{"metadata":{"name":"has space"},"steps":[{"text":"t"}]}""")
+            val broken = dir.write("broken.json", "{\"metadata\": {\"name\": \"broken\"},\n\"steps\": [")
             val notObject = dir.write("list.json", "[]")
             dir.write("notes.txt", "not a scenario")
             dir.resolve("nested").createDirectory().write("deeper.json", "{}")
             val outcome = validate(dir.toString())
             assertEquals(1, outcome.code)
-            assertContains(outcome.out, "ok $good\n")
-            assertContains(outcome.err, "$renamed: scenario file renamed.json declares name 'other'")
+            assertContains(outcome.out, "ok $good key=good name=\"good\"\n")
+            assertContains(outcome.out, "ok $renamed key=renamed name=\"other\"\n", message = "metadata.name may differ from the file name")
             assertContains(outcome.err, "$illegal: 'has space' is not a legal scenario name")
             assertContains(outcome.err, "$broken: invalid JSON at line 2")
             assertContains(outcome.err, "$notObject: \$: expected an object, got []")
             assertFalse("deeper" in outcome.out + outcome.err, "a directory is not searched recursively")
             assertFalse("notes" in outcome.out + outcome.err)
-            assertContains(outcome.out, "5 files: 1 valid, 4 invalid")
+            assertContains(outcome.out, "5 files: 2 valid, 3 invalid")
         }
     }
 
     @Test
     fun `usage errors exit 2 before any file is checked`() {
         withScenarioDir { dir ->
-            val good = dir.write("good.json", """{"name":"good","steps":[{"text":"t"}]}""")
+            val good = dir.write("good.json", """{"metadata":{"name":"good"},"steps":[{"text":"t"}]}""")
             val empty = dir.resolve("empty").createDirectory().toString()
             listOf(
                 emptyList<String>() to "no files or directories given",
@@ -102,7 +106,7 @@ class ScenarioValidationTest {
     @Test
     fun `main runs validate without starting a server`() {
         withScenarioDir { dir ->
-            val good = dir.write("good.json", """{"name":"good","steps":[{"text":"t"}]}""")
+            val good = dir.write("good.json", """{"metadata":{"name":"good"},"steps":[{"text":"t"}]}""")
             val captured = ByteArrayOutputStream()
             val original = System.out
             System.setOut(PrintStream(captured, true))

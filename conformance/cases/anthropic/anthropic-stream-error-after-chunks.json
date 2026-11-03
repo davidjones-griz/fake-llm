@@ -3,7 +3,7 @@
   "name": "anthropic-stream-error-after-chunks",
   "description": "streamErrorAfterChunks sends that many filler deltas, then the error body as an error event.",
   "scenario": {
-    "name": "stream-error",
+    "metadata": { "name": "stream-error" },
     "steps": [
       {
         "error": {

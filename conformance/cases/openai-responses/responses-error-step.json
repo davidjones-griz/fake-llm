@@ -3,7 +3,7 @@
   "name": "responses-error-step",
   "description": "An error step is that HTTP status, body and headers.",
   "scenario": {
-    "name": "responses-error-step",
+    "metadata": { "name": "responses-error-step" },
     "steps": [
       {
         "error": {

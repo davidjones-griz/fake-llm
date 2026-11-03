@@ -1,5 +1,6 @@
 {
-  "name": "custom",
-  "description": "One step. Found only in the fixtures' scenario directory, not on the classpath.",
+  "metadata": {
+    "description": "One step. Found only in the fixtures' scenario directory, not on the classpath."
+  },
   "steps": [{ "text": "From the scenario directory." }]
 }

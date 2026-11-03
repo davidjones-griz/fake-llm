@@ -3,7 +3,7 @@
   "name": "load-replaces-scenario",
   "description": "Loading another scenario replaces the loaded one, empties the call log, and starts at its step 1.",
   "scenario": {
-    "name": "old",
+    "metadata": { "name": "old" },
     "steps": [
       {
         "text": "old one"
@@ -68,7 +68,7 @@
         },
         "body": {
           "scenario": {
-            "name": "new",
+            "metadata": { "name": "new" },
             "steps": [
               {
                 "text": "new one"
@@ -84,6 +84,7 @@
         },
         "body": {
           "loaded": "new",
+          "name": "new",
           "steps": 1
         }
       }
@@ -159,9 +160,12 @@
         "body": {
           "status": "ok",
           "scenario": "new",
+          "scenarioName": "new",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 1,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

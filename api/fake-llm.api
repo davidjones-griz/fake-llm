@@ -36,6 +36,7 @@ public final class com/davidjonesgriz/fakellm/CallRecord {
 	public final fun component13 ()J
 	public final fun component14 ()Ljava/lang/Integer;
 	public final fun component15 ()Ljava/lang/Integer;
+	public final fun component16 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Ljava/lang/String;
@@ -53,6 +54,7 @@ public final class com/davidjonesgriz/fakellm/CallRecord {
 	public final fun getPromptSample ()Ljava/lang/String;
 	public final fun getSeq ()J
 	public final fun getStep ()Ljava/lang/Integer;
+	public final fun getStepName ()Ljava/lang/String;
 	public final fun getStreamInterChunkDelayMs ()J
 	public final fun getSystemShape ()Ljava/lang/String;
 	public final fun getTimestampMs ()J
@@ -234,10 +236,16 @@ public final class com/davidjonesgriz/fakellm/FakeLlmHealth {
 	public final fun component3 ()Ljava/lang/Integer;
 	public final fun component4 ()Ljava/util/List;
 	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/util/Map;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/String;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getLenient ()Z
 	public final fun getScenario ()Ljava/lang/String;
+	public final fun getScenarioName ()Ljava/lang/String;
+	public final fun getScenarioSource ()Ljava/lang/String;
 	public final fun getSteps ()Ljava/lang/Integer;
+	public final fun getUnusedStepNames ()Ljava/util/Map;
 	public final fun getUnusedSteps ()Ljava/util/List;
 	public final fun getVersion ()Ljava/lang/String;
 	public fun hashCode ()I
@@ -426,17 +434,15 @@ public final class com/davidjonesgriz/fakellm/ParallelSection$Companion {
 
 public final class com/davidjonesgriz/fakellm/Scenario {
 	public static final field Companion Lcom/davidjonesgriz/fakellm/Scenario$Companion;
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun component3 ()Ljava/util/List;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lcom/davidjonesgriz/fakellm/Scenario;
-	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/Scenario;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/Scenario;
+	public fun <init> (Ljava/util/List;Lcom/davidjonesgriz/fakellm/ScenarioMetadata;)V
+	public synthetic fun <init> (Ljava/util/List;Lcom/davidjonesgriz/fakellm/ScenarioMetadata;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Lcom/davidjonesgriz/fakellm/ScenarioMetadata;
+	public final fun copy (Ljava/util/List;Lcom/davidjonesgriz/fakellm/ScenarioMetadata;)Lcom/davidjonesgriz/fakellm/Scenario;
+	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/Scenario;Ljava/util/List;Lcom/davidjonesgriz/fakellm/ScenarioMetadata;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public fun equals (Ljava/lang/Object;)Z
 	public static final fun fromJson (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Scenario;
-	public final fun getDescription ()Ljava/lang/String;
-	public final fun getName ()Ljava/lang/String;
+	public final fun getMetadata ()Lcom/davidjonesgriz/fakellm/ScenarioMetadata;
 	public final fun getSteps ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -464,10 +470,11 @@ public final class com/davidjonesgriz/fakellm/ScenarioEngine {
 	public fun <init> (ZLjava/nio/file/Path;)V
 	public synthetic fun <init> (ZLjava/nio/file/Path;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun calls ()Ljava/util/List;
-	public final fun currentScenarioName ()Ljava/lang/String;
+	public final fun currentScenarioKey ()Ljava/lang/String;
 	public final fun exchanges ()Ljava/util/List;
 	public final fun getLenient ()Z
 	public final fun getScenarioDirectory ()Ljava/nio/file/Path;
+	public final fun getUnusedStepNames ()Ljava/util/Map;
 	public final fun getUnusedSteps ()Ljava/util/List;
 	public final fun load (Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/Scenario;
 	public final fun loadInline (Lcom/davidjonesgriz/fakellm/Scenario;)Lcom/davidjonesgriz/fakellm/Scenario;
@@ -475,17 +482,51 @@ public final class com/davidjonesgriz/fakellm/ScenarioEngine {
 	public final fun unload ()V
 }
 
+public final class com/davidjonesgriz/fakellm/ScenarioMetadata {
+	public static final field Companion Lcom/davidjonesgriz/fakellm/ScenarioMetadata$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lcom/davidjonesgriz/fakellm/ScenarioMetadata;
+	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/ScenarioMetadata;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/ScenarioMetadata;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDescription ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getTags ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/davidjonesgriz/fakellm/ScenarioMetadata$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/davidjonesgriz/fakellm/ScenarioMetadata$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/davidjonesgriz/fakellm/ScenarioMetadata;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/davidjonesgriz/fakellm/ScenarioMetadata;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/davidjonesgriz/fakellm/ScenarioMetadata$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
 public final class com/davidjonesgriz/fakellm/Step {
 	public static final field Companion Lcom/davidjonesgriz/fakellm/Step$Companion;
 	public fun <init> ()V
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/ErrorStep;IJLjava/lang/Integer;Ljava/util/List;JLcom/davidjonesgriz/fakellm/TokenUsage;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Lcom/davidjonesgriz/fakellm/ParallelSection;Lcom/davidjonesgriz/fakellm/Times;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/ErrorStep;IJLjava/lang/Integer;Ljava/util/List;JLcom/davidjonesgriz/fakellm/TokenUsage;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Lcom/davidjonesgriz/fakellm/ParallelSection;Lcom/davidjonesgriz/fakellm/Times;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/ErrorStep;IJLjava/lang/Integer;Ljava/util/List;JLcom/davidjonesgriz/fakellm/TokenUsage;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Lcom/davidjonesgriz/fakellm/ParallelSection;Lcom/davidjonesgriz/fakellm/Times;Lcom/davidjonesgriz/fakellm/ScenarioMetadata;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/ErrorStep;IJLjava/lang/Integer;Ljava/util/List;JLcom/davidjonesgriz/fakellm/TokenUsage;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Lcom/davidjonesgriz/fakellm/ParallelSection;Lcom/davidjonesgriz/fakellm/Times;Lcom/davidjonesgriz/fakellm/ScenarioMetadata;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component10 ()Lcom/davidjonesgriz/fakellm/TokenUsage;
 	public final fun component11 ()Ljava/lang/String;
 	public final fun component12 ()Lcom/davidjonesgriz/fakellm/Match;
 	public final fun component13 ()Lcom/davidjonesgriz/fakellm/ParallelSection;
 	public final fun component14 ()Lcom/davidjonesgriz/fakellm/Times;
+	public final fun component15 ()Lcom/davidjonesgriz/fakellm/ScenarioMetadata;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Lcom/davidjonesgriz/fakellm/ErrorStep;
@@ -494,12 +535,13 @@ public final class com/davidjonesgriz/fakellm/Step {
 	public final fun component7 ()Ljava/lang/Integer;
 	public final fun component8 ()Ljava/util/List;
 	public final fun component9 ()J
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/ErrorStep;IJLjava/lang/Integer;Ljava/util/List;JLcom/davidjonesgriz/fakellm/TokenUsage;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Lcom/davidjonesgriz/fakellm/ParallelSection;Lcom/davidjonesgriz/fakellm/Times;)Lcom/davidjonesgriz/fakellm/Step;
-	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/Step;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/ErrorStep;IJLjava/lang/Integer;Ljava/util/List;JLcom/davidjonesgriz/fakellm/TokenUsage;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Lcom/davidjonesgriz/fakellm/ParallelSection;Lcom/davidjonesgriz/fakellm/Times;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/Step;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/ErrorStep;IJLjava/lang/Integer;Ljava/util/List;JLcom/davidjonesgriz/fakellm/TokenUsage;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Lcom/davidjonesgriz/fakellm/ParallelSection;Lcom/davidjonesgriz/fakellm/Times;Lcom/davidjonesgriz/fakellm/ScenarioMetadata;)Lcom/davidjonesgriz/fakellm/Step;
+	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/Step;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/ErrorStep;IJLjava/lang/Integer;Ljava/util/List;JLcom/davidjonesgriz/fakellm/TokenUsage;Ljava/lang/String;Lcom/davidjonesgriz/fakellm/Match;Lcom/davidjonesgriz/fakellm/ParallelSection;Lcom/davidjonesgriz/fakellm/Times;Lcom/davidjonesgriz/fakellm/ScenarioMetadata;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/Step;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getError ()Lcom/davidjonesgriz/fakellm/ErrorStep;
 	public final fun getFirstByteDelayMs ()J
 	public final fun getMatch ()Lcom/davidjonesgriz/fakellm/Match;
+	public final fun getMetadata ()Lcom/davidjonesgriz/fakellm/ScenarioMetadata;
 	public final fun getParallel ()Lcom/davidjonesgriz/fakellm/ParallelSection;
 	public final fun getStopReason ()Ljava/lang/String;
 	public final fun getStopSequence ()Ljava/lang/String;

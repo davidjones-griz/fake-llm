@@ -3,7 +3,7 @@
   "name": "delays-no-more-steps",
   "description": "A call no step served records no delays.",
   "scenario": {
-    "name": "latency-no-more-steps",
+    "metadata": { "name": "latency-no-more-steps" },
     "steps": [
       {
         "text": "only",

@@ -22,6 +22,7 @@
         },
         "body": {
           "loaded": "fail-then-retry",
+          "name": "fail-then-retry",
           "steps": 2
         }
       }
@@ -39,9 +40,12 @@
         "body": {
           "status": "ok",
           "scenario": "fail-then-retry",
+          "scenarioName": "fail-then-retry",
+          "scenarioSource": "file",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [1, 2],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

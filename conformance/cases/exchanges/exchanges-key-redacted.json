@@ -3,7 +3,7 @@
   "name": "exchanges-key-redacted",
   "description": "A key query parameter is recorded as key=[redacted].",
   "scenario": {
-    "name": "key-redacted",
+    "metadata": { "name": "key-redacted" },
     "steps": [
       {
         "text": "Hi."

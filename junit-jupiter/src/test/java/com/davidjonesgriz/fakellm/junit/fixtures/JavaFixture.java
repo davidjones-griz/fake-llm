@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 public class JavaFixture {
     @Test
     public void injected(FakeLlmServer server) {
-        Sink.add("java", server.getEngine().currentScenarioName());
+        Sink.add("java", server.getEngine().currentScenarioKey());
         Sink.add("java:status", FixtureSupportKt.post(server, "example-model"));
     }
 }

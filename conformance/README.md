@@ -80,7 +80,7 @@ Turns every skip into a failure. CI sets it: with a command target, nothing shou
   "name": "scripted-400-vs-own-400",
   "description": "A scripted 400 is the scenario's body; fake-llm's own 400 after the last step is its no-more-steps body.",
   "scenario": {
-    "name": "scripted-400",
+    "metadata": {"name": "scripted-400"},
     "steps": [{ "error": { "status": 400, "body": "{\"type\":\"error\"}" } }]
   },
   "exchanges": [

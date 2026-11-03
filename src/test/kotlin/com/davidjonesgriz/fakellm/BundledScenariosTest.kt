@@ -40,7 +40,7 @@ class BundledScenariosTest {
         assertEquals(bundledNames, names)
         names.forEach { name ->
             val scenario = ScenarioLoader.load(name, directory = null)
-            assertEquals(name, scenario.name)
+            assertEquals(null, scenario.metadata?.name, "$name: a bundled scenario is named by its file")
             assertTrue(scenario.steps.isNotEmpty(), name)
         }
     }

@@ -3,7 +3,7 @@
   "name": "openai-max-tokens",
   "description": "stopReason max_tokens becomes finish_reason length.",
   "scenario": {
-    "name": "cutoff",
+    "metadata": { "name": "cutoff" },
     "steps": [
       {
         "text": "The recipe is",

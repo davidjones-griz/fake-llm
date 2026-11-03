@@ -81,10 +81,13 @@ private fun controlRoute(
                 HTTP_OK,
                 buildJsonObject {
                     put("status", "ok")
-                    put("scenario", progress.name)
+                    put("scenario", progress.key)
+                    put("scenarioName", progress.displayName)
+                    put("scenarioSource", progress.source?.json)
                     put("lenient", engine.lenient)
                     put("steps", progress.steps)
                     put("unusedSteps", buildJsonArray { progress.unusedSteps.forEach { add(JsonPrimitive(it)) } })
+                    put("unusedStepNames", buildJsonObject { progress.unusedStepNames.forEach { (label, name) -> put(label, name) } })
                     put("version", fakeLlmVersion)
                 }.toString(),
             )
@@ -185,20 +188,22 @@ private fun loadScenario(
     if (hasName == hasScenario) {
         error("body must contain exactly one of \"name\" or \"scenario\"")
     }
-    val scenario =
+    val (key, scenario) =
         if (hasName) {
             val name =
                 (obj["name"] as? JsonPrimitive)?.takeIf { it.isString }?.content
                     ?: error("\"name\" must be a string")
             if (name.isBlank()) error("\"name\" must be a non-blank string")
-            scenarioLoad { engine.load(name) }
+            name to scenarioLoad { engine.load(name) }
         } else {
             val inline =
                 obj["scenario"] as? JsonObject
                     ?: error("\"scenario\" must be a JSON object")
-            scenarioLoad { engine.loadInline(ScenarioLoader.decode(inline)) }
+            val decoded = scenarioLoad { ScenarioLoader.decode(inline) }
+            decoded.inlineKey to engine.loadInline(decoded)
         }
-    respond(ex, HTTP_OK, """{"loaded":${jsonString(scenario.name)},"steps":${scenario.steps.size}}""")
+    val displayName = scenario.displayName(key)
+    respond(ex, HTTP_OK, """{"loaded":${jsonString(key)},"name":${jsonString(displayName)},"steps":${scenario.steps.size}}""")
 }
 
 private fun scenariosJson(engine: ScenarioEngine): String {

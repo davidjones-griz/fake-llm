@@ -1,7 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
-  "name": "pipeline-rate-limited",
-  "description": "A 429 on the classification call, then the happy path's three steps.",
+  "metadata": {
+    "description": "A 429 on the classification call, then the happy path's three steps."
+  },
   "steps": [
     { "error": { "status": 429, "headers": { "retry-after": "0" } } },
     { "text": "billing" },

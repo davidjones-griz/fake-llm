@@ -3,7 +3,7 @@
   "name": "responses-stream-thinking",
   "description": "Streamed, the reasoning item is output 0: its six events come first, with the summary text as deltas chunked by streamChunkChars. The message is output 1 and the function call output 2, and response.completed carries all three items.",
   "scenario": {
-    "name": "responses-stream-thinking",
+    "metadata": { "name": "responses-stream-thinking" },
     "steps": [
       {
         "text": "Checking.",

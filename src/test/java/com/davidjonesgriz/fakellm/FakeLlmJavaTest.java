@@ -14,7 +14,7 @@ class FakeLlmJavaTest {
         try (FakeLlmServer server = FakeLlm.startFakeLlmServer(0, engine)) {
             engine.load("hello");
             assertEquals("http://127.0.0.1:" + server.getPort(), server.getBaseUrl());
-            assertEquals("hello", server.getEngine().currentScenarioName());
+            assertEquals("hello", server.getEngine().currentScenarioKey());
         }
     }
 
@@ -22,7 +22,7 @@ class FakeLlmJavaTest {
     void decodesAScenarioFromJsonText() {
         Scenario scenario = Scenario.fromJson("""
                 {
-                  "name": "from-java",
+                  "metadata": {"name": "from-java"},
                   "steps": [
                     {"error": {"status": 429, "headers": {"retry-after": "0"}}},
                     {"text": "Recovered."}
@@ -34,13 +34,13 @@ class FakeLlmJavaTest {
 
         ScenarioEngine engine = new ScenarioEngine();
         engine.loadInline(scenario);
-        assertEquals("from-java", engine.currentScenarioName());
+        assertEquals("from-java", engine.currentScenarioKey());
     }
 
     @Test
     void rejectsAnInvalidScenario() {
         IllegalArgumentException failure = assertThrows(
-                IllegalArgumentException.class, () -> Scenario.fromJson("{\"name\": \"x\", \"steps\": []}"));
-        assertEquals("scenario 'x' has no steps", failure.getMessage());
+                IllegalArgumentException.class, () -> Scenario.fromJson("{\"metadata\": {\"name\": \"x\"}, \"steps\": []}"));
+        assertEquals("a scenario must have at least one step", failure.getMessage());
     }
 }

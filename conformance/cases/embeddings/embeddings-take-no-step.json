@@ -3,7 +3,7 @@
   "name": "embeddings-take-no-step",
   "description": "An embeddings request takes no step and is in neither log: the next call still gets step 1.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

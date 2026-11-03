@@ -3,7 +3,7 @@
   "name": "anthropic-stream-text",
   "description": "A streamed text step is the full Messages event sequence, split at streamChunkChars code points.",
   "scenario": {
-    "name": "stream",
+    "metadata": { "name": "stream" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

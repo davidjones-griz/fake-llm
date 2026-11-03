@@ -3,7 +3,7 @@
   "name": "anthropic-system-null",
   "description": "A request with \"system\": null gets the normal reply, and the call log records no system prompt: systemShape absent and no null text.",
   "scenario": {
-    "name": "system-null",
+    "metadata": { "name": "system-null" },
     "steps": [
       {
         "text": "Billing questions go to the billing team."

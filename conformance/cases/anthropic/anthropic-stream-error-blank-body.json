@@ -3,7 +3,7 @@
   "name": "anthropic-stream-error-blank-body",
   "description": "A streamed error with a blank body sends the generic api_error body.",
   "scenario": {
-    "name": "stream-error-blank",
+    "metadata": { "name": "stream-error-blank" },
     "steps": [
       {
         "error": {

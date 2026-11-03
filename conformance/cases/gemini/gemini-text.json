@@ -3,7 +3,7 @@
   "name": "gemini-text",
   "description": "A text step is one generateContent candidate.",
   "scenario": {
-    "name": "text",
+    "metadata": { "name": "text" },
     "steps": [
       {
         "text": "Billing."

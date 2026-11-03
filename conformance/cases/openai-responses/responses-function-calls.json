@@ -3,7 +3,7 @@
   "name": "responses-function-calls",
   "description": "A tool-call step is function_call output items with the call_id and argument text (rawArguments verbatim); the function_call_output items the next request sends back are logged with their tool names.",
   "scenario": {
-    "name": "responses-function-calls",
+    "metadata": { "name": "responses-function-calls" },
     "steps": [
       {
         "toolCalls": [

@@ -3,7 +3,7 @@
   "name": "exchanges-stream",
   "description": "A streamed call's exchange holds the whole event stream, ending with data: [DONE].",
   "scenario": {
-    "name": "stream",
+    "metadata": { "name": "stream" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

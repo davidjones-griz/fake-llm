@@ -6,7 +6,7 @@
     "lenient": true
   },
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

@@ -4,9 +4,8 @@
   "$comment": "Generated from openapi/fake-llm.yaml by ./gradlew updateScenarioSchema. Do not edit by hand.",
   "title": "fake-llm scenario",
   "type": "object",
-  "description": "One named behaviour: an ordered list of steps. After a load or reset, call N gets step N, in a\nscenario with no `match`, no parallel step and no `times`.\nA call after the last step gets `NoMoreStepsError`.\n",
+  "description": "One behaviour: an ordered list of steps. After a load or reset, call N gets step N, in a\nscenario with no `match`, no parallel step and no `times`.\nA call after the last step gets `NoMoreStepsError`. A load by name finds the file by its\nfile name; `metadata.name` is a display name. Before 0.8.0 `name` and `description` were\ntop-level keys; they are now in `metadata`, and a top-level one is rejected.\n",
   "required": [
-    "name",
     "steps"
   ],
   "additionalProperties": false,
@@ -15,12 +14,16 @@
       "type": "string",
       "description": "The scenario JSON Schema's URL or path, for editors (see `schema/scenario.schema.json`).\nIgnored by the server. Only at the top level, not in a step.\n"
     },
-    "name": {
-      "type": "string"
-    },
-    "description": {
-      "type": "string",
-      "default": ""
+    "metadata": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ScenarioMetadata"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What the scenario is called and for. `name` defaults to the file name for a load by\nname; an inline load with no `name` is identified as `inline`.\n"
     },
     "steps": {
       "type": "array",
@@ -31,9 +34,44 @@
     }
   },
   "$defs": {
+    "ScenarioMetadata": {
+      "type": "object",
+      "description": "Information about a scenario or a step: what it is called, why it exists, and labels for\nfinding it. It never changes how a scenario runs: matching, replies, order and pass/fail are\nthe same with or without it. Only these fields are defined; any other key is rejected. It is\nnot allowed inside `match`, `error`, `toolCalls` or any other part of a step.\n",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Not empty or blank. A display name. On a step, it is copied into the call log and named in unused-step\nreports; names need not be unique. On a scenario, it is shown beside the file name, and\nidentifies an inline load.\n"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "A note for people reading the scenario, such as why a group runs in parallel."
+        },
+        "tags": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "description": "Labels for search and filtering, none empty or blank. Null, like an absent key, is none.\nfake-llm stores them and does not act on them.\n"
+        }
+      }
+    },
     "Step": {
       "type": "object",
-      "description": "One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking` and\n`usage`), or a scripted `error`, optionally with a `match` and `times`; or a parallel step, an object\nwhose only key is `parallel`. A step sets exactly one of a reply, `error` and `parallel`.\n",
+      "description": "One scripted reply: a reply (`text`, `toolCalls` or both, optionally with `thinking` and\n`usage`), or a scripted `error`, optionally with a `match` and `times`; or a parallel step, an object\nwhose only keys are `parallel` and `metadata`. A step sets exactly one of a reply, `error` and\n`parallel`. Any step can carry `metadata`.\n",
       "additionalProperties": false,
       "oneOf": [
         {
@@ -94,7 +132,12 @@
             }
           },
           "then": {
-            "maxProperties": 1
+            "propertyNames": {
+              "enum": [
+                "parallel",
+                "metadata"
+              ]
+            }
           }
         },
         {
@@ -345,7 +388,7 @@
               "type": "null"
             }
           ],
-          "description": "Makes this a parallel step: one position in the scenario holding several responses,\nused in any order. A parallel step has no other key.\n"
+          "description": "Makes this a parallel step: one position in the scenario holding several responses,\nused in any order. A parallel step has no other key but `metadata`.\n"
         },
         "times": {
           "oneOf": [
@@ -357,6 +400,17 @@
             }
           ],
           "description": "How many calls this step takes. Null, the default, is exactly once. Not on a parallel\nstep; on its steps, yes.\n"
+        },
+        "metadata": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ScenarioMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What the step is called and for. It never changes how the step is served. `name` is\ncopied into the call log's `stepName` when this step answers a call.\n"
         }
       }
     },

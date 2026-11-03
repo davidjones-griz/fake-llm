@@ -3,7 +3,7 @@
   "name": "usage-openai-stream-include-usage",
   "description": "With stream_options.include_usage, the usage chunk reports the step's prompt, completion and total tokens.",
   "scenario": {
-    "name": "stream-include-usage",
+    "metadata": { "name": "stream-include-usage" },
     "steps": [
       {
         "text": "Hi.",

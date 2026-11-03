@@ -25,12 +25,21 @@ class FakeLlmClientTest {
     fun `loads, reads typed calls and resets over HTTP`() {
         withClient { client, server ->
             assertEquals(
-                FakeLlmHealth(scenario = null, lenient = false, steps = null, unusedSteps = emptyList(), version = fakeLlmVersion),
+                FakeLlmHealth(
+                    scenario = null,
+                    lenient = false,
+                    steps = null,
+                    unusedSteps = emptyList(),
+                    scenarioName = null,
+                    unusedStepNames = emptyMap(),
+                    scenarioSource = null,
+                    version = fakeLlmVersion,
+                ),
                 client.health(),
             )
 
             client.load("hello")
-            assertEquals("hello", client.health().scenario)
+            assertEquals("hello" to "file", client.health().let { it.scenario to it.scenarioSource })
 
             TestClient(server.port).post("/anthropic/v1/messages", anthropicBody("hi"))
             val call = client.calls().single()
@@ -40,7 +49,10 @@ class FakeLlmClientTest {
             assertNull(call.innerStep)
 
             client.loadInline(
-                Scenario(name = "fan", steps = listOf(Step(parallel = ParallelSection(listOf(Step(text = "a"), Step(text = "b")))))),
+                Scenario(
+                    metadata = ScenarioMetadata(name = "fan"),
+                    steps = listOf(Step(parallel = ParallelSection(listOf(Step(text = "a"), Step(text = "b"))))),
+                ),
             )
             TestClient(server.port).post("/anthropic/v1/messages", anthropicBody("hi"))
             assertEquals(1 to 1, client.calls().single().let { it.step to it.innerStep })
@@ -93,12 +105,12 @@ class FakeLlmClientTest {
     fun `loadInline sends only the fields that are set`() {
         val scenario =
             Scenario(
-                name = "inline",
+                metadata = ScenarioMetadata(name = "inline"),
                 steps = listOf(Step(text = "from the client"), Step(text = "counted", usage = TokenUsage(outputTokens = 4000))),
             )
         // No "description", "stopReason" or other defaults that a server without those fields would reject.
         assertEquals(
-            """{"scenario":{"name":"inline","steps":[{"text":"from the client"},{"text":"counted","usage":{"outputTokens":4000}}]}}""",
+            """{"scenario":{"steps":[{"text":"from the client"},{"text":"counted","usage":{"outputTokens":4000}}],"metadata":{"name":"inline"}}}""",
             encodeLoadInline(scenario),
         )
     }
@@ -107,7 +119,7 @@ class FakeLlmClientTest {
     fun `loadInline round-trips error steps, headers and stop reasons`() {
         val scenario =
             Scenario(
-                name = "rich",
+                metadata = ScenarioMetadata(name = "rich"),
                 steps =
                     listOf(
                         Step(error = ErrorStep(status = 429, body = "slow down", headers = mapOf("retry-after" to "3"))),
@@ -179,11 +191,11 @@ class FakeLlmClientTest {
                     client.send(
                         "POST",
                         "/control/scenario",
-                        """{"scenario":{"name":"x","steps":[]}}""",
+                        """{"scenario":{"metadata":{"name":"x"},"steps":[]}}""",
                     )
                 }
             assertEquals(400, invalid.statusCode)
-            assertContains(invalid.serverMessage!!, "scenario 'x' has no steps")
+            assertContains(invalid.serverMessage!!, "a scenario must have at least one step")
             assertEquals("invalid-scenario", invalid.errorCode)
 
             val noRoute = assertFailsWith<FakeLlmClientException> { client.send("GET", "/nope") }

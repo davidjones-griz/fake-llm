@@ -3,7 +3,7 @@
   "name": "anthropic-stream-stop-sequence",
   "description": "Streamed, message_start keeps stop_sequence null and message_delta carries the step's stopSequence.",
   "scenario": {
-    "name": "anthropic-stream-stop-sequence",
+    "metadata": { "name": "anthropic-stream-stop-sequence" },
     "steps": [
       {
         "text": "42",

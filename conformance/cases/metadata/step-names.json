@@ -1,0 +1,347 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "step-names",
+  "description": "Metadata names a scenario and its steps. The call log carries the answering step's name, and GET /health names the unused steps that have one, a parallel step's steps included; metadata changes nothing about which step answers.",
+  "scenario": {
+    "metadata": {
+      "name": "Note summary",
+      "description": "One summary, then two tool results in either order",
+      "tags": [
+        "smoke"
+      ]
+    },
+    "steps": [
+      {
+        "metadata": {
+          "name": "summarize-note",
+          "tags": [
+            "happy-path"
+          ]
+        },
+        "text": "Summary."
+      },
+      {
+        "metadata": {
+          "description": "Two tool results can arrive in either order",
+          "tags": [
+            "race"
+          ]
+        },
+        "parallel": {
+          "steps": [
+            {
+              "metadata": {
+                "name": "side-a"
+              },
+              "match": {
+                "lastUser": {
+                  "equals": "a"
+                }
+              },
+              "text": "A."
+            },
+            {
+              "match": {
+                "lastUser": {
+                  "equals": "b"
+                }
+              },
+              "text": "B."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "Note summary",
+          "scenarioName": "Note summary",
+          "scenarioSource": "inline",
+          "lenient": false,
+          "steps": 2,
+          "unusedSteps": [
+            1,
+            2
+          ],
+          "unusedStepNames": {
+            "1": "summarize-note",
+            "2.1": "side-a"
+          },
+          "version": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "summarize"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-1",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "Summary."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "b"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-2",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "B."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "Note summary",
+          "scenarioName": "Note summary",
+          "scenarioSource": "inline",
+          "lenient": false,
+          "steps": 2,
+          "unusedSteps": [
+            2
+          ],
+          "unusedStepNames": {
+            "2.1": "side-a"
+          },
+          "version": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "a"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-3",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "A."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/control/calls"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": [
+          {
+            "seq": 1,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "summarize\n",
+            "step": 1,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0,
+            "stepName": "summarize-note"
+          },
+          {
+            "seq": 2,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "b\n",
+            "step": 2,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0,
+            "innerStep": 2
+          },
+          {
+            "seq": 3,
+            "vendor": "anthropic",
+            "model": "example-model",
+            "systemShape": "absent",
+            "messageCount": 1,
+            "outcome": "text",
+            "timestampMs": {
+              "$type": "integer"
+            },
+            "promptSample": "a\n",
+            "step": 2,
+            "toolCalls": [],
+            "toolResults": [],
+            "firstByteDelayMs": 0,
+            "streamInterChunkDelayMs": 0,
+            "innerStep": 1,
+            "stepName": "side-a"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "status": "ok",
+          "scenario": "Note summary",
+          "scenarioName": "Note summary",
+          "scenarioSource": "inline",
+          "lenient": false,
+          "steps": 2,
+          "unusedSteps": [],
+          "unusedStepNames": {},
+          "version": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

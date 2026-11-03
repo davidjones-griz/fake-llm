@@ -3,7 +3,7 @@
   "name": "exchanges-not-calls",
   "description": "Requests that are not calls are not recorded.",
   "scenario": {
-    "name": "not-calls",
+    "metadata": { "name": "not-calls" },
     "steps": [
       {
         "text": "only"

@@ -3,7 +3,7 @@
   "name": "gemini-stream-without-alt-sse",
   "description": "streamGenerateContent without alt=sse gets the invalid-request 400 and is not a call: the step stays next, and the request with alt=sse gets it as call 1.",
   "scenario": {
-    "name": "gemini-stream-without-alt-sse",
+    "metadata": { "name": "gemini-stream-without-alt-sse" },
     "steps": [
       {
         "text": "Hi."

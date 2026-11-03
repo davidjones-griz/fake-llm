@@ -6,7 +6,7 @@
     "lenient": true
   },
   "scenario": {
-    "name": "two-steps",
+    "metadata": { "name": "two-steps" },
     "steps": [
       {
         "text": "first"
@@ -46,9 +46,12 @@
         "body": {
           "status": "ok",
           "scenario": null,
+          "scenarioName": null,
+          "scenarioSource": null,
           "lenient": true,
           "steps": null,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

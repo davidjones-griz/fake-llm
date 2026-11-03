@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class UnloadRouteTest {
-    private val twoSteps = """{"scenario":{"name":"two-steps","steps":[{"text":"one"},{"text":"two"}]}}"""
+    private val twoSteps = """{"scenario":{"metadata":{"name":"two-steps"},"steps":[{"text":"one"},{"text":"two"}]}}"""
 
     private fun calls(client: TestClient): JsonArray = Json.parseToJsonElement(client.get("/control/calls").body()).jsonArray
 
@@ -32,7 +32,7 @@ class UnloadRouteTest {
 
             assertEquals(JsonNull, health(client)["scenario"])
             assertEquals(JsonArray(emptyList()), calls(client))
-            assertNull(engine.currentScenarioName())
+            assertNull(engine.currentScenarioKey())
             assertEquals(JsonArray(emptyList()), exchanges(client))
 
             val next = client.post("/anthropic/v1/messages", anthropicBody("hi"))
@@ -98,9 +98,9 @@ class UnloadRouteTest {
             assertEquals(listOf("Bearer"), missing.headers().allValues("www-authenticate"))
             val wrong = client.post("/control/unload", "", authorization = "Bearer wrong")
             assertEquals(401, wrong.statusCode())
-            assertEquals("hello", engine.currentScenarioName())
+            assertEquals("hello", engine.currentScenarioKey())
             assertEquals(200, client.post("/control/unload", "", authorization = "Bearer t").statusCode())
-            assertNull(engine.currentScenarioName())
+            assertNull(engine.currentScenarioKey())
         }
     }
 }

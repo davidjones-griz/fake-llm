@@ -3,7 +3,7 @@
   "name": "exchanges-no-more-steps",
   "description": "fake-llm's own no-more-steps 400 is recorded as call 2.",
   "scenario": {
-    "name": "no-more-steps",
+    "metadata": { "name": "no-more-steps" },
     "steps": [
       {
         "text": "only"

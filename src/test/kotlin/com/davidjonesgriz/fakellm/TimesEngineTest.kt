@@ -19,7 +19,10 @@ class TimesEngineTest {
         times: Times? = null,
     ) = Step(text = text.uppercase(), match = Match(lastUser = TextMatch(equalTo = text)), times = times)
 
-    private fun engine(vararg steps: Step) = ScenarioEngine().also { it.loadInline(Scenario(name = "times", steps = steps.toList())) }
+    private fun engine(vararg steps: Step) =
+        ScenarioEngine().also {
+            it.loadInline(Scenario(metadata = ScenarioMetadata(name = "times"), steps = steps.toList()))
+        }
 
     private fun section(
         vararg steps: Step,

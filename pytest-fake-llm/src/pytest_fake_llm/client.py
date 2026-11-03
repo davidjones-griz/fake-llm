@@ -44,18 +44,26 @@ class FakeLlmClientError(Exception):
 
 @dataclass(frozen=True)
 class Health:
-    """``GET /health``: the loaded scenario's name, or None, and whether the server is lenient.
+    """``GET /health``: the loaded scenario's key, or None, and whether the server is lenient.
 
-    ``steps`` is the scenario's step count, None with none loaded, and ``unused_steps`` the steps not used
-    up since the last load, reset or unload (a parallel step until every step in it is used, a step with
-    ``times`` until it has its ``min`` calls), [] with none loaded. Both are None from a server older
-    than 0.6.0.
+    ``scenario`` is the name the scenario was loaded by, or for an inline load its ``metadata.name``, or
+    ``inline`` when it has none. ``steps`` is the scenario's step count, None with none loaded, and
+    ``unused_steps`` the steps not used up since the last load, reset or unload (a parallel step until every
+    step in it is used, a step with ``times`` until it has its ``min`` calls), [] with none loaded. Both are
+    None from a server older than 0.6.0. ``scenario_name`` is the scenario's ``metadata.name``, or
+    ``scenario`` when it has none; ``unused_step_names`` maps the label of each unused step that has a
+    ``metadata.name`` (``"2"``, or ``"2.1"`` for a step of the parallel step 2) to it; and ``scenario_source``
+    is ``"file"`` for a load by name or ``"inline"`` for an inline load, None with none loaded. All three are
+    None from a server older than 0.8.0.
     """
 
     scenario: str | None
     lenient: bool
     steps: int | None = None
     unused_steps: list[int] | None = None
+    scenario_name: str | None = None
+    unused_step_names: dict[str, str] | None = None
+    scenario_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +107,9 @@ class CallRecord:
     use_number: int | None = None
     """Which call of a step with ``times`` this was, from 1; None for a step without ``times``, an unserved
     call and a server older than 0.7.0."""
+    step_name: str | None = None
+    """The ``metadata.name`` of the step that served the call; None for a step without one, an unserved call
+    and a server older than 0.8.0."""
 
 
 class FakeLlmClient:
@@ -125,6 +136,9 @@ class FakeLlmClient:
                 lenient=body["lenient"],
                 steps=body.get("steps"),
                 unused_steps=body.get("unusedSteps"),
+                scenario_name=body.get("scenarioName"),
+                unused_step_names=body.get("unusedStepNames"),
+                scenario_source=body.get("scenarioSource"),
             ),
         )
 
@@ -216,6 +230,7 @@ def _call_record(entry: dict[str, Any]) -> CallRecord:
         stream_inter_chunk_delay_ms=entry.get("streamInterChunkDelayMs", 0),
         inner_step=entry.get("innerStep"),
         use_number=entry.get("useNumber"),
+        step_name=entry.get("stepName"),
     )
 
 

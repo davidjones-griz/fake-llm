@@ -3,7 +3,7 @@
   "name": "anthropic-prompt-tool-result",
   "description": "A tool_result block's content adds its text to the prompt, as an OpenAI tool message's content does.",
   "scenario": {
-    "name": "anthropic-prompt-tool-result",
+    "metadata": { "name": "anthropic-prompt-tool-result" },
     "steps": [
       {
         "text": "Noted."

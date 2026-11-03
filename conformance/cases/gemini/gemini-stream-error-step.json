@@ -3,7 +3,7 @@
   "name": "gemini-stream-error-step",
   "description": "An error step without streamErrorAfterChunks is a plain HTTP error even on the stream route.",
   "scenario": {
-    "name": "gemini-stream-error-step",
+    "metadata": { "name": "gemini-stream-error-step" },
     "steps": [
       {
         "error": {

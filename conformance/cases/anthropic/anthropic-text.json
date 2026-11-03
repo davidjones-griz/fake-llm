@@ -3,7 +3,7 @@
   "name": "anthropic-text",
   "description": "A text step is one buffered Messages reply with fixed usage and an id from the call number.",
   "scenario": {
-    "name": "text",
+    "metadata": { "name": "text" },
     "steps": [
       {
         "text": "Billing questions go to the billing team."

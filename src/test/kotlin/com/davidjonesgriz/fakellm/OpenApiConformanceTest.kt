@@ -53,10 +53,12 @@ class OpenApiConformanceTest {
         // A response body with an undocumented field must fail the strict check, and a request body
         // the server rejects must fail the request schema.
         val health = "#/paths/~1health/get/responses/200/content/application~1json/schema"
-        val valid = """{"status":"ok","scenario":null,"lenient":false,"steps":null,"unusedSteps":[],"version":"0.5.0"}"""
+        val valid =
+            """{"status":"ok","scenario":null,"scenarioName":null,"scenarioSource":null,"lenient":false,""" +
+                """"steps":null,"unusedSteps":[],"unusedStepNames":{},"version":"0.5.0"}"""
         assertEquals(emptyList(), validate(health, valid))
-        assertTrue(validate(health, valid.replace("}", ""","extra":1}""")).isNotEmpty())
-        assertTrue(validate(health, valid.replace(""","version":"0.5.0"""", "")).isNotEmpty(), "version is required")
+        assertTrue(validate(health, valid.removeSuffix("}") + ""","extra":1}""").isNotEmpty())
+        assertTrue(validate(health, valid.replace(""""version":"0.5.0"""", "").replace(""",}""", "}")).isNotEmpty(), "version is required")
         assertTrue(validate(health, """{"status":"ok","scenario":null,"lenient":false,"steps":null}""").isNotEmpty())
         val load = "#/paths/~1control~1scenario/post/requestBody/content/application~1json/schema"
         assertEquals(emptyList(), validate(load, """{"name":"hello"}"""))
@@ -97,7 +99,7 @@ class OpenApiConformanceTest {
     @Test
     fun `the Scenario schema and the server's decoder both accept explicit nulls`() {
         val withNulls =
-            """{"name":"nulls","steps":[
+            """{"metadata":{"name":"nulls"},"steps":[
               {"text":null,"thinking":null,"usage":null,"error":{"status":500}},
               {"text":"t","error":null,"streamErrorAfterChunks":null},
               {"text":"t","toolCalls":null},
@@ -116,7 +118,7 @@ class OpenApiConformanceTest {
         // description; the server's decoder enforces it.
         assertContains(spec.path("info").path("description").asString(), "without quotes, a fraction or an exponent")
         listOf("24.0", "2e1", "2E+1").forEach { value ->
-            val scenario = """{"name":"x","steps":[{"text":"t","streamChunkChars":$value}]}"""
+            val scenario = """{"metadata":{"name":"x"},"steps":[{"text":"t","streamChunkChars":$value}]}"""
             assertEquals(emptyList(), validate(SCENARIO, scenario), value)
             assertFails(value) {
                 ScenarioLoader.decode(
@@ -153,25 +155,27 @@ class OpenApiConformanceTest {
     fun `the case check is not vacuous`() {
         fun case(response: String) =
             json.readTree(
-                """{"name":"x","description":"d","scenario":{"name":"s","steps":[{"text":"t"}]},
+                """{"name":"x","description":"d","scenario":{"metadata":{"name":"s"},"steps":[{"text":"t"}]},
                 "exchanges":[{"request":{"method":"GET","path":"/health"},"response":$response}]}""",
             )
         assertEquals(
             emptyList(),
             caseDisagreements(
-                case("""{"status":200,"body":{"status":"ok","scenario":"s","lenient":false,"steps":1,"unusedSteps":[1],"version":"v"}}"""),
+                case(
+                    """{"status":200,"body":{"status":"ok","scenario":"s","scenarioName":"s","scenarioSource":"inline","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"v"}}""",
+                ),
             ),
         )
         assertTrue(
             caseDisagreements(
                 case(
-                    """{"status":200,"body":{"status":"ok","scenario":"s","lenient":false,"steps":1,"unusedSteps":[1],"version":"v","x":1}}""",
+                    """{"status":200,"body":{"status":"ok","scenario":"s","scenarioName":"s","scenarioSource":"inline","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"v","x":1}}""",
                 ),
             ).isNotEmpty(),
         )
         assertTrue(caseDisagreements(case("""{"status":418}""")).isNotEmpty())
         assertTrue(caseDisagreements(case("""{"status":200,"headers":{"content-type":"text/plain"}}""")).isNotEmpty())
-        val badScenario = json.readTree("""{"scenario":{"name":"s","steps":[]},"exchanges":[]}""")
+        val badScenario = json.readTree("""{"scenario":{"metadata":{"name":"s"},"steps":[]},"exchanges":[]}""")
         assertTrue(caseDisagreements(badScenario).isNotEmpty())
 
         fun vendor400(body: String) =
@@ -665,7 +669,7 @@ class OpenApiConformanceTest {
 
         const val OPEN_AI = """{"model":"example-model","messages":[{"role":"user","content":"hi"}]}"""
         const val GEMINI = """{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}"""
-        const val INLINE = """{"name":"inline","steps":[{"text":"t"}]}"""
+        const val INLINE = """{"metadata":{"name":"inline"},"steps":[{"text":"t"}]}"""
 
         fun callVendors(server: FakeLlmServer) {
             send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
@@ -767,7 +771,7 @@ class OpenApiConformanceTest {
                     "POST",
                     "/control/scenario",
                     control,
-                    """{"scenario":{"name":"s","steps":[]}}""",
+                    """{"scenario":{"metadata":{"name":"s"},"steps":[]}}""",
                     requestValid = false,
                     expectStatus = 400,
                 ),
@@ -776,7 +780,7 @@ class OpenApiConformanceTest {
                     "POST",
                     "/control/scenario",
                     control,
-                    """{"scenario":{"name":"s","steps":[{"text":"t"}],"extra":1}}""",
+                    """{"scenario":{"metadata":{"name":"s"},"steps":[{"text":"t"}],"extra":1}}""",
                     requestValid = false,
                     expectStatus = 400,
                 ),
@@ -785,7 +789,7 @@ class OpenApiConformanceTest {
                     "POST",
                     "/control/scenario",
                     control,
-                    """{"scenario":{"name":"s","steps":[{"error":{"status":42}}]}}""",
+                    """{"scenario":{"metadata":{"name":"s"},"steps":[{"error":{"status":42}}]}}""",
                     requestValid = false,
                     expectStatus = 400,
                 ),

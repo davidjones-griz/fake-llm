@@ -3,7 +3,7 @@
   "name": "overlap-group",
   "description": "Three parallel steps marked overlap form one group: a sub-call of the first plan arrives before the second plan, and the merge step after the group is not reachable until every step in the group is used. The group's sections are used up separately.",
   "scenario": {
-    "name": "nested",
+    "metadata": { "name": "nested" },
     "steps": [
       {
         "parallel": {
@@ -307,12 +307,15 @@
         "body": {
           "status": "ok",
           "scenario": "nested",
+          "scenarioName": "nested",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 4,
           "unusedSteps": [
             2,
             4
           ],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

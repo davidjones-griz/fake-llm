@@ -3,7 +3,7 @@
   "name": "exchanges-reset",
   "description": "A reset empties the exchange log, and the next call is seq 1 again.",
   "scenario": {
-    "name": "reset",
+    "metadata": { "name": "reset" },
     "steps": [
       {
         "text": "one"

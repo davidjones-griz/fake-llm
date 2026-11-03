@@ -3,7 +3,7 @@
   "name": "gemini-stream-max-tokens",
   "description": "A streamed max_tokens step finishes with finishReason MAX_TOKENS.",
   "scenario": {
-    "name": "gemini-stream-max-tokens",
+    "metadata": { "name": "gemini-stream-max-tokens" },
     "steps": [
       {
         "text": "cut off",

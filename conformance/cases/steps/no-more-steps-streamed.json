@@ -3,7 +3,7 @@
   "name": "no-more-steps-streamed",
   "description": "A streamed call after the last step gets the same JSON 400 and no events.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

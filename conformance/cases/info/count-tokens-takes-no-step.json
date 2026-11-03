@@ -3,7 +3,7 @@
   "name": "count-tokens-takes-no-step",
   "description": "Counting tokens takes no step: the Messages call after it gets step 1 and is call 1.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

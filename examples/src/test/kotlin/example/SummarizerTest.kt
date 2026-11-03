@@ -5,6 +5,7 @@ import com.davidjonesgriz.fakellm.FakeLlmClient
 import com.davidjonesgriz.fakellm.FakeLlmServer
 import com.davidjonesgriz.fakellm.Scenario
 import com.davidjonesgriz.fakellm.ScenarioEngine
+import com.davidjonesgriz.fakellm.ScenarioMetadata
 import com.davidjonesgriz.fakellm.Step
 import com.davidjonesgriz.fakellm.startFakeLlmServer
 import java.nio.file.Path
@@ -118,5 +119,5 @@ class SummarizerTest {
         assertContains(failure.message!!, "no more steps")
     }
 
-    private fun scenario(vararg steps: Step) = Scenario(name = "inline", steps = steps.toList())
+    private fun scenario(vararg steps: Step) = Scenario(metadata = ScenarioMetadata(name = "inline"), steps = steps.toList())
 }

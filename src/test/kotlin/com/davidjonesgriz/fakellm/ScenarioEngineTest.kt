@@ -39,7 +39,7 @@ class ScenarioEngineTest {
     private fun textScenario(
         vararg texts: String,
         name: String = "inline",
-    ): Scenario = Scenario(name = name, steps = texts.map { Step(text = it) })
+    ): Scenario = Scenario(metadata = ScenarioMetadata(name = name), steps = texts.map { Step(text = it) })
 
     private fun engineWith(
         scenario: Scenario,
@@ -115,7 +115,7 @@ class ScenarioEngineTest {
         val engine =
             engineWith(
                 Scenario(
-                    name = "inline",
+                    metadata = ScenarioMetadata(name = "inline"),
                     steps =
                         listOf(
                             Step(
@@ -146,7 +146,7 @@ class ScenarioEngineTest {
         engine.text()
 
         engine.reset()
-        assertEquals("inline", engine.currentScenarioName())
+        assertEquals("inline", engine.currentScenarioKey())
         assertTrue(engine.calls().isEmpty())
         val again = engine.handle("anthropic", req())
         assertEquals("one", anthropicText(again.body))
@@ -163,7 +163,7 @@ class ScenarioEngineTest {
         engine.text()
 
         engine.loadInline(textScenario("fresh", name = "reloaded"))
-        assertEquals("reloaded", engine.currentScenarioName())
+        assertEquals("reloaded", engine.currentScenarioKey())
         assertTrue(engine.calls().isEmpty())
         val reply = engine.handle("openai", req()).body
         assertEquals("fake-openai-1", json(reply).getValue("id").jsonPrimitive.content)
@@ -182,7 +182,7 @@ class ScenarioEngineTest {
         engine.text()
 
         engine.unload()
-        assertNull(engine.currentScenarioName())
+        assertNull(engine.currentScenarioKey())
         assertTrue(engine.calls().isEmpty())
         val canned = engine.handle("anthropic", req())
         assertEquals(CANNED_ASSISTANT_TEXT, anthropicText(canned.body))
@@ -258,7 +258,7 @@ class ScenarioEngineTest {
         val engine =
             engineWith(
                 Scenario(
-                    name = "raw",
+                    metadata = ScenarioMetadata(name = "raw"),
                     steps = listOf(Step(toolCalls = listOf(ToolCall(name = "f", rawArguments = "{"))), Step(text = "two")),
                 ),
             )
@@ -269,27 +269,38 @@ class ScenarioEngineTest {
     @Test
     fun `progress reads name, steps and unused steps together`() {
         val engine = ScenarioEngine()
-        assertEquals(ScenarioProgress(null, null, emptyList()), engine.progress)
+        assertEquals(ScenarioProgress(null, null, null, emptyList(), emptyMap()), engine.progress)
 
         engine.loadInline(textScenario("one", "two", "three", name = "three"))
-        assertEquals(ScenarioProgress("three", 3, listOf(1, 2, 3)), engine.progress)
+        assertEquals(ScenarioProgress("three", "three", 3, listOf(1, 2, 3), emptyMap(), ScenarioSource.INLINE), engine.progress)
         engine.text()
-        assertEquals(ScenarioProgress("three", 3, listOf(2, 3)), engine.progress)
+        assertEquals(ScenarioProgress("three", "three", 3, listOf(2, 3), emptyMap(), ScenarioSource.INLINE), engine.progress)
         engine.text()
         engine.text()
         engine.handle("anthropic", req())
-        assertEquals(ScenarioProgress("three", 3, emptyList()), engine.progress, "a call after the last step uses no step")
+        assertEquals(
+            ScenarioProgress("three", "three", 3, emptyList(), emptyMap(), ScenarioSource.INLINE),
+            engine.progress,
+            "a call after the last step uses no step",
+        )
 
         engine.reset()
-        assertEquals(ScenarioProgress("three", 3, listOf(1, 2, 3)), engine.progress)
+        assertEquals(ScenarioProgress("three", "three", 3, listOf(1, 2, 3), emptyMap(), ScenarioSource.INLINE), engine.progress)
         engine.unload()
-        assertEquals(ScenarioProgress(null, null, emptyList()), engine.progress)
+        assertEquals(ScenarioProgress(null, null, null, emptyList(), emptyMap()), engine.progress)
 
         engine.loadInline(
-            Scenario(name = "raw", steps = listOf(Step(toolCalls = listOf(ToolCall(name = "f", rawArguments = "{"))), Step(text = "two"))),
+            Scenario(
+                metadata = ScenarioMetadata(name = "raw"),
+                steps = listOf(Step(toolCalls = listOf(ToolCall(name = "f", rawArguments = "{"))), Step(text = "two")),
+            ),
         )
         assertFailsWith<IllegalArgumentException> { engine.handle("gemini", req()) }
-        assertEquals(ScenarioProgress("raw", 2, listOf(1, 2)), engine.progress, "a rejected rawArguments request uses no step")
+        assertEquals(
+            ScenarioProgress("raw", "raw", 2, listOf(1, 2), emptyMap(), ScenarioSource.INLINE),
+            engine.progress,
+            "a rejected rawArguments request uses no step",
+        )
     }
 
     @Test
@@ -404,14 +415,14 @@ class ScenarioEngineTest {
         val engine = engineWith(textScenario("kept"))
         val failure = assertFailsWith<IllegalStateException> { engine.load("missing-scenario") }
         assertTrue(failure.message!!.contains("unknown scenario"))
-        assertEquals("inline", engine.currentScenarioName())
+        assertEquals("inline", engine.currentScenarioKey())
         assertEquals("kept", engine.text())
     }
 
     @Test
     fun `a step is an error or a reply of text, tool calls or both`() {
         val call = listOf(ToolCall(name = "f"))
-        assertFailsWith<IllegalArgumentException> { Scenario(name = "empty", steps = emptyList()) }
+        assertFailsWith<IllegalArgumentException> { Scenario(metadata = ScenarioMetadata(name = "empty"), steps = emptyList()) }
         assertFailsWith<IllegalArgumentException> { Step(text = "x", error = ErrorStep(500)) }
         assertFailsWith<IllegalArgumentException> { Step() }
         Step(text = "x")
@@ -470,7 +481,7 @@ class ScenarioEngineTest {
             )
         val records =
             listOf("anthropic", "openai", "gemini", RESPONSES_VENDOR).map { vendor ->
-                val engine = engineWith(Scenario(name = "tools-$vendor", steps = listOf(step)))
+                val engine = engineWith(Scenario(metadata = ScenarioMetadata(name = "tools-$vendor"), steps = listOf(step)))
                 engine.handle(vendor, req())
                 engine.calls().single()
             }
@@ -489,7 +500,7 @@ class ScenarioEngineTest {
     @Test
     fun `a rawArguments step is not used by a buffered anthropic or a gemini call`() {
         val raw = Step(toolCalls = listOf(ToolCall(name = "get_weather", rawArguments = "{\"city\": Paris}")))
-        val engine = engineWith(Scenario(name = "raw", steps = listOf(raw)))
+        val engine = engineWith(Scenario(metadata = ScenarioMetadata(name = "raw"), steps = listOf(raw)))
         val anthropic = assertFailsWith<IllegalArgumentException> { engine.resolve("anthropic", req()) }
         val gemini = assertFailsWith<IllegalArgumentException> { engine.resolve("gemini", req()) }
         assertEquals(
@@ -512,7 +523,10 @@ class ScenarioEngineTest {
 
     @Test
     fun `onCall gets each call's record after it is logged`() {
-        val engine = engineWith(Scenario(name = "inline", steps = listOf(Step(text = "one"), Step(error = ErrorStep(429)))))
+        val engine =
+            engineWith(
+                Scenario(metadata = ScenarioMetadata(name = "inline"), steps = listOf(Step(text = "one"), Step(error = ErrorStep(429)))),
+            )
         val seen = mutableListOf<CallRecord>()
         engine.onCall = { record ->
             assertTrue(record in engine.calls(), "the record is logged before the hook runs")
@@ -528,7 +542,7 @@ class ScenarioEngineTest {
     @Test
     fun `onCall is not called for a rejected request`() {
         val raw = Step(toolCalls = listOf(ToolCall(name = "get_weather", rawArguments = "{\"city\": Paris}")))
-        val engine = engineWith(Scenario(name = "raw", steps = listOf(raw)))
+        val engine = engineWith(Scenario(metadata = ScenarioMetadata(name = "raw"), steps = listOf(raw)))
         val seen = mutableListOf<CallRecord>()
         engine.onCall = { seen.add(it) }
         assertFailsWith<IllegalArgumentException> { engine.resolve("gemini", req()) }
@@ -599,7 +613,7 @@ class ScenarioEngineTest {
                 Step(error = ErrorStep(500), firstByteDelayMs = 50, streamInterChunkDelayMs = 20),
                 Step(error = ErrorStep(500), streamErrorAfterChunks = 1, firstByteDelayMs = 50, streamInterChunkDelayMs = 20),
             )
-        val engine = engineWith(Scenario(name = "d", steps = steps))
+        val engine = engineWith(Scenario(metadata = ScenarioMetadata(name = "d"), steps = steps))
         engine.handle("anthropic", req())
         engine.resolve("anthropic", req(stream = true))
         engine.resolve("anthropic", req(stream = true))
@@ -619,7 +633,7 @@ class ScenarioEngineTest {
         val engine =
             engineWith(
                 Scenario(
-                    name = "d",
+                    metadata = ScenarioMetadata(name = "d"),
                     steps = listOf(Step(text = "a", firstByteDelayMs = 7), Step(error = ErrorStep(500), firstByteDelayMs = 8)),
                 ),
             )
@@ -630,7 +644,10 @@ class ScenarioEngineTest {
 
     @Test
     fun `a thinking step is rendered ahead of the text`() {
-        val engine = engineWith(Scenario(name = "inline", steps = listOf(Step(text = "the reply", thinking = "the thinking"))))
+        val engine =
+            engineWith(
+                Scenario(metadata = ScenarioMetadata(name = "inline"), steps = listOf(Step(text = "the reply", thinking = "the thinking"))),
+            )
         val body = engine.handle("anthropic", req()).body
         val content = json(body).getValue("content").jsonArray.map { it.jsonObject }
         assertEquals(listOf("thinking", "text"), content.map { it.getValue("type").jsonPrimitive.content })
@@ -688,5 +705,5 @@ class ScenarioEngineTest {
         }
     }
 
-    private fun sameScenario(text: String): String = """{"name":"same","steps":[{"text":"$text"}]}"""
+    private fun sameScenario(text: String): String = """{"metadata":{"name":"same"},"steps":[{"text":"$text"}]}"""
 }

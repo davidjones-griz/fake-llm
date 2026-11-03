@@ -3,7 +3,7 @@
   "name": "openai-embeddings-batch",
   "description": "Several inputs get one item each, in order; equal texts get equal vectors; a token array is hashed as its JSON text and counts its length; usage is summed.",
   "scenario": {
-    "name": "one-step",
+    "metadata": { "name": "one-step" },
     "steps": [
       {
         "text": "only"

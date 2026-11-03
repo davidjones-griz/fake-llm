@@ -3,7 +3,7 @@
   "name": "usage-responses",
   "description": "A buffered Response reports the step's input, output and total tokens; the details stay 0.",
   "scenario": {
-    "name": "responses-text",
+    "metadata": { "name": "responses-text" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

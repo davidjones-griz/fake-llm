@@ -81,7 +81,7 @@ class FakeLlmContainerTest {
         @TempDir directory: Path,
     ) {
         val scenario = directory.resolve("private.json")
-        Files.writeString(scenario, """{"name": "private", "steps": [{"text": "Read anyway."}]}""")
+        Files.writeString(scenario, """{"metadata": {"name": "private"}, "steps": [{"text": "Read anyway."}]}""")
         Files.setPosixFilePermissions(scenario, PosixFilePermissions.fromString("rw-------"))
         Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"))
 

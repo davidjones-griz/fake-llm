@@ -3,7 +3,7 @@
   "name": "call-log-mixed-run",
   "description": "The call log records each call's number, step and outcome.",
   "scenario": {
-    "name": "mixed",
+    "metadata": { "name": "mixed" },
     "steps": [
       {
         "text": "fine"

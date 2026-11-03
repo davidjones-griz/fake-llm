@@ -154,7 +154,7 @@ class EmbeddingRoutesTest {
         val expected = withServerBody(ScenarioEngine(), body)
         assertEquals(expected, withServerBody(ScenarioEngine(lenient = true), body))
         withServer { client, _ ->
-            client.post("/control/scenario", """{"scenario":{"name":"one","steps":[{"text":"only"}]}}""")
+            client.post("/control/scenario", """{"scenario":{"metadata":{"name":"one"},"steps":[{"text":"only"}]}}""")
             assertEquals(expected, openAi(client, body).body())
             assertEquals(JsonArray(emptyList()), calls(client))
             assertEquals(JsonArray(emptyList()), exchanges(client))

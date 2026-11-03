@@ -3,7 +3,7 @@
   "name": "min-zero-skipped",
   "description": "A step with times min 0 counts as used with no call, so the first call can reach the step after it.",
   "scenario": {
-    "name": "retry-that-never-comes",
+    "metadata": { "name": "retry-that-never-comes" },
     "steps": [
       {
         "match": {
@@ -41,11 +41,14 @@
         "body": {
           "status": "ok",
           "scenario": "retry-that-never-comes",
+          "scenarioName": "retry-that-never-comes",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [
             2
           ],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }
@@ -110,9 +113,12 @@
         "body": {
           "status": "ok",
           "scenario": "retry-that-never-comes",
+          "scenarioName": "retry-that-never-comes",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [],
+          "unusedStepNames": {},
           "version": {
             "$type": "string"
           }

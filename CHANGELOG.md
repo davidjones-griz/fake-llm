@@ -14,6 +14,49 @@ change the public API.
   and the express-mode `/gemini/{version}/publishers/google/models/{model}:…`, served exactly as the
   Developer API paths, so `google-genai` with `vertexai=True` works against the same base URL.
   Vertex AI embeddings are not served.
+- `metadata` on a scenario and on every kind of step (a reply step, an error step, a parallel step
+  and the steps inside one), with exactly three fields: `name`, `description` and `tags`. It never
+  changes how a scenario runs. Any other key inside it is rejected, and it is not allowed inside
+  `match`, `error`, `toolCalls` or any other part of a step. In Kotlin, `ScenarioMetadata` builds it,
+  and `Step` takes it as its new last parameter, `metadata`. A `name` or tag that is empty or only
+  whitespace is rejected with its step and path (`step 2: $.steps[1].metadata.name: must not be
+  blank`), and a `null` field, `tags` included, is the same as an absent one.
+- A step's `metadata.name` is copied into the call log: `CallRecord.stepName` (`stepName` in
+  `GET /control/calls`, the pytest plugin's `step_name`), left out for a step without one, and
+  ` name="<name>"` at the end of the CLI's call line. Names need not be unique.
+- Unused steps are named: `GET /health` adds `unusedStepNames`, which maps each unused step that has
+  a name to it by its label, its number or `N.M` for a step of the parallel step N that is below its
+  minimum (`{"2": "fan-out", "2.1": "side-a"}`); `ScenarioEngine.unusedStepNames`,
+  `FakeLlmHealth.unusedStepNames` and the pytest plugin's `Health.unused_step_names` carry the same.
+  `unusedSteps` is unchanged. The JUnit extension's unused-step failure names them, such as
+  `steps 1, 3 (1 'fan-out', 1.1 'side-a', 3 'merge')`.
+- `GET /health` adds `scenarioName`, and the `POST /control/scenario` response adds `name`: the
+  scenario's display name, its `metadata.name`, or its key when it has none
+  (`FakeLlmHealth.scenarioName`, the pytest plugin's `Health.scenario_name`).
+- `GET /health` adds `scenarioSource`: `file` for a load by name, `inline` for an inline load, null
+  with none loaded (`FakeLlmHealth.scenarioSource`, the pytest plugin's `Health.scenario_source`).
+
+### Breaking
+
+- A scenario's `name` and `description` moved into `metadata`: `metadata.name` and
+  `metadata.description`. A scenario with a top-level `name` or `description` is rejected, with a
+  message that points to `metadata`, so a scenario file written for 0.7.0 or older doesn't load on
+  this release, and a file that uses `metadata` doesn't load on 0.7.0 or older. Every scenario in
+  the repository is migrated: the bundled ones keep their `description` in `metadata` and drop the
+  `name` that only repeated the file name.
+- The file name is the scenario's key for a load by name, and the rule that the declared name must
+  equal the file name is gone: `metadata.name` is a free display name that defaults to the file
+  name. `fake-llm validate` no longer reports a mismatch; it prints `ok <path> key=<key>`, followed
+  by ` name="<metadata.name>"` when there is one.
+- An inline load is keyed by its `metadata.name`, or `inline` when it has none. `GET /health`'s
+  `scenario`, the load response's `loaded`, the no-more-steps body's `scenario` and the JUnit
+  extension's messages report the key.
+- Kotlin: `Scenario(name, description, steps)` is now `Scenario(steps, metadata = null)`; build the
+  old fields with `Scenario(steps, ScenarioMetadata(name = "...", description = "..."))`.
+  `Scenario.name` and `Scenario.description` are gone (`scenario.metadata?.name`). A scenario with
+  no steps fails with `a scenario must have at least one step`.
+  `ScenarioEngine.currentScenarioName()` is renamed `currentScenarioKey()`. `FakeLlmHealth` gains
+  `scenarioName`, `scenarioSource` and `unusedStepNames`, and `CallRecord` gains `stepName`.
 
 ## [0.7.0] - 2026-11-02
 

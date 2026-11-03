@@ -3,7 +3,7 @@
   "name": "responses-stream-text",
   "description": "A streamed text step is the named events from response.created to response.completed, numbered from 0, with no [DONE].",
   "scenario": {
-    "name": "responses-stream-text",
+    "metadata": { "name": "responses-stream-text" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

@@ -3,7 +3,7 @@
   "name": "openai-stream-text",
   "description": "A streamed text step is data-only chunk frames: the role chunk, the content pieces, the finish chunk, then [DONE]; the call is logged once.",
   "scenario": {
-    "name": "stream-text",
+    "metadata": { "name": "stream-text" },
     "steps": [
       {
         "text": "Mild and dry tomorrow.",

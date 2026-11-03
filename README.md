@@ -27,7 +27,7 @@ curl -s http://localhost:8080/health
 ```
 
 ```json
-{"status":"ok","scenario":"hello","lenient":false,"steps":1,"unusedSteps":[1],"version":"0.7.0"}
+{"status":"ok","scenario":"hello","scenarioName":"hello","scenarioSource":"file","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"0.7.0"}
 ```
 
 Point an SDK at the server; the server does not check API keys:
@@ -159,7 +159,7 @@ A scenario is an ordered list of steps. Each step is a reply (`text`, tool calls
 
 ```json
 {
-  "name": "example",
+  "metadata": {"name": "example"},
   "steps": [
     { "error": { "status": 429, "headers": { "retry-after": "1" } } },
     { "text": "Mild and dry." }
