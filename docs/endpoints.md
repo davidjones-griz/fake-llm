@@ -150,7 +150,7 @@ The OpenAI embeddings list; see [Embeddings](#embeddings).
 
 ## Gemini
 
-The model id is the path segment between `/models/` and `:`, and `{version}` is any API version segment, such as `v1beta`.
+The model id is the path segment between `/models/` and `:`, and `{version}` is any API version segment, such as `v1beta`. The same two generation methods are served on the Vertex AI paths; see [Vertex AI paths](#vertex-ai-paths).
 
 ### `GET /gemini/{version}/models`
 
@@ -174,6 +174,43 @@ The response is `text/event-stream` of data-only frames (`data: <payload>`, no `
 for chunk in client.models.generate_content_stream(model="gemini-2.0-flash", contents="Hello"):
     print(chunk.text, end="")
 ```
+
+### `POST /gemini/{version}/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent`
+
+`generateContent` on the regional Vertex AI path; see [Vertex AI paths](#vertex-ai-paths).
+
+### `POST /gemini/{version}/projects/{project}/locations/{location}/publishers/google/models/{model}:streamGenerateContent`
+
+`streamGenerateContent` on the regional Vertex AI path; see [Vertex AI paths](#vertex-ai-paths).
+
+### `POST /gemini/{version}/publishers/google/models/{model}:generateContent`
+
+`generateContent` on the express-mode Vertex AI path, with no project or location; see [Vertex AI paths](#vertex-ai-paths).
+
+### `POST /gemini/{version}/publishers/google/models/{model}:streamGenerateContent`
+
+`streamGenerateContent` on the express-mode Vertex AI path; see [Vertex AI paths](#vertex-ai-paths).
+
+### Vertex AI paths
+
+The four routes above are each served exactly as the Developer API path with the same model: the same request reading, reply, `alt=sse` rule, errors and call log entry, whose route is `gemini`. `{version}` is any segment, such as `v1` or `v1beta1` (the `google-genai` default on Vertex AI). The project and location are not checked, and the publisher must be `google`. The Vertex AI request and response bodies are the Developer API's in every field fake-llm reads or writes.
+
+Point `google-genai` in Vertex AI mode at the same base URL as the Developer API. The SDK adds the project and location itself, and sends `alt=sse` when it streams:
+
+```python
+from google import genai
+from google.genai import types
+from google.oauth2.credentials import Credentials
+
+options = types.HttpOptions(base_url="http://localhost:8080/gemini/")
+client = genai.Client(vertexai=True, project="my-project", location="us-central1",
+                      credentials=Credentials(token="unused"), http_options=options)
+express = genai.Client(vertexai=True, api_key="unused", http_options=options)
+```
+
+`credentials` keeps the SDK from looking for Application Default Credentials; fake-llm doesn't check the token.
+
+Vertex AI embeddings, `countTokens` and model lookups are not served on these paths, and get the `no-route` 404. Vertex AI embeds with `:predict` (`instances` in, `predictions` out) for `gemini-embedding-001` and the `text-embedding` models, which `google-genai` calls for those models. Its `:embedContent` takes `outputDimensionality` inside `embedContentConfig` and returns `truncated` and `usageMetadata` beside the vector. Neither is the Developer API's `embedContent` shape that the embeddings routes answer.
 
 ### `POST /gemini/{version}/models/{model}:embedContent`
 

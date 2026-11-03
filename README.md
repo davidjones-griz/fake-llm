@@ -52,7 +52,7 @@ The SDKs' base URLs:
 | --- | --- |
 | Anthropic | `http://localhost:8080/anthropic` |
 | OpenAI (Chat Completions and Responses) | `http://localhost:8080/openai/v1` |
-| Gemini (`google-genai`) | `http://localhost:8080/gemini/` |
+| Gemini (`google-genai`), on the Developer API or Vertex AI | `http://localhost:8080/gemini/` |
 
 The [Quickstart](docs/quickstart.md) page has the full walk-through, with the response to each step.
 
@@ -180,6 +180,7 @@ Call N, on any generation route, gets step N. The last step does not repeat: a c
 | `POST /openai/v1/responses` | OpenAI Responses, buffered or streamed: the next step. |
 | `POST /gemini/{version}/models/{model}:generateContent` | Gemini, buffered: the next step. |
 | `POST /gemini/{version}/models/{model}:streamGenerateContent?alt=sse` | Gemini, streamed: the next step. |
+| `POST /gemini/{version}/projects/{project}/locations/{location}/publishers/google/models/{model}:…`, `POST /gemini/{version}/publishers/google/models/{model}:…` | Gemini on the Vertex AI paths, regional and express mode: `generateContent` and `streamGenerateContent`, served as above. |
 | `POST /openai/v1/embeddings`, `POST /gemini/…:embedContent`, `…:batchEmbedContents` | Deterministic fake embeddings from the text. Not calls. |
 | `GET /anthropic/v1/models`, `/openai/v1/models`, `/gemini/{version}/models`, and `…/models/{id}` | One model, `fake-llm`; a lookup echoes the id. Not calls. |
 | `GET /health` | Liveness, the loaded scenario, its unused steps, and the version. |

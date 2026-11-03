@@ -515,6 +515,10 @@ class OpenApiConformanceTest {
         const val BASE = "https://fake-llm.invalid/openapi.json"
         const val SCENARIO = "#/components/schemas/Scenario"
         const val TOKEN = "spec-token"
+        const val VERTEX_TEMPLATE = "/gemini/{version}/projects/{project}/locations/{location}/publishers/google/models/{model}"
+        const val VERTEX_EXPRESS_TEMPLATE = "/gemini/{version}/publishers/google/models/{model}"
+        const val VERTEX_PATH = "/gemini/v1/projects/my-project/locations/us-central1/publishers/google/models/example-model"
+        const val VERTEX_EXPRESS_PATH = "/gemini/v1beta1/publishers/google/models/example-model"
         val HTTP_METHODS = setOf("get", "put", "post", "delete", "options", "head", "patch", "trace")
         val REQUEST_SCHEMAS =
             listOf(
@@ -983,6 +987,71 @@ class OpenApiConformanceTest {
                         send(server, "POST", "/anthropic/v1/messages", anthropic(), null)
                     },
                     assertBody = { assertContains(it, "\"fake_llm_error\":\"no-more-steps\"") },
+                ),
+                Exchange(
+                    "vertex, served by a step",
+                    "POST",
+                    "$VERTEX_PATH:generateContent",
+                    Target.Operation("$VERTEX_TEMPLATE:generateContent"),
+                    GEMINI,
+                    expectStatus = 200,
+                    setup = { it.engine.load("hello") },
+                ),
+                Exchange(
+                    "vertex, no scenario loaded",
+                    "POST",
+                    "$VERTEX_PATH:generateContent",
+                    Target.Operation("$VERTEX_TEMPLATE:generateContent"),
+                    GEMINI,
+                    expectStatus = 400,
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"no-scenario\"") },
+                ),
+                Exchange(
+                    "vertex, streamed",
+                    "POST",
+                    "$VERTEX_PATH:streamGenerateContent?alt=sse",
+                    Target.Operation("$VERTEX_TEMPLATE:streamGenerateContent"),
+                    GEMINI,
+                    expectStatus = 200,
+                    setup = { it.engine.load("hello") },
+                ),
+                Exchange(
+                    "vertex, streamed without alt=sse",
+                    "POST",
+                    "$VERTEX_PATH:streamGenerateContent",
+                    Target.Operation("$VERTEX_TEMPLATE:streamGenerateContent"),
+                    GEMINI,
+                    expectStatus = 400,
+                    setup = { it.engine.load("hello") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"invalid-request\"") },
+                ),
+                Exchange(
+                    "vertex express, served by a step",
+                    "POST",
+                    "$VERTEX_EXPRESS_PATH:generateContent",
+                    Target.Operation("$VERTEX_EXPRESS_TEMPLATE:generateContent"),
+                    GEMINI,
+                    expectStatus = 200,
+                    setup = { it.engine.load("hello") },
+                ),
+                Exchange(
+                    "vertex express, streamed",
+                    "POST",
+                    "$VERTEX_EXPRESS_PATH:streamGenerateContent?alt=sse",
+                    Target.Operation("$VERTEX_EXPRESS_TEMPLATE:streamGenerateContent"),
+                    GEMINI,
+                    expectStatus = 200,
+                    setup = { it.engine.load("hello") },
+                ),
+                Exchange(
+                    "vertex express, streamed without alt=sse",
+                    "POST",
+                    "$VERTEX_EXPRESS_PATH:streamGenerateContent",
+                    Target.Operation("$VERTEX_EXPRESS_TEMPLATE:streamGenerateContent"),
+                    GEMINI,
+                    expectStatus = 400,
+                    setup = { it.engine.load("hello") },
+                    assertBody = { assertContains(it, "\"fake_llm_error\":\"invalid-request\"") },
                 ),
                 Exchange(
                     "anthropic, streamed after the last step",

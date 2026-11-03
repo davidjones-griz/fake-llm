@@ -28,15 +28,21 @@ internal fun handleOpenAi(
     }
 }
 
+/**
+ * Gemini `generateContent` and `streamGenerateContent`, on the Developer API path or a Vertex AI
+ * path. [model] is the request's model: the segment between `/models/` and `:` by default, and
+ * the route's own capture for a Vertex AI path.
+ */
 internal fun handleGemini(
     ex: HttpExchange,
     engine: ScenarioEngine,
     path: String,
+    model: String = geminiModelFromPath(path),
 ) {
     val body = ex.requestBody.readBytes().decodeToString()
     val streamed = path.endsWith(":streamGenerateContent")
     require(!streamed || geminiAltSse(ex.requestURI.rawQuery)) { GEMINI_STREAM_NEEDS_ALT_SSE }
-    val parsed = parseGeminiRequest(body, geminiModelFromPath(path), stream = streamed).withHeaders(ex)
+    val parsed = parseGeminiRequest(body, model, stream = streamed).withHeaders(ex)
     if (streamed) {
         streamGeminiGenerateContent(ex, engine, parsed)
     } else {

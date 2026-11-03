@@ -1,4 +1,4 @@
-"""The official google-genai SDK against fake-llm's Gemini generateContent and streamGenerateContent routes (buffered and streaming)."""
+"""The official google-genai SDK against fake-llm's Gemini generateContent and streamGenerateContent routes (buffered and streaming), on the Developer API and Vertex AI paths."""
 
 import json
 
@@ -6,6 +6,7 @@ import httpx
 import pytest
 from google import genai
 from google.genai import errors, types
+from google.oauth2.credentials import Credentials
 
 FAST_RETRY = {"retry-after-ms": "10"}
 
@@ -288,4 +289,33 @@ def test_models(fake, gemini_client):
     model = gemini_client.models.get(model="example-gemini")
     assert (model.name, model.display_name) == ("models/example-gemini", "example-gemini")
     assert "generateContent" in model.supported_actions
+    assert fake.log() == []
+
+
+@pytest.fixture(params=["regional", "express"])
+def vertex_client(server, request):
+    """google-genai in Vertex AI mode: with a project and location, or in express mode with an API key."""
+    options = types.HttpOptions(base_url=f"{server}/gemini/", timeout=10_000)
+    if request.param == "regional":
+        credentials = Credentials(token="not-used")
+        client = genai.Client(vertexai=True, project="my-project", location="us-central1", credentials=credentials, http_options=options)
+    else:
+        client = genai.Client(vertexai=True, api_key="not-used", http_options=options)
+    yield client
+    client.close()
+
+
+def test_vertex_text_and_stream(fake, vertex_client):
+    fake.load([{"text": "Billing."}, {"text": "Streamed reply.", "streamChunkChars": 5}])
+    response = generate(vertex_client)
+    assert (response.text, response.model_version) == ("Billing.", "example-gemini")
+    assert [chunk.text for chunk in stream(vertex_client)] == ["Strea", "med r", "eply."]
+    assert fake.log() == [call(1, "text", 1), call(2, "text", 2)]
+
+
+def test_vertex_embeddings_are_not_served(fake, vertex_client):
+    fake.load([{"text": "unused"}])
+    with pytest.raises(errors.ClientError) as raised:
+        vertex_client.models.embed_content(model="example-embedding", contents="a")
+    assert raised.value.code == 404
     assert fake.log() == []
