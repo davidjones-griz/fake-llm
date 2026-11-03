@@ -39,6 +39,11 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // -Dfakellm.tags.include=... and -Dfakellm.tags.exclude=... set Gradle's own JVM properties;
+    // pass them on to the test JVM, where the JUnit extension reads them.
+    listOf("fakellm.tags.include", "fakellm.tags.exclude").forEach { key ->
+        providers.systemProperty(key).orNull?.let { systemProperty(key, it) }
+    }
 }
 
 // The Java tests in src/test/java use fake-llm as a Java project would. javac's lint warnings fail

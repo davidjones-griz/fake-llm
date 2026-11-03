@@ -1824,7 +1824,8 @@ components:
             pattern: "\\S"
           description: |
             Labels for search and filtering, none empty or blank. Null, like an absent key, is none.
-            fake-llm stores them and does not act on them.
+            The server does not act on them; the JUnit extension selects tests by a scenario's
+            top-level tags.
     Times:
       type: object
       description: |

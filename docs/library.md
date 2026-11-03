@@ -151,6 +151,34 @@ class MyClientTest {
   junit.jupiter.execution.parallel.mode.classes.default=concurrent
   ```
 
+### Running only the tests whose scenario has selected tags
+
+The run can pick tests by their scenario's top-level [`metadata.tags`](scenarios.md#metadata), without changing a test. Set the configuration parameters `fakellm.tags.include` and `fakellm.tags.exclude`, each a comma-separated list of tags. JUnit reads configuration parameters from JVM system properties and from `junit-platform.properties`, so either works:
+
+- **`include`.** A test runs only if its scenario has at least one of the listed tags. With no `include`, every test runs. A scenario with no tags is skipped when `include` is set.
+- **`exclude`.** A test is skipped if its scenario has any of the listed tags. `exclude` wins over `include`.
+- **Matching** is exact and case-sensitive. Blank and empty entries are ignored, so `include= , ` selects nothing and every test runs.
+- **Which scenario.** The tags are those of the `@FakeLlmScenario` that applies to the test, found the same way as for loading it, and the scenario is read with the same loading and checks. A test without a `@FakeLlmScenario` always runs, and a scenario that fails to load still fails its test with the loader's message.
+- **Skipped, not failed.** A test that doesn't match is reported as skipped (disabled) before it starts, so its `@BeforeEach` methods don't run either, with a reason such as `fake-llm scenario 'pipeline-rate-limited' has tags [error-handling], none of them in fakellm.tags.include [malformed]`. JUnit's reporting (an IDE, the console launcher, Maven Surefire) shows the reason; Gradle's test report shows the test as skipped without it.
+- **Nothing else changes.** The selection only decides whether a test runs, never how its scenario is served.
+
+With Gradle, `-D` on the command line sets a property on Gradle's own JVM, not the test JVM, so pass the two properties on in the test task:
+
+```kotlin
+tasks.test {
+    useJUnitPlatform()
+    listOf("fakellm.tags.include", "fakellm.tags.exclude").forEach { key ->
+        providers.systemProperty(key).orNull?.let { systemProperty(key, it) }
+    }
+}
+```
+
+```bash
+./gradlew test -Dfakellm.tags.include=malformed -Dfakellm.tags.exclude=slow
+```
+
+Maven Surefire passes `-D` properties to the test JVM itself: `mvn test -Dfakellm.tags.include=malformed`. [examples/](https://github.com/davidjones-griz/fake-llm/tree/main/examples/) tags `TicketPipelineTest`'s scenarios `smoke`, `error-handling` and `malformed`, and its build passes the properties on, so `./gradlew -p examples test -Dfakellm.tags.include=malformed` runs just the two malformed-response tests.
+
 The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6 deprecates in favour of `computeIfAbsent`. JUnit 5.10 has no `computeIfAbsent`, so the extension moves to it once the minimum supported JUnit version does.
 
 [examples/](https://github.com/davidjones-griz/fake-llm/tree/main/examples/) uses the extension in `SummarizerExtensionTest` and `TicketPipelineTest`.

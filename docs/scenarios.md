@@ -216,7 +216,7 @@ It has three fields, all optional; any other key in `metadata` is rejected, as e
 
 - `name`: a display name. On a step, it is copied into the call log as `stepName` when the step answers a call, and the CLI's call line ends with ` name="<name>"`. A test can then find a call by the step that answered it, which keeps working when a step is added before it: positions such as `step 2.1` shift, names don't. Unnamed steps keep only their position. `GET /health`'s `unusedStepNames` and the JUnit extension's unused-step failure name the unused steps that have one, the steps of a parallel step included (`2.1 'side-a'`). Names need not be unique. On the scenario, `name` is shown as `GET /health`'s `scenarioName` and the load response's `name`; a load by name defaults it to the file name, and for an inline load it is also the key (`GET /health`'s `scenarioSource` says which kind of load it was).
 - `description`: a note for people reading the file, such as why a group of steps runs in parallel.
-- `tags`: labels for search and filtering. fake-llm stores them and does not act on them yet.
+- `tags`: labels for search and filtering. The server stores them and does not act on them; the JUnit extension can [run only the tests whose scenario has selected tags](library.md#running-only-the-tests-whose-scenario-has-selected-tags), by the scenario's own (top-level) tags.
 
 A `name` or tag that is empty or only whitespace is rejected, with its step and path, such as `step 2: $.steps[1].metadata.name: must not be blank`. A `null` field is the same as an absent one, `tags` included.
 
@@ -530,7 +530,7 @@ The `metadata` of a scenario or a step. Only these keys are allowed. See [Metada
 | --- | --- | --- | --- |
 | `name` | string or null, not empty or blank | none | A display name. A step's is copied into the call log as `stepName` and named in unused-step reports; names need not be unique. A scenario's is shown beside its key, defaults to the file name for a load by name, and is the key of an inline load. |
 | `description` | string or null | none | A note for people reading the file. |
-| `tags` | array of strings, none empty or blank, or null | none | Labels for search and filtering. Stored, not acted on. |
+| `tags` | array of strings, none empty or blank, or null | none | Labels for search and filtering. The server doesn't act on them; the JUnit extension selects tests by a scenario's top-level tags. |
 
 ### ErrorStep fields
 

@@ -1,0 +1,7 @@
+{
+  "metadata": {
+    "description": "Tagged malformed, for the tag selection fixtures.",
+    "tags": ["malformed"]
+  },
+  "steps": [{ "text": "{\"broken\":" }]
+}

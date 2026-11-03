@@ -9,6 +9,14 @@ change the public API.
 
 ### Added
 
+- The JUnit extension runs only the tests whose scenario has selected tags. The configuration
+  parameters (or JVM system properties) `fakellm.tags.include` and `fakellm.tags.exclude` take
+  comma-separated tags: a test runs if its `@FakeLlmScenario`'s top-level `metadata.tags` has any
+  included tag (or none are listed) and no excluded tag, so `exclude` wins. A test that doesn't
+  match is skipped with a reason naming the scenario and the tags; an untagged scenario is skipped
+  when `include` is set, and a test without a scenario always runs. Matching is exact and
+  case-sensitive, and blank entries are ignored. With Gradle, pass the properties on to the test
+  JVM in the test task (see the JUnit extension docs).
 - Gemini on the Vertex AI paths: `generateContent` and `streamGenerateContent` on
   `/gemini/{version}/projects/{project}/locations/{location}/publishers/google/models/{model}:…`
   and the express-mode `/gemini/{version}/publishers/google/models/{model}:…`, served exactly as the
