@@ -161,6 +161,10 @@ private fun vendorRoute(
             handleGemini(ex, engine, path)
         }
 
+        ex.requestMethod == "POST" && VERTEX_CONTENT_ROUTE.matches(path) -> {
+            handleGemini(ex, engine, path, model = VERTEX_CONTENT_ROUTE.matchEntire(path)!!.groupValues[1])
+        }
+
         else -> {
             return false
         }
@@ -275,6 +279,14 @@ private const val BATCHES_PATH = "/anthropic/v1/messages/batches"
 
 /** `/gemini/{version}/models/{model}:generateContent` or `:streamGenerateContent`, matching the OpenAPI paths exactly. */
 private val GEMINI_CONTENT_ROUTE = Regex("/gemini/[^/]+/models/[^/:]+:(generateContent|streamGenerateContent)")
+
+/**
+ * The Vertex AI paths for the same two methods, matching the OpenAPI paths exactly:
+ * `/gemini/{version}/projects/{project}/locations/{location}/publishers/google/models/{model}:…`
+ * and the express-mode `/gemini/{version}/publishers/google/models/{model}:…`. Group 1 is the model.
+ */
+private val VERTEX_CONTENT_ROUTE =
+    Regex("/gemini/[^/]+/(?:projects/[^/]+/locations/[^/]+/)?publishers/google/models/([^/:]+):(?:generateContent|streamGenerateContent)")
 
 private const val HTTP_INTERNAL_ERROR = 500
 private const val HTTP_NOT_IMPLEMENTED = 501

@@ -34,7 +34,9 @@ import kotlin.system.exitProcess
  *  - `POST /gemini/…:generateContent` — Gemini `generateContent`, as one JSON response.
  *    `POST /gemini/…:streamGenerateContent?alt=sse` — the same reply as an SSE stream of
  *    `GenerateContentResponse` data frames; without `alt=sse` it is the `invalid-request` 400. The model
- *    id is the path segment between `/models/` and `:`.
+ *    id is the path segment between `/models/` and `:`. Both are also served on the Vertex AI paths,
+ *    `/gemini/{version}/projects/{p}/locations/{l}/publishers/google/models/{model}:…` and the
+ *    express-mode `/gemini/{version}/publishers/google/models/{model}:…`.
  *  - `POST /openai/v1/embeddings`, `POST /gemini/…:embedContent` and `…:batchEmbedContents` —
  *    deterministic fake embeddings derived from SHA-256 of the text. They are not calls: they
  *    answer from the request alone, with or without a scenario.

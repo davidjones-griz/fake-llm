@@ -695,6 +695,204 @@ paths:
           $ref: "#/components/responses/VendorBadRequest"
         default:
           $ref: "#/components/responses/ScriptedError"
+  /gemini/{version}/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The Vertex AI API version segment, such as `v1` or `v1beta1`.
+        schema:
+          type: string
+      - name: project
+        in: path
+        required: true
+        description: The Google Cloud project. It is not checked.
+        schema:
+          type: string
+      - name: location
+        in: path
+        required: true
+        description: The region, such as `us-central1` or `global`. It is not checked.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: generateVertexContent
+      summary: Vertex AI generateContent stand-in (regional)
+      description: |
+        The Vertex AI path for Gemini `generateContent`
+        (https://docs.cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1/projects.locations.publishers.models/generateContent).
+        It is served exactly as `/gemini/{version}/models/{model}:generateContent`: the same
+        request, reply, call log entry (route `gemini`) and errors.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A reply in the Gemini generateContent format.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/VendorBadRequest"
+        default:
+          $ref: "#/components/responses/ScriptedError"
+  /gemini/{version}/projects/{project}/locations/{location}/publishers/google/models/{model}:streamGenerateContent:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The Vertex AI API version segment, such as `v1` or `v1beta1`.
+        schema:
+          type: string
+      - name: project
+        in: path
+        required: true
+        description: The Google Cloud project. It is not checked.
+        schema:
+          type: string
+      - name: location
+        in: path
+        required: true
+        description: The region, such as `us-central1` or `global`. It is not checked.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: streamVertexContent
+      summary: Vertex AI streamGenerateContent stand-in (regional)
+      description: |
+        The Vertex AI path for Gemini `streamGenerateContent`. It is served exactly as
+        `/gemini/{version}/models/{model}:streamGenerateContent`: server-sent events with
+        `alt=sse`, which the `google-genai` SDK sends on Vertex AI too, and `RequestError`
+        (`invalid-request`) without it. A step's scripted error can return any status and body.
+      security: []
+      parameters:
+        - name: alt
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [sse]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A Gemini SSE stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/VendorBadRequest"
+        default:
+          $ref: "#/components/responses/ScriptedError"
+  /gemini/{version}/publishers/google/models/{model}:generateContent:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The Vertex AI API version segment, such as `v1` or `v1beta1`.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: generateVertexExpressContent
+      summary: Vertex AI generateContent stand-in (express mode)
+      description: |
+        The Vertex AI path for Gemini `generateContent`
+        (https://docs.cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1/projects.locations.publishers.models/generateContent).
+        It is served exactly as `/gemini/{version}/models/{model}:generateContent`: the same
+        request, reply, call log entry (route `gemini`) and errors.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A reply in the Gemini generateContent format.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/VendorBadRequest"
+        default:
+          $ref: "#/components/responses/ScriptedError"
+  /gemini/{version}/publishers/google/models/{model}:streamGenerateContent:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: The Vertex AI API version segment, such as `v1` or `v1beta1`.
+        schema:
+          type: string
+      - name: model
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [vendor]
+      operationId: streamVertexExpressContent
+      summary: Vertex AI streamGenerateContent stand-in (express mode)
+      description: |
+        The Vertex AI path for Gemini `streamGenerateContent`. It is served exactly as
+        `/gemini/{version}/models/{model}:streamGenerateContent`: server-sent events with
+        `alt=sse`, which the `google-genai` SDK sends on Vertex AI too, and `RequestError`
+        (`invalid-request`) without it. A step's scripted error can return any status and body.
+      security: []
+      parameters:
+        - name: alt
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [sse]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: A Gemini SSE stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/VendorBadRequest"
+        default:
+          $ref: "#/components/responses/ScriptedError"
   /gemini/{version}/models/{model}:embedContent:
     parameters:
       - name: version

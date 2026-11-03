@@ -11,6 +11,11 @@ change the public API.
 
 ### Added
 
+- Gemini on the Vertex AI paths: `generateContent` and `streamGenerateContent` on
+  `/gemini/{version}/projects/{project}/locations/{location}/publishers/google/models/{model}:…`
+  and the express-mode `/gemini/{version}/publishers/google/models/{model}:…`, served exactly as the
+  Developer API paths, so `google-genai` with `vertexai=True` works against the same base URL.
+  Vertex AI embeddings are not served.
 - Parallel calls in scenarios. A step can carry a `match` that a call must satisfy, on the route,
   model, stream, system prompt, last user message, prompt, one message, message count, tool
   results, tools and tool choice, a body value or a header. A parallel step holds several steps
