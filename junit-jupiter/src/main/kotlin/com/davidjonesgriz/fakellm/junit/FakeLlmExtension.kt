@@ -189,9 +189,9 @@ private fun allowsUnusedSteps(context: ExtensionContext): Boolean =
 private fun unusedMessage(
     scenario: String?,
     steps: List<Int>,
-    names: Map<Int, String>,
+    names: Map<String, String>,
 ): String {
-    val named = steps.mapNotNull { n -> names[n]?.let { "$n '$it'" } }
+    val named = names.map { (label, name) -> "$label '$name'" }
     val which =
         (if (steps.size == 1) "step " else "steps ") + ranges(steps) + (if (named.isEmpty()) "" else " (${named.joinToString(", ")})")
     return "${steps.size} step(s) of fake-llm scenario '$scenario' got fewer calls than they need: $which. " +

@@ -120,7 +120,7 @@ class NonContiguousUnusedStepsFixture {
         engine: ScenarioEngine,
         server: FakeLlmServer,
     ) {
-        val on = { model: String -> Step(text = model, match = Match(model = model)) }
+        val on = { model: String -> Step(text = model, match = Match(model = model), metadata = ScenarioMetadata(name = "side-$model")) }
         engine.loadInline(
             Scenario(
                 metadata = ScenarioMetadata(name = "groups"),

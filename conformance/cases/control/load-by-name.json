@@ -41,6 +41,7 @@
           "status": "ok",
           "scenario": "fail-then-retry",
           "scenarioName": "fail-then-retry",
+          "scenarioSource": "file",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [1, 2],

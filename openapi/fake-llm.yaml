@@ -1055,7 +1055,7 @@ components:
   schemas:
     Health:
       type: object
-      required: [status, scenario, scenarioName, lenient, steps, unusedSteps, unusedStepNames, version]
+      required: [status, scenario, scenarioName, scenarioSource, lenient, steps, unusedSteps, unusedStepNames, version]
       properties:
         status:
           type: string
@@ -1070,6 +1070,13 @@ components:
           description: |
             The loaded scenario's display name, its `metadata.name`, or `scenario` when it has none.
             Null when none is loaded.
+        scenarioSource:
+          type: [string, "null"]
+          enum: [file, inline, null]
+          description: |
+            Where the loaded scenario came from: `file` for a load by name (a scenario directory file,
+            a project's classpath scenario or a bundled one), `inline` for an inline load. Null when
+            none is loaded.
         lenient:
           type: boolean
           description: |
@@ -1097,12 +1104,14 @@ components:
         unusedStepNames:
           type: object
           propertyNames:
-            pattern: "^[1-9][0-9]{0,9}$"
+            pattern: "^[1-9][0-9]{0,9}([.][1-9][0-9]{0,9})?$"
           additionalProperties:
             type: string
           description: |
-            The `metadata.name` of each step in `unusedSteps` that has one, keyed by its number as a
-            string, such as `{"2": "summarize-note"}`. Empty when none of them has a name.
+            The `metadata.name` of each unused step that has one, keyed by its label: its number for a
+            step in `unusedSteps`, such as `"2"`, and `N.M` for step M of the parallel step N when that
+            step is below its minimum, such as `{"2": "fan-out", "2.1": "side-a"}`. In step order.
+            Empty when none of them has a name.
         version:
           type: string
           description: |
@@ -1799,20 +1808,23 @@ components:
         name:
           type: [string, "null"]
           minLength: 1
+          pattern: "\\S"
           description: |
-            A display name. On a step, it is copied into the call log and named in unused-step
+            Not empty or blank. A display name. On a step, it is copied into the call log and named in unused-step
             reports; names need not be unique. On a scenario, it is shown beside the file name, and
             identifies an inline load.
         description:
           type: [string, "null"]
           description: A note for people reading the scenario, such as why a group runs in parallel.
         tags:
-          type: array
+          type: [array, "null"]
           items:
             type: string
             minLength: 1
-          default: []
-          description: Labels for search and filtering. fake-llm stores them and does not act on them.
+            pattern: "\\S"
+          description: |
+            Labels for search and filtering, none empty or blank. Null, like an absent key, is none.
+            fake-llm stores them and does not act on them.
     Times:
       type: object
       description: |

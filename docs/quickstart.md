@@ -11,7 +11,7 @@ You need Docker and curl. The image is on GHCR, for linux/amd64 and linux/arm64.
 Apart from the container ID that `docker run -d` prints and the name `docker stop` prints, each step prints one line. `/health` reports that the server is up with no scenario loaded:
 
 ```json
-{"status":"ok","scenario":null,"scenarioName":null,"lenient":false,"steps":null,"unusedSteps":[],"unusedStepNames":{},"version":"0.7.0"}
+{"status":"ok","scenario":null,"scenarioName":null,"scenarioSource":null,"lenient":false,"steps":null,"unusedSteps":[],"unusedStepNames":{},"version":"0.7.0"}
 ```
 
 Loading `hello` reports its name and step count:

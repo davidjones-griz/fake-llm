@@ -10,7 +10,7 @@ from support import ANTHROPIC_REQUEST, HELLO, OPENAI_REQUEST, post
 
 def test_health_with_no_scenario_loaded(fake_llm):
     assert fake_llm.client.health() == Health(
-        scenario=None, lenient=False, steps=None, unused_steps=[], scenario_name=None, unused_step_names={}
+        scenario=None, lenient=False, steps=None, unused_steps=[], scenario_name=None, unused_step_names={}, scenario_source=None
     )
 
 
@@ -27,7 +27,7 @@ def test_health_from_an_older_server_leaves_the_new_fields_none(stub):
     health = FakeLlmClient(stub(200, '{"status":"ok","scenario":null,"lenient":false}').url).health()
 
     assert (health.steps, health.unused_steps) == (None, None)
-    assert (health.scenario_name, health.unused_step_names) == (None, None)
+    assert (health.scenario_name, health.unused_step_names, health.scenario_source) == (None, None, None)
 
 
 def test_step_names_reach_the_call_log_and_the_unused_steps(fake_llm):
@@ -46,8 +46,8 @@ def test_step_names_reach_the_call_log_and_the_unused_steps(fake_llm):
 
     assert [(c.step, c.step_name) for c in fake_llm.client.calls()] == [(1, "greet"), (2, None)]
     health = fake_llm.client.health()
-    assert (health.scenario, health.scenario_name) == ("Named steps", "Named steps")
-    assert (health.unused_steps, health.unused_step_names) == ([3], {3: "farewell"})
+    assert (health.scenario, health.scenario_name, health.scenario_source) == ("Named steps", "Named steps", "inline")
+    assert (health.unused_steps, health.unused_step_names) == ([3], {"3": "farewell"})
 
 
 def test_scenario_names_are_the_bundled_ones_sorted(fake_llm):
@@ -69,7 +69,7 @@ def test_a_scenario_loaded_by_name_answers_and_its_call_is_logged(fake_llm):
     assert (call.message_count, call.system_shape, call.prompt_sample) == (1, "absent", "Hi\n")
     assert (call.tool_calls, call.tool_results) == ([], [])
     assert call.inner_step is None
-    assert fake_llm.client.health().scenario == "hello"
+    assert (fake_llm.client.health().scenario, fake_llm.client.health().scenario_source) == ("hello", "file")
 
 
 def test_a_call_served_by_a_parallel_step_reports_its_inner_step(fake_llm):

@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/case.schema.json",
   "name": "step-names",
-  "description": "Metadata names a scenario and its steps. The call log carries the answering step's name, and GET /health names the unused steps that have one; metadata changes nothing about which step answers.",
+  "description": "Metadata names a scenario and its steps. The call log carries the answering step's name, and GET /health names the unused steps that have one, a parallel step's steps included; metadata changes nothing about which step answers.",
   "scenario": {
     "metadata": {
       "name": "Note summary",
@@ -68,6 +68,7 @@
           "status": "ok",
           "scenario": "Note summary",
           "scenarioName": "Note summary",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [
@@ -75,7 +76,8 @@
             2
           ],
           "unusedStepNames": {
-            "1": "summarize-note"
+            "1": "summarize-note",
+            "2.1": "side-a"
           },
           "version": {
             "$type": "string"
@@ -187,12 +189,15 @@
           "status": "ok",
           "scenario": "Note summary",
           "scenarioName": "Note summary",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [
             2
           ],
-          "unusedStepNames": {},
+          "unusedStepNames": {
+            "2.1": "side-a"
+          },
           "version": {
             "$type": "string"
           }
@@ -327,6 +332,7 @@
           "status": "ok",
           "scenario": "Note summary",
           "scenarioName": "Note summary",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [],

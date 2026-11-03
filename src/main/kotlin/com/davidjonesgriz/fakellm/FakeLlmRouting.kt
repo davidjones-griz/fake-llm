@@ -83,10 +83,11 @@ private fun controlRoute(
                     put("status", "ok")
                     put("scenario", progress.key)
                     put("scenarioName", progress.displayName)
+                    put("scenarioSource", progress.source?.json)
                     put("lenient", engine.lenient)
                     put("steps", progress.steps)
                     put("unusedSteps", buildJsonArray { progress.unusedSteps.forEach { add(JsonPrimitive(it)) } })
-                    put("unusedStepNames", buildJsonObject { progress.unusedStepNames.forEach { (n, name) -> put("$n", name) } })
+                    put("unusedStepNames", buildJsonObject { progress.unusedStepNames.forEach { (label, name) -> put(label, name) } })
                     put("version", fakeLlmVersion)
                 }.toString(),
             )
@@ -199,7 +200,7 @@ private fun loadScenario(
                 obj["scenario"] as? JsonObject
                     ?: error("\"scenario\" must be a JSON object")
             val decoded = scenarioLoad { ScenarioLoader.decode(inline) }
-            (decoded.metadata?.name ?: INLINE_SCENARIO_KEY) to engine.loadInline(decoded)
+            decoded.inlineKey to engine.loadInline(decoded)
         }
     val displayName = scenario.metadata?.name ?: key
     respond(ex, HTTP_OK, """{"loaded":${jsonString(key)},"name":${jsonString(displayName)},"steps":${scenario.steps.size}}""")

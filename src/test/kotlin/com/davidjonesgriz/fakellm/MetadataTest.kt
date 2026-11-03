@@ -3,6 +3,7 @@ package com.davidjonesgriz.fakellm
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -51,7 +52,7 @@ class MetadataTest {
                 .map { it.metadata?.name },
         )
         assertEquals(listOf("race"), s.steps[2].metadata?.tags)
-        assertEquals(emptyList(), s.steps[3].metadata!!.tags, "tags default to none")
+        assertNull(s.steps[3].metadata!!.tags, "tags default to none")
     }
 
     @Test
@@ -126,15 +127,23 @@ class MetadataTest {
     }
 
     @Test
-    fun `unused steps are reported by number, with the names of those that have one`() {
+    fun `unused steps are reported by number, with the names of those that have one, inner steps of a parallel step included`() {
         val engine = ScenarioEngine().also { it.loadInline(decode(annotated)) }
         assertEquals(listOf(1, 2, 3, 4), engine.unusedSteps)
-        assertEquals(mapOf(1 to "first", 2 to "limited", 3 to "group", 4 to "poll"), engine.unusedStepNames)
+        assertEquals(
+            mapOf("1" to "first", "2" to "limited", "3" to "group", "3.1" to "side-a", "3.2" to "side-b", "4" to "poll"),
+            engine.unusedStepNames,
+        )
         engine.handle("anthropic", user("x"))
         engine.handle("anthropic", user("x"))
         engine.handle("anthropic", user("a"))
         assertEquals(listOf(3, 4), engine.unusedSteps, "the group has one unused step")
-        assertEquals(mapOf(3 to "group", 4 to "poll"), engine.unusedStepNames)
+        assertEquals(mapOf("3" to "group", "3.2" to "side-b", "4" to "poll"), engine.unusedStepNames, "side-a has its call")
+        val unnamedGroup =
+            ScenarioEngine().also {
+                it.loadInline(decode("""{"steps":[{"parallel":{"steps":[{"text":"a"},{"metadata":{"name":"b"},"text":"b"}]}}]}"""))
+            }
+        assertEquals(mapOf("1.2" to "b"), unnamedGroup.unusedStepNames, "an inner name is listed when the group has none")
         val unnamed = ScenarioEngine().also { it.loadInline(Scenario(steps = listOf(Step(text = "a")))) }
         assertEquals(emptyMap(), unnamed.unusedStepNames)
     }
@@ -161,6 +170,25 @@ class MetadataTest {
     }
 
     @Test
+    fun `the loaded scenario's source is file for a load by name and inline for an inline load, and reset keeps it`() {
+        withScenarioDir { dir ->
+            writeScenario(dir, "from-dir", """{"steps":[{"text":"a"}]}""")
+            val engine = ScenarioEngine(scenarioDirectory = dir)
+            assertNull(engine.progress.source)
+            engine.load("from-dir")
+            assertEquals(ScenarioSource.FILE, engine.progress.source)
+            engine.load("hello")
+            assertEquals(ScenarioSource.FILE, engine.progress.source, "a bundled scenario loads by name too")
+            engine.loadInline(Scenario(steps = listOf(Step(text = "a")), metadata = ScenarioMetadata(name = "from-dir")))
+            assertEquals(ScenarioSource.INLINE, engine.progress.source, "an inline load named like a file is still inline")
+            engine.reset()
+            assertEquals(ScenarioSource.INLINE, engine.progress.source)
+            engine.unload()
+            assertNull(engine.progress.source)
+        }
+    }
+
+    @Test
     fun `health, the load response and the no-more-steps body report the key and the display name`() {
         withScenarioDir { dir ->
             writeScenario(dir, "shown", """{"metadata":{"name":"Shown name"},"steps":[{"metadata":{"name":"only"},"text":"a"}]}""")
@@ -170,6 +198,7 @@ class MetadataTest {
                 val health = Json.parseToJsonElement(client.get("/health").body()).jsonObject
                 assertEquals("shown", health.getValue("scenario").jsonPrimitive.content)
                 assertEquals("Shown name", health.getValue("scenarioName").jsonPrimitive.content)
+                assertEquals("file", health.getValue("scenarioSource").jsonPrimitive.content)
                 assertEquals("""{"1":"only"}""", health.getValue("unusedStepNames").toString())
                 client.post("/anthropic/v1/messages", anthropicBody("a"))
                 val calls = Json.parseToJsonElement(client.get("/control/calls").body()).jsonArray
@@ -186,14 +215,16 @@ class MetadataTest {
                 assertContains(after, "\"scenario\":\"shown\"")
                 val inline = client.post("/control/scenario", """{"scenario":{"steps":[{"text":"a"}]}}""").body()
                 assertEquals("""{"loaded":"inline","name":"inline","steps":1}""", inline)
+                val inlineHealth = Json.parseToJsonElement(client.get("/health").body()).jsonObject
                 assertEquals(
-                    "inline",
-                    Json
-                        .parseToJsonElement(client.get("/health").body())
-                        .jsonObject
-                        .getValue("scenario")
-                        .jsonPrimitive.content,
+                    "inline" to "inline",
+                    inlineHealth
+                        .getValue(
+                            "scenario",
+                        ).jsonPrimitive.content to inlineHealth.getValue("scenarioSource").jsonPrimitive.content,
                 )
+                client.post("/control/unload", "")
+                assertEquals(JsonNull, Json.parseToJsonElement(client.get("/health").body()).jsonObject.getValue("scenarioSource"))
             }
         }
     }
@@ -237,14 +268,58 @@ class MetadataTest {
             "step 1: \$.steps[0].parallel: unknown field 'metadata'",
             messageFor("""{"steps":[{"parallel":{"steps":[{"text":"a"}],"metadata":{"name":"x"}}}]}"""),
         )
-        assertEquals("metadata.name must not be empty", messageFor("""{"metadata":{"name":""},"steps":[{"text":"t"}]}"""))
         assertEquals(
-            "step 1: metadata.tags must not contain an empty tag",
-            messageFor("""{"steps":[{"text":"t","metadata":{"tags":[""]}}]}"""),
+            "step 1: \$.steps[0].parallel: unknown field 'metadata'",
+            messageFor("""{"steps":[{"parallel":{"steps":[{"text":"a"}],"metadata":{"name":"x"}}}]}"""),
         )
         assertEquals(
             "step 1: \$.steps[0]: a parallel step has only the keys 'parallel' and 'metadata', got 'times'",
             messageFor("""{"steps":[{"parallel":{"steps":[{"text":"a"}]},"metadata":{"name":"g"},"times":{"min":1}}]}"""),
+        )
+    }
+
+    @Test
+    fun `an empty or blank name or tag is rejected with its step and path`() {
+        assertEquals("\$.metadata.name: must not be empty", messageFor("""{"metadata":{"name":""},"steps":[{"text":"t"}]}"""))
+        assertEquals("\$.metadata.name: must not be blank", messageFor("""{"metadata":{"name":" \t"},"steps":[{"text":"t"}]}"""))
+        assertEquals(
+            "step 2: \$.steps[1].metadata.name: must not be empty",
+            messageFor("""{"steps":[{"text":"a"},{"text":"t","metadata":{"name":""}}]}"""),
+        )
+        assertEquals(
+            "step 2: \$.steps[1].metadata.name: must not be blank",
+            messageFor("""{"steps":[{"text":"a"},{"text":"t","metadata":{"name":"   "}}]}"""),
+        )
+        assertEquals(
+            "step 1: \$.steps[0].metadata.tags[1]: must not be empty",
+            messageFor("""{"steps":[{"text":"t","metadata":{"tags":["ok",""]}}]}"""),
+        )
+        assertEquals(
+            "step 1: \$.steps[0].metadata.tags[0]: must not be blank",
+            messageFor("""{"steps":[{"text":"t","metadata":{"tags":[" "]}}]}"""),
+        )
+        assertEquals(
+            "step 1.2: \$.steps[0].parallel.steps[1].metadata.name: must not be blank",
+            messageFor("""{"steps":[{"parallel":{"steps":[{"text":"a"},{"text":"b","metadata":{"name":"\n"}}]}}]}"""),
+        )
+        assertEquals(
+            "step 1: \$.steps[0].metadata.tags[0]: must not be empty",
+            messageFor("""{"steps":[{"parallel":{"steps":[{"text":"a"}]},"metadata":{"tags":[""]}}]}"""),
+        )
+        assertFailsWith<IllegalArgumentException> { ScenarioMetadata(name = " ") }
+        assertFailsWith<IllegalArgumentException> { ScenarioMetadata(tags = listOf("\t")) }
+    }
+
+    @Test
+    fun `null tags read as absent, like a null name or description`() {
+        val s = decode("""{"metadata":{"name":null,"description":null,"tags":null},"steps":[{"text":"t","metadata":{"tags":null}}]}""")
+        assertEquals(ScenarioMetadata(), s.metadata)
+        assertEquals(ScenarioMetadata(), s.steps.single().metadata)
+        assertNull(
+            s.steps
+                .single()
+                .metadata!!
+                .tags,
         )
     }
 

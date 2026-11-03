@@ -308,6 +308,7 @@
           "status": "ok",
           "scenario": "nested",
           "scenarioName": "nested",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 4,
           "unusedSteps": [

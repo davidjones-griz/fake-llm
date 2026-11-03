@@ -30,12 +30,12 @@ From Kotlin or Java, [`FakeLlmClient`](library.md#control-api-client) makes thes
 Always open, including when a control token is set. Reports liveness, the loaded scenario's key and display name or `null` when none is loaded, whether lenient mode is on, the scenario's step count and unused steps, and the server's version.
 
 ```json
-{"status":"ok","scenario":"hello","scenarioName":"hello","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"0.7.0"}
+{"status":"ok","scenario":"hello","scenarioName":"hello","scenarioSource":"file","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"0.7.0"}
 ```
 
 The version varies with the release. `steps` is the loaded scenario's step count, and `unusedSteps` lists the steps not used up since the last load, reset or unload (both `null` / `[]` with no scenario); a parallel step is listed until every step in it is used, and a step with `times` until it has its `min` calls. A test can assert `unusedSteps` is empty to check its app made every scripted call. The JUnit extension makes the same check in process after each test.
 
-`scenario` is the loaded scenario's key: the name it was loaded by (its file name), or for an inline load its `metadata.name`, or `inline` when it has none. `scenarioName` is its display name: its `metadata.name`, or the key when it has none. `unusedStepNames` maps each step in `unusedSteps` that has a [`metadata.name`](scenarios.md#metadata) to it, keyed by its number as a string, such as `{"2":"summarize-note"}`; it is `{}` when none of them has one.
+`scenario` is the loaded scenario's key: the name it was loaded by (its file name), or for an inline load its `metadata.name`, or `inline` when it has none. `scenarioName` is its display name: its `metadata.name`, or the key when it has none. `scenarioSource` says where it came from: `file` for a load by name (a scenario directory file, a classpath scenario or a bundled one) and `inline` for an inline load, so an inline scenario named like a file can't be mistaken for it; `null` with none loaded. `unusedStepNames` maps each unused step that has a [`metadata.name`](scenarios.md#metadata) to it, keyed by its label: its number for a step in `unusedSteps`, and `N.M` for step M of the parallel step N while that step is below its minimum, such as `{"2":"fan-out","2.1":"side-a"}`; it is `{}` when none of them has one.
 
 ### `GET /openapi`
 

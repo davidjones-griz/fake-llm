@@ -161,6 +161,7 @@
           "status": "ok",
           "scenario": "new",
           "scenarioName": "new",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 1,
           "unusedSteps": [],

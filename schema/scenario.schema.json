@@ -45,7 +45,8 @@
             "null"
           ],
           "minLength": 1,
-          "description": "A display name. On a step, it is copied into the call log and named in unused-step\nreports; names need not be unique. On a scenario, it is shown beside the file name, and\nidentifies an inline load.\n"
+          "pattern": "\\S",
+          "description": "Not empty or blank. A display name. On a step, it is copied into the call log and named in unused-step\nreports; names need not be unique. On a scenario, it is shown beside the file name, and\nidentifies an inline load.\n"
         },
         "description": {
           "type": [
@@ -55,13 +56,16 @@
           "description": "A note for people reading the scenario, such as why a group runs in parallel."
         },
         "tags": {
-          "type": "array",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           },
-          "default": [],
-          "description": "Labels for search and filtering. fake-llm stores them and does not act on them."
+          "description": "Labels for search and filtering, none empty or blank. Null, like an absent key, is none.\nfake-llm stores them and does not act on them.\n"
         }
       }
     },

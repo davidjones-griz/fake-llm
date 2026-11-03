@@ -181,6 +181,7 @@
           "status": "ok",
           "scenario": "parallel-with-a-429-retry",
           "scenarioName": "parallel-with-a-429-retry",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 1,
           "unusedSteps": [],

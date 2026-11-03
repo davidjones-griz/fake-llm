@@ -42,6 +42,7 @@
           "status": "ok",
           "scenario": "retry-that-never-comes",
           "scenarioName": "retry-that-never-comes",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [
@@ -113,6 +114,7 @@
           "status": "ok",
           "scenario": "retry-that-never-comes",
           "scenarioName": "retry-that-never-comes",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [],

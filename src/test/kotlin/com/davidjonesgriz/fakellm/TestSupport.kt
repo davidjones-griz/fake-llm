@@ -170,7 +170,9 @@ internal val invalidScenarios =
         "an empty tag" to """{"steps":[{"text":"t","metadata":{"tags":["ok",""]}}]}""",
         "a tag that is not a string" to """{"steps":[{"text":"t","metadata":{"tags":[1]}}]}""",
         "tags that are not a list" to """{"steps":[{"text":"t","metadata":{"tags":"smoke"}}]}""",
-        "null tags" to """{"steps":[{"text":"t","metadata":{"tags":null}}]}""",
+        "a blank metadata name" to """{"metadata":{"name":"  "},"steps":[{"text":"t"}]}""",
+        "a blank step name" to """{"steps":[{"text":"t","metadata":{"name":"\t"}}]}""",
+        "a blank tag" to """{"steps":[{"text":"t","metadata":{"tags":["ok"," "]}}]}""",
         "metadata that is not an object" to """{"metadata":"x","steps":[{"text":"t"}]}""",
         "a metadata name that is not a string" to """{"steps":[{"text":"t","metadata":{"name":2}}]}""",
         "an unknown field" to """{"metadata":{"name":"x"},"steps":[{"text":"t"}],"extra":1}""",
@@ -351,6 +353,7 @@ internal val validParallelScenarios =
                 {"metadata":{"name":"side-a"},"match":{"lastUser":{"contains":"a"}},"text":"a"},
                 {"metadata":{"name":"side-b","description":null},"text":"b"}]}},
               {"metadata":null,"text":"no metadata"},
+              {"metadata":{"name":null,"description":null,"tags":null},"text":"all null"},
               {"metadata":{},"text":"empty metadata"}]}""",
         "the issue's fan-out and merge" to
             """{"metadata":{"name":"summarize-three-then-merge"},"steps":[{"parallel":{"steps":[

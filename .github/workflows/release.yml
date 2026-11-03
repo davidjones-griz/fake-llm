@@ -139,7 +139,7 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
-          expected="{\"status\":\"ok\",\"scenario\":null,\"scenarioName\":null,\"lenient\":false,\"steps\":null,\"unusedSteps\":[],\"unusedStepNames\":{},\"version\":\"$VERSION\"}"
+          expected="{\"status\":\"ok\",\"scenario\":null,\"scenarioName\":null,\"scenarioSource\":null,\"lenient\":false,\"steps\":null,\"unusedSteps\":[],\"unusedStepNames\":{},\"version\":\"$VERSION\"}"
           health() { docker inspect -f '{{.State.Health.Status}}' "$1" 2>/dev/null || echo none; }
           for platform in linux/amd64 linux/arm64; do
             docker pull --quiet --platform "$platform" "$IMAGE@$DIGEST"

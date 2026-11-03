@@ -31,6 +31,7 @@
           "status": "ok",
           "scenario": "three-steps",
           "scenarioName": "three-steps",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [
@@ -103,6 +104,7 @@
           "status": "ok",
           "scenario": "three-steps",
           "scenarioName": "three-steps",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [
@@ -218,6 +220,7 @@
           "status": "ok",
           "scenario": "three-steps",
           "scenarioName": "three-steps",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [],
@@ -280,6 +283,7 @@
           "status": "ok",
           "scenario": "three-steps",
           "scenarioName": "three-steps",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [],
@@ -320,6 +324,7 @@
           "status": "ok",
           "scenario": "three-steps",
           "scenarioName": "three-steps",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 3,
           "unusedSteps": [
@@ -364,6 +369,7 @@
           "status": "ok",
           "scenario": null,
           "scenarioName": null,
+          "scenarioSource": null,
           "lenient": false,
           "steps": null,
           "unusedSteps": [],

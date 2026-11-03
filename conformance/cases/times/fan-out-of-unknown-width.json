@@ -229,6 +229,7 @@
           "status": "ok",
           "scenario": "fan-out-width",
           "scenarioName": "fan-out-width",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [],

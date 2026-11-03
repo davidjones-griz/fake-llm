@@ -121,16 +121,25 @@ public data class ToolResultRecord internal constructor(
     val isError: Boolean,
 )
 
+/** Where the loaded scenario came from: a load by name, or an inline load. [json] is how `GET /health` writes it. */
+internal enum class ScenarioSource(
+    val json: String,
+) {
+    FILE("file"),
+    INLINE("inline"),
+}
+
 /**
- * The loaded scenario's [key] and [displayName], its step count, the steps no call has used and
- * the names of those that have one, read together.
+ * The loaded scenario's [key], [displayName] and [source], its step count, the steps no call has
+ * used and the names of those that have one, read together.
  */
 internal data class ScenarioProgress(
     val key: String?,
     val displayName: String?,
     val steps: Int?,
     val unusedSteps: List<Int>,
-    val unusedStepNames: Map<Int, String>,
+    val unusedStepNames: Map<String, String>,
+    val source: ScenarioSource? = null,
 )
 
 /** One logged call and the [Step] that answers it. See [ScenarioEngine.resolve]. */
@@ -184,8 +193,9 @@ public class ScenarioEngine(
     private val lock = Any()
     private var scenario: Scenario? = null
 
-    /** What identifies [scenario]: the name it was loaded by, or for an inline load its `metadata.name` or `inline`. */
+    /** What identifies [scenario]: the name it was loaded by, or for an inline load its [Scenario.inlineKey]. */
     private var scenarioKey: String? = null
+    private var scenarioSource: ScenarioSource? = null
     private var callCount = 0L
 
     /** Where the loaded scenario has got to. */
@@ -208,7 +218,7 @@ public class ScenarioEngine(
      * the engine is then unchanged. The scenario's `metadata.name` may differ from [name], which
      * stays its key ([currentScenarioKey]). Empties the call log and the exchange log.
      */
-    public fun load(name: String): Scenario = ScenarioLoader.load(name, scenarioDirectory).also { replace(it, name) }
+    public fun load(name: String): Scenario = ScenarioLoader.load(name, scenarioDirectory).also { replace(it, name, ScenarioSource.FILE) }
 
     /**
      * Installs [s] as the loaded scenario and starts it over, as [reset] does: empties the call log
@@ -216,7 +226,7 @@ public class ScenarioEngine(
      * ([currentScenarioKey]) is its `metadata.name`, or `inline` when it has none.
      */
     public fun loadInline(s: Scenario): Scenario {
-        replace(s, s.metadata?.name ?: INLINE_SCENARIO_KEY)
+        replace(s, s.inlineKey, ScenarioSource.INLINE)
         return s
     }
 
@@ -226,7 +236,7 @@ public class ScenarioEngine(
      * and [FakeLlmClient.unload] call it over HTTP.
      */
     public fun unload() {
-        replace(null, null)
+        replace(null, null, null)
     }
 
     /**
@@ -234,16 +244,18 @@ public class ScenarioEngine(
      * is call 1 and gets step 1. Keeps the loaded scenario.
      */
     public fun reset() {
-        synchronized(lock) { replace(scenario, scenarioKey) }
+        synchronized(lock) { replace(scenario, scenarioKey, scenarioSource) }
     }
 
     private fun replace(
         s: Scenario?,
         key: String?,
+        source: ScenarioSource?,
     ) {
         synchronized(lock) {
             scenario = s
             scenarioKey = key
+            scenarioSource = source
             callCount = 0
             position = Position()
             log = mutableListOf()
@@ -269,10 +281,12 @@ public class ScenarioEngine(
         get() = progress.unusedSteps
 
     /**
-     * The `metadata.name` of each step in [unusedSteps] that has one, by its 1-based number, read
-     * under the same lock. A step without a name has no entry. From Java, `getUnusedStepNames()`.
+     * The `metadata.name` of each unused step that has one, read under the same lock, keyed by its
+     * label: `"2"` for step 2 of [unusedSteps], and `"2.1"` for step 1 of the parallel step 2 when
+     * that step is below its minimum. A step without a name has no entry. In step order. From Java,
+     * `getUnusedStepNames()`.
      */
-    public val unusedStepNames: Map<Int, String>
+    public val unusedStepNames: Map<String, String>
         get() = progress.unusedStepNames
 
     /** [currentScenarioKey], the display name, the step count, [unusedSteps] and their names, read under one lock. */
@@ -280,21 +294,14 @@ public class ScenarioEngine(
         get() =
             synchronized(lock) {
                 val s = scenario
-                val unused = s?.let { position.unused(it) }.orEmpty()
+                val unused = s?.let { position.unusedCandidates(it) }.orEmpty()
                 ScenarioProgress(
                     key = scenarioKey,
                     displayName = s?.let { it.metadata?.name ?: scenarioKey },
                     steps = s?.steps?.size,
-                    unusedSteps = unused,
-                    unusedStepNames =
-                        unused
-                            .mapNotNull { n ->
-                                s!!
-                                    .steps[n - 1]
-                                    .metadata
-                                    ?.name
-                                    ?.let { n to it }
-                            }.toMap(),
+                    unusedSteps = unused.map { it.top + 1 }.distinct(),
+                    unusedStepNames = s?.let { unusedNames(it, unused) }.orEmpty(),
+                    source = scenarioSource,
                 )
             }
 
@@ -375,6 +382,28 @@ public class ScenarioEngine(
         return Resolution(seq = served.seq, step = served.choice.chosen?.step ?: unservedStep(served, vendor, req, lenient))
     }
 }
+
+/**
+ * The names of [unused], the steps of [s] below their minimum, by label: each parallel or plain
+ * step's own name under its number, then each named step of a parallel step under `N.M`.
+ */
+private fun unusedNames(
+    s: Scenario,
+    unused: List<Candidate>,
+): Map<String, String> =
+    buildMap {
+        unused.forEach { c ->
+            s.steps[c.top]
+                .metadata
+                ?.name
+                ?.let { putIfAbsent("${c.top + 1}", it) }
+            if (c.inner != null) {
+                c.step.metadata
+                    ?.name
+                    ?.let { put("${c.top + 1}.${c.inner + 1}", it) }
+            }
+        }
+    }
 
 /** What [ScenarioEngine.resolve] decided under the lock, for building the response after it. */
 internal data class Served(

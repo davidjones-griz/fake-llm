@@ -395,7 +395,8 @@ class FakeLlmExtensionTest {
         assertEquals(listOf(200), Sink.get("partly:status"))
         assertContains(
             failure.message.orEmpty(),
-            "2 step(s) of fake-llm scenario 'groups' got fewer calls than they need: steps 1, 3 (1 'fan-out', 3 'merge').",
+            "2 step(s) of fake-llm scenario 'groups' got fewer calls than they need: " +
+                "steps 1, 3 (1 'fan-out', 1.1 'side-a', 1.2 'side-b', 3 'merge').",
         )
     }
 

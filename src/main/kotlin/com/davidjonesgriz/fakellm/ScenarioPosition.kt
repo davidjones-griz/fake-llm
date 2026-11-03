@@ -93,9 +93,9 @@ internal class Position {
         return Taken(chosen, uses.takeIf { chosen.step.times != null })
     }
 
-    /** The 1-based numbers of [s]'s steps from [pos] on that have a step below its minimum. */
-    fun unused(s: Scenario): List<Int> =
-        (pos until s.steps.size).filter { top -> candidatesOf(s.steps[top], top).any { !it.isMet() } }.map { it + 1 }
+    /** The steps of [s] from [pos] on that are below their minimum: plain steps, and the steps of parallel steps. */
+    fun unusedCandidates(s: Scenario): List<Candidate> =
+        (pos until s.steps.size).flatMap { top -> candidatesOf(s.steps[top], top).filter { !it.isMet() } }
 }
 
 /** A call's step ([candidate]) and, for a step with [Step.times], which of its uses this was. */

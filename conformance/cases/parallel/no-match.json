@@ -216,6 +216,7 @@
           "status": "ok",
           "scenario": "plain-match",
           "scenarioName": "plain-match",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [

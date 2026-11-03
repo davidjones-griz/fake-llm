@@ -272,20 +272,20 @@ class ScenarioEngineTest {
         assertEquals(ScenarioProgress(null, null, null, emptyList(), emptyMap()), engine.progress)
 
         engine.loadInline(textScenario("one", "two", "three", name = "three"))
-        assertEquals(ScenarioProgress("three", "three", 3, listOf(1, 2, 3), emptyMap()), engine.progress)
+        assertEquals(ScenarioProgress("three", "three", 3, listOf(1, 2, 3), emptyMap(), ScenarioSource.INLINE), engine.progress)
         engine.text()
-        assertEquals(ScenarioProgress("three", "three", 3, listOf(2, 3), emptyMap()), engine.progress)
+        assertEquals(ScenarioProgress("three", "three", 3, listOf(2, 3), emptyMap(), ScenarioSource.INLINE), engine.progress)
         engine.text()
         engine.text()
         engine.handle("anthropic", req())
         assertEquals(
-            ScenarioProgress("three", "three", 3, emptyList(), emptyMap()),
+            ScenarioProgress("three", "three", 3, emptyList(), emptyMap(), ScenarioSource.INLINE),
             engine.progress,
             "a call after the last step uses no step",
         )
 
         engine.reset()
-        assertEquals(ScenarioProgress("three", "three", 3, listOf(1, 2, 3), emptyMap()), engine.progress)
+        assertEquals(ScenarioProgress("three", "three", 3, listOf(1, 2, 3), emptyMap(), ScenarioSource.INLINE), engine.progress)
         engine.unload()
         assertEquals(ScenarioProgress(null, null, null, emptyList(), emptyMap()), engine.progress)
 
@@ -297,7 +297,7 @@ class ScenarioEngineTest {
         )
         assertFailsWith<IllegalArgumentException> { engine.handle("gemini", req()) }
         assertEquals(
-            ScenarioProgress("raw", "raw", 2, listOf(1, 2), emptyMap()),
+            ScenarioProgress("raw", "raw", 2, listOf(1, 2), emptyMap(), ScenarioSource.INLINE),
             engine.progress,
             "a rejected rawArguments request uses no step",
         )

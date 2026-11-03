@@ -18,18 +18,23 @@ change the public API.
   and the steps inside one), with exactly three fields: `name`, `description` and `tags`. It never
   changes how a scenario runs. Any other key inside it is rejected, and it is not allowed inside
   `match`, `error`, `toolCalls` or any other part of a step. In Kotlin, `ScenarioMetadata` builds it,
-  and `Step` takes it as its new last parameter, `metadata`.
+  and `Step` takes it as its new last parameter, `metadata`. A `name` or tag that is empty or only
+  whitespace is rejected with its step and path (`step 2: $.steps[1].metadata.name: must not be
+  blank`), and a `null` field, `tags` included, is the same as an absent one.
 - A step's `metadata.name` is copied into the call log: `CallRecord.stepName` (`stepName` in
   `GET /control/calls`, the pytest plugin's `step_name`), left out for a step without one, and
   ` name="<name>"` at the end of the CLI's call line. Names need not be unique.
 - Unused steps are named: `GET /health` adds `unusedStepNames`, which maps each unused step that has
-  a name to it by its number (`{"2": "summarize-note"}`); `ScenarioEngine.unusedStepNames`,
+  a name to it by its label, its number or `N.M` for a step of the parallel step N that is below its
+  minimum (`{"2": "fan-out", "2.1": "side-a"}`); `ScenarioEngine.unusedStepNames`,
   `FakeLlmHealth.unusedStepNames` and the pytest plugin's `Health.unused_step_names` carry the same.
   `unusedSteps` is unchanged. The JUnit extension's unused-step failure names them, such as
-  `steps 1, 3 (1 'fan-out', 3 'merge')`.
+  `steps 1, 3 (1 'fan-out', 1.1 'side-a', 3 'merge')`.
 - `GET /health` adds `scenarioName`, and the `POST /control/scenario` response adds `name`: the
   scenario's display name, its `metadata.name`, or its key when it has none
   (`FakeLlmHealth.scenarioName`, the pytest plugin's `Health.scenario_name`).
+- `GET /health` adds `scenarioSource`: `file` for a load by name, `inline` for an inline load, null
+  with none loaded (`FakeLlmHealth.scenarioSource`, the pytest plugin's `Health.scenario_source`).
 
 ### Breaking
 
@@ -51,7 +56,7 @@ change the public API.
   `Scenario.name` and `Scenario.description` are gone (`scenario.metadata?.name`). A scenario with
   no steps fails with `a scenario must have at least one step`.
   `ScenarioEngine.currentScenarioName()` is renamed `currentScenarioKey()`. `FakeLlmHealth` gains
-  `scenarioName` and `unusedStepNames`, and `CallRecord` gains `stepName`.
+  `scenarioName`, `scenarioSource` and `unusedStepNames`, and `CallRecord` gains `stepName`.
 
 ## [0.7.0] - 2026-11-02
 

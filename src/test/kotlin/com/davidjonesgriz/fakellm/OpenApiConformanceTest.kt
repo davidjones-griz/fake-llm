@@ -54,8 +54,8 @@ class OpenApiConformanceTest {
         // the server rejects must fail the request schema.
         val health = "#/paths/~1health/get/responses/200/content/application~1json/schema"
         val valid =
-            """{"status":"ok","scenario":null,"scenarioName":null,"lenient":false,"steps":null,"unusedSteps":[],"unusedStepNames":{},""" +
-                """"version":"0.5.0"}"""
+            """{"status":"ok","scenario":null,"scenarioName":null,"scenarioSource":null,"lenient":false,""" +
+                """"steps":null,"unusedSteps":[],"unusedStepNames":{},"version":"0.5.0"}"""
         assertEquals(emptyList(), validate(health, valid))
         assertTrue(validate(health, valid.removeSuffix("}") + ""","extra":1}""").isNotEmpty())
         assertTrue(validate(health, valid.replace(""""version":"0.5.0"""", "").replace(""",}""", "}")).isNotEmpty(), "version is required")
@@ -162,14 +162,14 @@ class OpenApiConformanceTest {
             emptyList(),
             caseDisagreements(
                 case(
-                    """{"status":200,"body":{"status":"ok","scenario":"s","scenarioName":"s","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"v"}}""",
+                    """{"status":200,"body":{"status":"ok","scenario":"s","scenarioName":"s","scenarioSource":"inline","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"v"}}""",
                 ),
             ),
         )
         assertTrue(
             caseDisagreements(
                 case(
-                    """{"status":200,"body":{"status":"ok","scenario":"s","scenarioName":"s","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"v","x":1}}""",
+                    """{"status":200,"body":{"status":"ok","scenario":"s","scenarioName":"s","scenarioSource":"inline","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"v","x":1}}""",
                 ),
             ).isNotEmpty(),
         )

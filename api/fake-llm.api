@@ -238,10 +238,12 @@ public final class com/davidjonesgriz/fakellm/FakeLlmHealth {
 	public final fun component5 ()Ljava/lang/String;
 	public final fun component6 ()Ljava/util/Map;
 	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/String;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getLenient ()Z
 	public final fun getScenario ()Ljava/lang/String;
 	public final fun getScenarioName ()Ljava/lang/String;
+	public final fun getScenarioSource ()Ljava/lang/String;
 	public final fun getSteps ()Ljava/lang/Integer;
 	public final fun getUnusedStepNames ()Ljava/util/Map;
 	public final fun getUnusedSteps ()Ljava/util/List;

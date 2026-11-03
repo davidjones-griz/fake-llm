@@ -198,10 +198,12 @@ public data class FakeLlmHealth internal constructor(
     /** The scenario's `metadata.name`, or [scenario] when it has none; null with none loaded, or from a server older than 0.8.0. */
     val scenarioName: String? = null,
     /**
-     * The `metadata.name` of each step in [unusedSteps] that has one, by its number; empty when none
-     * has. Null from a server older than 0.8.0.
+     * The `metadata.name` of each unused step that has one, keyed by its label: `"2"`, or `"2.1"` for
+     * a step of the parallel step 2; empty when none has. Null from a server older than 0.8.0.
      */
-    val unusedStepNames: Map<Int, String>? = null,
+    val unusedStepNames: Map<String, String>? = null,
+    /** Where the loaded scenario came from: `file` for a load by name, `inline` for an inline load; null with none loaded, or from a server older than 0.8.0. */
+    val scenarioSource: String? = null,
     /** The server's version, such as `0.5.0`; null from a server older than this release, which does not report it. */
     val version: String? = null,
 )

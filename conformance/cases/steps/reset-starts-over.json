@@ -89,6 +89,7 @@
           "status": "ok",
           "scenario": "two-steps",
           "scenarioName": "two-steps",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [1, 2],

@@ -176,6 +176,7 @@
           "status": "ok",
           "scenario": "poll-loop",
           "scenarioName": "poll-loop",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [
@@ -332,6 +333,7 @@
           "status": "ok",
           "scenario": "poll-loop",
           "scenarioName": "poll-loop",
+          "scenarioSource": "inline",
           "lenient": false,
           "steps": 2,
           "unusedSteps": [],

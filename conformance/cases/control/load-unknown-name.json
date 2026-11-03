@@ -42,6 +42,7 @@
           "status": "ok",
           "scenario": "hello",
           "scenarioName": "hello",
+          "scenarioSource": "file",
           "lenient": false,
           "steps": 1,
           "unusedSteps": [1],

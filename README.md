@@ -27,7 +27,7 @@ curl -s http://localhost:8080/health
 ```
 
 ```json
-{"status":"ok","scenario":"hello","scenarioName":"hello","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"0.7.0"}
+{"status":"ok","scenario":"hello","scenarioName":"hello","scenarioSource":"file","lenient":false,"steps":1,"unusedSteps":[1],"unusedStepNames":{},"version":"0.7.0"}
 ```
 
 Point an SDK at the server; the server does not check API keys:

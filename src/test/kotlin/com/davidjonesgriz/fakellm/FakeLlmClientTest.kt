@@ -32,13 +32,14 @@ class FakeLlmClientTest {
                     unusedSteps = emptyList(),
                     scenarioName = null,
                     unusedStepNames = emptyMap(),
+                    scenarioSource = null,
                     version = fakeLlmVersion,
                 ),
                 client.health(),
             )
 
             client.load("hello")
-            assertEquals("hello", client.health().scenario)
+            assertEquals("hello" to "file", client.health().let { it.scenario to it.scenarioSource })
 
             TestClient(server.port).post("/anthropic/v1/messages", anthropicBody("hi"))
             val call = client.calls().single()

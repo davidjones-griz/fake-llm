@@ -21,6 +21,7 @@
           "status": "ok",
           "scenario": null,
           "scenarioName": null,
+          "scenarioSource": null,
           "lenient": false,
           "steps": null,
           "unusedSteps": [],

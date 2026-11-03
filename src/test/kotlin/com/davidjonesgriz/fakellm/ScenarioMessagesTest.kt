@@ -81,7 +81,10 @@ class ScenarioMessagesTest {
 
     @Test
     fun `null is named for a field that does not take it`() {
-        assertEquals("\$.metadata.tags: must not be null", messageFor("""{"metadata":{"tags":null},"steps":[{"text":"t"}]}"""))
+        assertEquals(
+            "step 1: \$.steps[0].stopReason: must not be null",
+            messageFor("""{"metadata":{"tags":null},"steps":[{"text":"t","stopReason":null}]}"""),
+        )
         assertEquals("\$.steps: must not be null", messageFor("""{"metadata":{"name":"x"},"steps":null}"""))
     }
 

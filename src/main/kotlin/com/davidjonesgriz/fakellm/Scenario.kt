@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.io.File
 import java.nio.file.Path
@@ -192,7 +193,7 @@ public data class Step(
  * finding it. It never changes how a scenario runs: matching, replies, order and pass/fail are the
  * same with or without it. Only these three fields are defined; any other key is rejected.
  *
- * @throws IllegalArgumentException when [name] is empty or a tag is empty. The message text is
+ * @throws IllegalArgumentException when [name] or a tag is empty or blank. The message text is
  *   diagnostic, not part of the API.
  */
 @Serializable
@@ -205,14 +206,20 @@ public data class ScenarioMetadata(
     val name: String? = null,
     /** A note for people reading the scenario: why it exists, why a group runs in parallel. */
     val description: String? = null,
-    /** Labels for search and filtering. fake-llm stores them and does not act on them. */
-    val tags: List<String> = emptyList(),
+    /** Labels for search and filtering; null, the default, is none. fake-llm stores them and does not act on them. */
+    val tags: List<String>? = null,
 ) {
     init {
-        require(name == null || name.isNotEmpty()) { "metadata.name must not be empty" }
-        require(tags.none { it.isEmpty() }) { "metadata.tags must not contain an empty tag" }
+        require(name == null || name.isNotBlank()) { "metadata.name must not be ${if (name!!.isEmpty()) "empty" else "blank"}" }
+        require(tags == null || tags.none { it.isBlank() }) { "metadata.tags must not contain an empty or blank tag" }
     }
 }
+
+/**
+ * The key of this scenario when it is loaded inline: its `metadata.name`, or `inline` when it has
+ * none. [ScenarioEngine.loadInline] and `POST /control/scenario` both use it.
+ */
+internal val Scenario.inlineKey: String get() = metadata?.name ?: INLINE_SCENARIO_KEY
 
 /**
  * One scripted tool call in a [Step]'s reply.
@@ -375,6 +382,7 @@ internal object ScenarioLoader {
             decodeStep(json, step, "step ${i + 1}", "$.steps[$i]")
         }
         ScenarioShape.require(root, Scenario.serializer().descriptor, "$")
+        metadataProblem((root as? JsonObject)?.get("metadata"), "$.metadata")?.let { throw IllegalArgumentException(it) }
         return try {
             json.decodeFromJsonElement(root)
         } catch (e: IllegalArgumentException) {
@@ -447,6 +455,31 @@ internal object ScenarioLoader {
     private val defaultLoader: ClassLoader = ScenarioLoader::class.java.classLoader
 }
 
+/**
+ * The first empty or blank `name` or tag in [metadata], a `metadata` value that passed the shape
+ * check, named by its [path]; null when there is none. The model enforces the same rule, without the path.
+ */
+private fun metadataProblem(
+    metadata: JsonElement?,
+    path: String,
+): String? {
+    val obj = metadata as? JsonObject ?: return null
+
+    fun blankness(
+        value: JsonElement?,
+        at: String,
+    ): String? {
+        val text = (value as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
+        return when {
+            text.isEmpty() -> "$at: must not be empty"
+            text.isBlank() -> "$at: must not be blank"
+            else -> null
+        }
+    }
+    return blankness(obj["name"], "$path.name")
+        ?: (obj["tags"] as? JsonArray)?.withIndex()?.firstNotNullOfOrNull { (i, tag) -> blankness(tag, "$path.tags[$i]") }
+}
+
 /** A top-level `name` or `description`, which moved into `metadata` in 0.8.0, is rejected with a pointer to it. */
 private fun requireNoMovedKeys(root: JsonElement) {
     val moved = MOVED_KEYS.firstOrNull { (root as? JsonObject)?.containsKey(it) == true } ?: return
@@ -462,6 +495,7 @@ private fun decodeStep(
 ) {
     try {
         ScenarioShape.require(step, Step.serializer().descriptor, path)
+        metadataProblem((step as? JsonObject)?.get("metadata"), "$path.metadata")?.let { throw IllegalArgumentException(it) }
         json.decodeFromJsonElement<Step>(step)
     } catch (e: IllegalArgumentException) {
         throw IllegalArgumentException("$label: ${ScenarioShape.decodeFailure(e)}", e)

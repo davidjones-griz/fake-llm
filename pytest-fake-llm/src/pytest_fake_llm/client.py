@@ -51,8 +51,10 @@ class Health:
     ``unused_steps`` the steps not used up since the last load, reset or unload (a parallel step until every
     step in it is used, a step with ``times`` until it has its ``min`` calls), [] with none loaded. Both are
     None from a server older than 0.6.0. ``scenario_name`` is the scenario's ``metadata.name``, or
-    ``scenario`` when it has none, and ``unused_step_names`` maps each unused step that has a
-    ``metadata.name`` to it; both are None from a server older than 0.8.0.
+    ``scenario`` when it has none; ``unused_step_names`` maps the label of each unused step that has a
+    ``metadata.name`` (``"2"``, or ``"2.1"`` for a step of the parallel step 2) to it; and ``scenario_source``
+    is ``"file"`` for a load by name or ``"inline"`` for an inline load, None with none loaded. All three are
+    None from a server older than 0.8.0.
     """
 
     scenario: str | None
@@ -60,7 +62,8 @@ class Health:
     steps: int | None = None
     unused_steps: list[int] | None = None
     scenario_name: str | None = None
-    unused_step_names: dict[int, str] | None = None
+    unused_step_names: dict[str, str] | None = None
+    scenario_source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -134,7 +137,8 @@ class FakeLlmClient:
                 steps=body.get("steps"),
                 unused_steps=body.get("unusedSteps"),
                 scenario_name=body.get("scenarioName"),
-                unused_step_names=_step_names(body.get("unusedStepNames")),
+                unused_step_names=body.get("unusedStepNames"),
+                scenario_source=body.get("scenarioSource"),
             ),
         )
 
@@ -228,10 +232,6 @@ def _call_record(entry: dict[str, Any]) -> CallRecord:
         use_number=entry.get("useNumber"),
         step_name=entry.get("stepName"),
     )
-
-
-def _step_names(names: dict[str, str] | None) -> dict[int, str] | None:
-    return None if names is None else {int(n): name for n, name in names.items()}
 
 
 def _server_message(body: str) -> str | None:
