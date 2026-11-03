@@ -7,6 +7,8 @@ change the public API.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-02
+
 ### Added
 
 - Parallel calls in scenarios. A step can carry a `match` that a call must satisfy, on the route,
