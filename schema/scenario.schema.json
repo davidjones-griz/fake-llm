@@ -848,7 +848,7 @@
     },
     "TextMatch": {
       "type": "object",
-      "description": "A rule on a text: exactly one of `contains`, `equals` and `regex`, case-sensitive. `regex`\nis a Java regular expression that may match anywhere; `^` and `$` anchor it.\n",
+      "description": "A rule on a text: exactly one of `contains`, `equals`, `regex`, `allOf` and `anyOf`,\ncase-sensitive. `regex` is a Java regular expression that may match anywhere; `^` and `$`\nanchor it. `allOf` holds when every rule in it holds and `anyOf` when at least one does; each\nis a non-empty array of plain rules (`contains`, `equals` or `regex`), one level deep.\n",
       "additionalProperties": false,
       "oneOf": [
         {
@@ -880,6 +880,26 @@
               "type": "string"
             }
           }
+        },
+        {
+          "required": [
+            "allOf"
+          ],
+          "properties": {
+            "allOf": {
+              "type": "array"
+            }
+          }
+        },
+        {
+          "required": [
+            "anyOf"
+          ],
+          "properties": {
+            "anyOf": {
+              "type": "array"
+            }
+          }
         }
       ],
       "properties": {
@@ -903,12 +923,34 @@
             "null"
           ],
           "description": "This regular expression matches somewhere in the text."
+        },
+        "allOf": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/PlainTextMatch"
+          },
+          "description": "Every rule holds for the text. Plain rules only (`contains`, `equals` or `regex`), one level deep."
+        },
+        "anyOf": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/PlainTextMatch"
+          },
+          "description": "At least one rule holds for the text. Plain rules only, one level deep."
         }
       }
     },
     "MessageMatch": {
       "type": "object",
-      "description": "A rule on one message, chosen by exactly one of `index` and `role`, with exactly one of\n`contains`, `equals` and `regex` on its text.\n",
+      "description": "A rule on one message, chosen by exactly one of `index` and `role`, with exactly one of\n`contains`, `equals`, `regex`, `allOf` and `anyOf` on its text, as in `TextMatch`.\n",
       "additionalProperties": false,
       "allOf": [
         {
@@ -966,6 +1008,26 @@
                   "type": "string"
                 }
               }
+            },
+            {
+              "required": [
+                "allOf"
+              ],
+              "properties": {
+                "allOf": {
+                  "type": "array"
+                }
+              }
+            },
+            {
+              "required": [
+                "anyOf"
+              ],
+              "properties": {
+                "anyOf": {
+                  "type": "array"
+                }
+              }
             }
           ]
         }
@@ -1007,6 +1069,28 @@
             "null"
           ],
           "description": "This regular expression matches somewhere in the message's text."
+        },
+        "allOf": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/PlainTextMatch"
+          },
+          "description": "Every rule holds for the message's text. Plain rules only (`contains`, `equals` or `regex`), one level deep."
+        },
+        "anyOf": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/PlainTextMatch"
+          },
+          "description": "At least one rule holds for the message's text. Plain rules only, one level deep."
         }
       }
     },
@@ -1205,7 +1289,7 @@
     },
     "HeaderMatch": {
       "type": "object",
-      "description": "A rule on a request header; some value of the header must satisfy the text rule.",
+      "description": "A rule on a request header; some value of the header must satisfy the text rule: exactly\none of `contains`, `equals`, `regex`, `allOf` and `anyOf`, as in `TextMatch`.\n",
       "additionalProperties": false,
       "required": [
         "name"
@@ -1240,6 +1324,26 @@
               "type": "string"
             }
           }
+        },
+        {
+          "required": [
+            "allOf"
+          ],
+          "properties": {
+            "allOf": {
+              "type": "array"
+            }
+          }
+        },
+        {
+          "required": [
+            "anyOf"
+          ],
+          "properties": {
+            "anyOf": {
+              "type": "array"
+            }
+          }
         }
       ],
       "properties": {
@@ -1268,6 +1372,96 @@
             "null"
           ],
           "description": "This regular expression matches somewhere in a value of the header."
+        },
+        "allOf": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/PlainTextMatch"
+          },
+          "description": "Every rule holds for one value of the header. Plain rules only (`contains`, `equals` or `regex`), one level deep."
+        },
+        "anyOf": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/PlainTextMatch"
+          },
+          "description": "At least one rule holds for one value of the header. Plain rules only, one level deep."
+        }
+      }
+    },
+    "PlainTextMatch": {
+      "type": "object",
+      "description": "A rule inside `allOf` or `anyOf`: exactly one of `contains`, `equals` and `regex`. Another\n`allOf` or `anyOf` is not allowed here.\n",
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "contains"
+          ],
+          "properties": {
+            "contains": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "required": [
+            "equals"
+          ],
+          "properties": {
+            "equals": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "required": [
+            "regex"
+          ],
+          "properties": {
+            "regex": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "contains": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The text contains this."
+        },
+        "equals": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The text is exactly this."
+        },
+        "regex": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "This regular expression matches somewhere in the text."
+        },
+        "allOf": {
+          "type": "null",
+          "description": "Not allowed inside `allOf` or `anyOf`; only null, as if absent."
+        },
+        "anyOf": {
+          "type": "null",
+          "description": "Not allowed inside `allOf` or `anyOf`; only null, as if absent."
         }
       }
     }

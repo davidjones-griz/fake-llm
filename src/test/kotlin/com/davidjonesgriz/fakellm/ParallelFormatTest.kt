@@ -95,7 +95,7 @@ class ParallelFormatTest {
     fun `match rules are checked when the scenario loads`() {
         fun matchMessage(match: String) = messageFor("""{"metadata":{"name":"x"},"steps":[{"match":$match,"text":"t"}]}""")
         assertEquals("step 1: a match must set at least one key", matchMessage("{}"))
-        assertEquals("step 1: a text match sets exactly one of contains, equals and regex", matchMessage("""{"prompt":{}}"""))
+        assertEquals("step 1: a text match sets exactly one of contains, equals, regex, allOf and anyOf", matchMessage("""{"prompt":{}}"""))
         assertEquals(
             "step 1: a message match sets exactly one of index and role",
             matchMessage("""{"message":{"index":0,"role":"user","contains":"a"}}"""),

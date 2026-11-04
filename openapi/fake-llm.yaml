@@ -1972,8 +1972,49 @@ components:
     TextMatch:
       type: object
       description: |
-        A rule on a text: exactly one of `contains`, `equals` and `regex`, case-sensitive. `regex`
-        is a Java regular expression that may match anywhere; `^` and `$` anchor it.
+        A rule on a text: exactly one of `contains`, `equals`, `regex`, `allOf` and `anyOf`,
+        case-sensitive. `regex` is a Java regular expression that may match anywhere; `^` and `$`
+        anchor it. `allOf` holds when every rule in it holds and `anyOf` when at least one does; each
+        is a non-empty array of plain rules (`contains`, `equals` or `regex`), one level deep.
+      additionalProperties: false
+      oneOf:
+        - required: [contains]
+          properties: {contains: {type: string}}
+        - required: [equals]
+          properties: {equals: {type: string}}
+        - required: [regex]
+          properties: {regex: {type: string}}
+        - required: [allOf]
+          properties: {allOf: {type: array}}
+        - required: [anyOf]
+          properties: {anyOf: {type: array}}
+      properties:
+        contains:
+          type: [string, "null"]
+          description: The text contains this.
+        equals:
+          type: [string, "null"]
+          description: The text is exactly this.
+        regex:
+          type: [string, "null"]
+          description: This regular expression matches somewhere in the text.
+        allOf:
+          type: [array, "null"]
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PlainTextMatch"
+          description: Every rule holds for the text. Plain rules only (`contains`, `equals` or `regex`), one level deep.
+        anyOf:
+          type: [array, "null"]
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PlainTextMatch"
+          description: At least one rule holds for the text. Plain rules only, one level deep.
+    PlainTextMatch:
+      type: object
+      description: |
+        A rule inside `allOf` or `anyOf`: exactly one of `contains`, `equals` and `regex`. Another
+        `allOf` or `anyOf` is not allowed here.
       additionalProperties: false
       oneOf:
         - required: [contains]
@@ -1992,11 +2033,17 @@ components:
         regex:
           type: [string, "null"]
           description: This regular expression matches somewhere in the text.
+        allOf:
+          type: "null"
+          description: Not allowed inside `allOf` or `anyOf`; only null, as if absent.
+        anyOf:
+          type: "null"
+          description: Not allowed inside `allOf` or `anyOf`; only null, as if absent.
     MessageMatch:
       type: object
       description: |
         A rule on one message, chosen by exactly one of `index` and `role`, with exactly one of
-        `contains`, `equals` and `regex` on its text.
+        `contains`, `equals`, `regex`, `allOf` and `anyOf` on its text, as in `TextMatch`.
       additionalProperties: false
       allOf:
         - oneOf:
@@ -2011,6 +2058,10 @@ components:
               properties: {equals: {type: string}}
             - required: [regex]
               properties: {regex: {type: string}}
+            - required: [allOf]
+              properties: {allOf: {type: array}}
+            - required: [anyOf]
+              properties: {anyOf: {type: array}}
       properties:
         index:
           type: [integer, "null"]
@@ -2029,6 +2080,18 @@ components:
         regex:
           type: [string, "null"]
           description: This regular expression matches somewhere in the message's text.
+        allOf:
+          type: [array, "null"]
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PlainTextMatch"
+          description: Every rule holds for the message's text. Plain rules only (`contains`, `equals` or `regex`), one level deep.
+        anyOf:
+          type: [array, "null"]
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PlainTextMatch"
+          description: At least one rule holds for the message's text. Plain rules only, one level deep.
     ToolResultMatch:
       type: object
       description: A rule on the request's tool results; some result must satisfy every key that is set.
@@ -2106,7 +2169,9 @@ components:
           description: The value at `path`, compared as JSON (numbers by value). Any JSON value, `null` included.
     HeaderMatch:
       type: object
-      description: A rule on a request header; some value of the header must satisfy the text rule.
+      description: |
+        A rule on a request header; some value of the header must satisfy the text rule: exactly
+        one of `contains`, `equals`, `regex`, `allOf` and `anyOf`, as in `TextMatch`.
       additionalProperties: false
       required: [name]
       oneOf:
@@ -2116,6 +2181,10 @@ components:
           properties: {equals: {type: string}}
         - required: [regex]
           properties: {regex: {type: string}}
+        - required: [allOf]
+          properties: {allOf: {type: array}}
+        - required: [anyOf]
+          properties: {anyOf: {type: array}}
       properties:
         name:
           type: string
@@ -2130,6 +2199,18 @@ components:
         regex:
           type: [string, "null"]
           description: This regular expression matches somewhere in a value of the header.
+        allOf:
+          type: [array, "null"]
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PlainTextMatch"
+          description: Every rule holds for one value of the header. Plain rules only (`contains`, `equals` or `regex`), one level deep.
+        anyOf:
+          type: [array, "null"]
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PlainTextMatch"
+          description: At least one rule holds for one value of the header. Plain rules only, one level deep.
     ToolCall:
       type: object
       description: One scripted tool call.

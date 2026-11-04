@@ -9,6 +9,15 @@ change the public API.
 
 ### Added
 
+- `allOf` and `anyOf` in text rules: a text rule can now be exactly one of `contains`, `equals`,
+  `regex`, `allOf` and `anyOf`. `allOf` holds when every rule in it holds, and `anyOf` when at least
+  one does; each is a non-empty array of plain rules (`contains`, `equals` or `regex`), one level
+  deep. They work in every text rule: `system`, `lastUser`, `prompt`, `message` (beside `index` or
+  `role`), `header` (beside `name`) and `toolResult`'s `content`. Nesting, an empty array and a
+  combinator beside a plain key are rejected when the scenario loads (`invalid-scenario`), and the
+  `no-match` message describes them, such as `lastUser allOf(contains "doc-a", regex "urgent|asap")`.
+  In Kotlin, `TextMatch`, `MessageMatch` and `HeaderMatch` take `allOf` and `anyOf` as new last
+  parameters.
 - The JUnit extension runs only the tests whose scenario has selected tags. The configuration
   parameters (or JVM system properties) `fakellm.tags.include` and `fakellm.tags.exclude` take
   comma-separated tags: a test runs if its `@FakeLlmScenario`'s top-level `metadata.tags` has any

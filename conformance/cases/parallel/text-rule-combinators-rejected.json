@@ -1,0 +1,167 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "text-rule-combinators-rejected",
+  "description": "allOf and anyOf take plain rules one level deep: nesting, an empty array and a combinator beside a plain key are invalid-scenario.",
+  "server": {
+    "lenient": false,
+    "fresh": true
+  },
+  "scenario": null,
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenario": {
+            "steps": [
+              {
+                "match": {
+                  "lastUser": {
+                    "allOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "contains": "a"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "text": "t"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "invalid-scenario",
+          "message": "step 1: allOf and anyOf take plain text rules (contains, equals or regex), not another allOf or anyOf"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenario": {
+            "steps": [
+              {
+                "match": {
+                  "header": {
+                    "name": "h",
+                    "anyOf": []
+                  }
+                },
+                "text": "t"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "invalid-scenario",
+          "message": "step 1: anyOf must not be empty"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenario": {
+            "steps": [
+              {
+                "match": {
+                  "message": {
+                    "index": 0,
+                    "contains": "a",
+                    "allOf": [
+                      {
+                        "contains": "b"
+                      }
+                    ]
+                  }
+                },
+                "text": "t"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "invalid-scenario",
+          "message": "step 1: a text match sets exactly one of contains, equals, regex, allOf and anyOf"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/control/scenario",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "scenario": {
+            "steps": [
+              {
+                "match": {
+                  "prompt": {
+                    "anyOf": [
+                      {
+                        "contains": "a"
+                      },
+                      {
+                        "regex": "b"
+                      }
+                    ]
+                  }
+                },
+                "text": "t"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "loaded": "inline",
+          "name": "inline",
+          "steps": 1
+        }
+      }
+    }
+  ]
+}

@@ -157,6 +157,19 @@ internal fun writeScenario(
 internal val invalidScenarios =
     listOf(
         "no steps" to """{"metadata":{"name":"x"},"steps":[]}""",
+        "allOf nested in allOf" to """{"steps":[{"text":"t","match":{"lastUser":{"allOf":[{"allOf":[{"contains":"a"}]}]}}}]}""",
+        "anyOf nested in a message's anyOf" to
+            """{"steps":[{"text":"t","match":{"message":{"index":0,"anyOf":[{"anyOf":[{"contains":"a"}]}]}}}]}""",
+        "allOf nested in a header's allOf" to
+            """{"steps":[{"text":"t","match":{"header":{"name":"h","allOf":[{"anyOf":[{"contains":"a"}]}]}}}]}""",
+        "an empty allOf" to """{"steps":[{"text":"t","match":{"prompt":{"allOf":[]}}}]}""",
+        "an empty anyOf in a message" to """{"steps":[{"text":"t","match":{"message":{"role":"user","anyOf":[]}}}]}""",
+        "allOf beside contains" to """{"steps":[{"text":"t","match":{"lastUser":{"contains":"a","allOf":[{"contains":"b"}]}}}]}""",
+        "allOf beside anyOf" to """{"steps":[{"text":"t","match":{"system":{"allOf":[{"contains":"a"}],"anyOf":[{"contains":"b"}]}}}]}""",
+        "anyOf beside a header's equals" to
+            """{"steps":[{"text":"t","match":{"header":{"name":"h","equals":"a","anyOf":[{"contains":"b"}]}}}]}""",
+        "allOf that is not an array" to """{"steps":[{"text":"t","match":{"lastUser":{"allOf":{"contains":"a"}}}}]}""",
+        "an empty rule in allOf" to """{"steps":[{"text":"t","match":{"lastUser":{"allOf":[{}]}}}]}""",
         "a top-level name, now metadata.name" to """{"name":"x","steps":[{"text":"t"}]}""",
         "a top-level description, now metadata.description" to """{"description":"d","steps":[{"text":"t"}]}""",
         "an unknown key in the scenario's metadata" to """{"metadata":{"name":"x","owner":"me"},"steps":[{"text":"t"}]}""",
@@ -345,6 +358,14 @@ internal val invalidScenarios =
  */
 internal val validParallelScenarios =
     listOf(
+        "allOf and anyOf in every text rule" to
+            """{"metadata":{"name":"text-combinators"},"steps":[{"match":{
+              "system":{"anyOf":[{"contains":"a"},{"equals":"b"}]},
+              "lastUser":{"allOf":[{"contains":"doc-a"},{"regex":"urgent|asap"}]},
+              "prompt":{"anyOf":[{"regex":"x"}],"contains":null},
+              "message":{"role":"user","anyOf":[{"contains":"x"},{"contains":"y","allOf":null}]},
+              "header":{"name":"x-tenant","allOf":[{"contains":"acme"},{"regex":"-prod$"}]},
+              "toolResult":{"content":{"allOf":[{"contains":"ok"}]}}},"text":"t"}]}""",
         "metadata on the scenario and on every kind of step" to
             """{"metadata":{"name":"note-summary","description":"Single note","tags":["smoke"]},"steps":[
               {"metadata":{"name":"summarize-note","tags":["happy-path"]},"text":"ok"},

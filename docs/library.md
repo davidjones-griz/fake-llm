@@ -177,7 +177,7 @@ tasks.test {
 ./gradlew test -Dfakellm.tags.include=malformed -Dfakellm.tags.exclude=slow
 ```
 
-Maven Surefire passes `-D` properties to the test JVM itself: `mvn test -Dfakellm.tags.include=malformed`. [examples/](https://github.com/davidjones-griz/fake-llm/tree/main/examples/) tags `TicketPipelineTest`'s scenarios `smoke`, `error-handling` and `malformed`, and its build passes the properties on, so `./gradlew -p examples test -Dfakellm.tags.include=malformed` runs just the two malformed-response tests.
+Maven Surefire passes `-D` properties to the test JVM itself: `mvn test -Dfakellm.tags.include=malformed`. [examples/](https://github.com/davidjones-griz/fake-llm/tree/main/examples/) tags `TicketPipelineTest`'s scenarios `smoke`, `error-handling` and `malformed`, and its build passes the properties on, so `./gradlew -p examples test -Dfakellm.tags.include=malformed` runs just the two malformed-response tests among the tests that use a scenario.
 
 The extension calls `ExtensionContext.Store.getOrComputeIfAbsent`, which JUnit 6 deprecates in favour of `computeIfAbsent`. JUnit 5.10 has no `computeIfAbsent`, so the extension moves to it once the minimum supported JUnit version does.
 
