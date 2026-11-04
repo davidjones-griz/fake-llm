@@ -31,6 +31,9 @@ public annotation class FakeLlmTest(
  * annotation wins: the method's, then the class's (its own, then its interfaces', then its
  * superclasses'), then each enclosing class's, the same way. It is also found inside a composed
  * annotation. A test with none runs with no scenario loaded.
+ *
+ * The scenario's top-level `metadata.tags` also decide whether the test runs when the run selects
+ * tags with `fakellm.tags.include` or `fakellm.tags.exclude`; see [FakeLlmExtension].
  */
 @Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)

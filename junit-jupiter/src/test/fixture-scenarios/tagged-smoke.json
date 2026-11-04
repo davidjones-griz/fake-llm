@@ -1,0 +1,7 @@
+{
+  "metadata": {
+    "description": "Tagged smoke, for the tag selection fixtures.",
+    "tags": ["smoke"]
+  },
+  "steps": [{ "text": "Smoke." }]
+}

@@ -206,7 +206,11 @@ public data class ScenarioMetadata(
     val name: String? = null,
     /** A note for people reading the scenario: why it exists, why a group runs in parallel. */
     val description: String? = null,
-    /** Labels for search and filtering; null, the default, is none. fake-llm stores them and does not act on them. */
+    /**
+     * Labels for search and filtering; null, the default, is none. The server does not act on them;
+     * the JUnit extension selects tests by a scenario's top-level tags (`fakellm.tags.include` and
+     * `fakellm.tags.exclude`).
+     */
     val tags: List<String>? = null,
 ) {
     init {

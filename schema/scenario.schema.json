@@ -65,7 +65,7 @@
             "minLength": 1,
             "pattern": "\\S"
           },
-          "description": "Labels for search and filtering, none empty or blank. Null, like an absent key, is none.\nfake-llm stores them and does not act on them.\n"
+          "description": "Labels for search and filtering, none empty or blank. Null, like an absent key, is none.\nThe server does not act on them; the JUnit extension selects tests by a scenario's\ntop-level tags.\n"
         }
       }
     },

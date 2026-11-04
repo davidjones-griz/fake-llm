@@ -8,6 +8,8 @@ import org.junit.jupiter.api.extension.AfterEachCallback
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback
 import org.junit.jupiter.api.extension.BeforeAllCallback
 import org.junit.jupiter.api.extension.BeforeEachCallback
+import org.junit.jupiter.api.extension.ConditionEvaluationResult
+import org.junit.jupiter.api.extension.ExecutionCondition
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.api.extension.ParameterContext
 import org.junit.jupiter.api.extension.ParameterResolver
@@ -23,6 +25,7 @@ private const val SERVER = "server"
 private const val HANDLED = "handled:"
 private const val ENTERED = "entered:"
 private const val CHECK = "check:"
+private const val SELECTED = "selected by fakellm.tags.include and fakellm.tags.exclude, or no selection applies"
 private val UNSERVED = setOf("no-more-steps", "no-scenario", "no-match")
 private val INJECTABLE = setOf(FakeLlmServer::class.java, ScenarioEngine::class.java)
 private const val CONCURRENT_TESTS =
@@ -51,6 +54,14 @@ private const val CONCURRENT_TESTS =
  * never made; [FakeLlmAllowUnusedSteps] turns that check off. An aborted test (a failed assumption)
  * is not checked.
  *
+ * Tests can be selected at run time by their scenario's top-level `metadata.tags`, with the
+ * configuration parameters (or JVM system properties) `fakellm.tags.include` and
+ * `fakellm.tags.exclude`, each a comma-separated list. A test whose [FakeLlmScenario] has none of
+ * the included tags (when any are listed), or has an excluded tag, is skipped with a reason naming
+ * the scenario and the tags; `exclude` wins over `include`, and matching is exact and
+ * case-sensitive. A test without a scenario always runs. The selection only decides whether a test
+ * runs: it never changes how its scenario is served.
+ *
  * Test classes may run in parallel; each has its own server and port. The tests of one class share
  * one engine, so they must not run concurrently: a second concurrent test fails at once with an
  * explanation. With JUnit's parallel execution, set
@@ -66,9 +77,37 @@ public class FakeLlmExtension
         BeforeEachCallback,
         AfterTestExecutionCallback,
         AfterEachCallback,
-        ParameterResolver {
+        ParameterResolver,
+        ExecutionCondition {
         override fun beforeAll(context: ExtensionContext) {
             serverFor(context)
+        }
+
+        /**
+         * Skips a test whose scenario's top-level tags don't match the run's [TagSelection]. The
+         * scenario is read with [ScenarioEngine.load], the same loading and validation as the
+         * test's own load; one that doesn't load is left to that load, which fails the test with
+         * the loader's message.
+         */
+        override fun evaluateExecutionCondition(context: ExtensionContext): ConditionEvaluationResult {
+            val selection = TagSelection.of(context)
+            val name = if (context.testMethod.isPresent && selection.isActive) scenarioFor(context) else null
+            val tags =
+                name?.let {
+                    try {
+                        ScenarioEngine(scenarioDirectory = directoryFor(context))
+                            .load(it)
+                            .metadata
+                            ?.tags
+                            .orEmpty()
+                    } catch (_: IllegalArgumentException) {
+                        null
+                    } catch (_: IllegalStateException) {
+                        null
+                    }
+                }
+            val reason = if (name != null && tags != null) selection.skipReason(name, tags) else null
+            return if (reason != null) ConditionEvaluationResult.disabled(reason) else ConditionEvaluationResult.enabled(SELECTED)
         }
 
         override fun beforeEach(context: ExtensionContext) {
@@ -142,11 +181,21 @@ public class FakeLlmExtension
                 // which 5.10 (the oldest supported version) does not have.
                 .getOrComputeIfAbsent(SERVER, { startServer(context) }, ServerHolder::class.java)
 
+        /** The scenario directory: [FakeLlmTest]'s when the class has one, else this extension's. */
+        private fun directoryFor(context: ExtensionContext): Path? {
+            val annotation = findOnClassOrEnclosing(context.requiredTestClass) { it.find<FakeLlmTest>() }
+            return if (annotation !=
+                null
+            ) {
+                annotation.scenarioDirectory.takeIf { it.isNotEmpty() }?.let { Path.of(it) }
+            } else {
+                scenarioDirectory
+            }
+        }
+
         private fun startServer(context: ExtensionContext): ServerHolder {
             val annotation = findOnClassOrEnclosing(context.requiredTestClass) { it.find<FakeLlmTest>() }
-            val directory =
-                if (annotation != null) annotation.scenarioDirectory.takeIf { it.isNotEmpty() }?.let { Path.of(it) } else scenarioDirectory
-            val engine = ScenarioEngine(lenient = annotation?.lenient ?: lenient, scenarioDirectory = directory)
+            val engine = ScenarioEngine(lenient = annotation?.lenient ?: lenient, scenarioDirectory = directoryFor(context))
             // controlToken = null: a FAKE_LLM_CONTROL_TOKEN in the developer's environment must not gate the test server.
             return ServerHolder(startFakeLlmServer(port = 0, engine = engine, controlToken = null))
         }

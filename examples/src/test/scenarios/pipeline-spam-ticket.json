@@ -1,7 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/davidjones-griz/fake-llm/main/schema/scenario.schema.json",
   "metadata": {
-    "description": "One step: the classification. A spam ticket makes no further calls."
+    "description": "One step: the classification. A spam ticket makes no further calls.",
+    "tags": ["smoke"]
   },
   "steps": [
     { "text": "spam" }

@@ -1,0 +1,7 @@
+{
+  "metadata": {
+    "description": "Tagged Malformed with a capital M: tag matching is case-sensitive.",
+    "tags": ["Malformed"]
+  },
+  "steps": [{ "text": "Case." }]
+}
