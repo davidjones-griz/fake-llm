@@ -485,7 +485,16 @@ Things to know when writing these:
 | `body` | A value in the request body at a path, compared as JSON. |
 | `header` | A request header, by name in any case; some value of it must match. A header the request doesn't send never matches, and no match ever requires the app to send one. |
 
-The text keys (`system`, `lastUser`, `prompt`, `message`, and `header`'s value) each take exactly one of `contains`, `equals` and `regex`. The field tables are [Match fields](#match-fields) and the ones after it.
+The text keys (`system`, `lastUser`, `prompt`, `message`, `header`'s value, and `toolResult`'s `content`) each take exactly one of `contains`, `equals`, `regex`, `allOf` and `anyOf`. `allOf` holds when every rule in it holds, and `anyOf` when at least one does. Each is a non-empty array of plain rules, `contains`, `equals` or `regex`, one level deep: an `allOf` or `anyOf` inside one is rejected when the scenario loads, as are an empty array and an `allOf` or `anyOf` beside another of the five keys.
+
+```json
+{ "lastUser": { "allOf": [ { "contains": "doc-a" }, { "regex": "urgent|asap" } ] } }
+{ "lastUser": { "anyOf": [ { "contains": "doc-a" }, { "equals": "plan b" } ] } }
+{ "message": { "role": "user", "anyOf": [ { "contains": "x" }, { "contains": "y" } ] } }
+{ "header": { "name": "x-tenant", "allOf": [ { "contains": "acme" }, { "regex": "-prod$" } ] } }
+```
+
+The `no-match` message describes them the same way, such as `lastUser allOf(contains "doc-a", regex "urgent|asap")`. The field tables are [Match fields](#match-fields) and the ones after it.
 
 ## Fields
 
@@ -592,17 +601,31 @@ Every key that is set must hold, and at least one must be set. [Match keys](#mat
 
 ### TextMatch fields
 
-Exactly one of the three, case-sensitive.
+Exactly one of the five, case-sensitive.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `contains` | string or null | none | The text contains this. |
 | `equals` | string or null | none | The text is exactly this. |
 | `regex` | string or null | none | This Java regular expression matches somewhere in the text; `^` and `$` anchor it. A pattern that doesn't compile is rejected when the scenario loads. |
+| `allOf` | array of [PlainTextMatch](#plaintextmatch-fields), at least one, or null | none | Every rule holds for the text. |
+| `anyOf` | array of [PlainTextMatch](#plaintextmatch-fields), at least one, or null | none | At least one rule holds for the text. |
+
+### PlainTextMatch fields
+
+A rule inside `allOf` or `anyOf`: exactly one of `contains`, `equals` and `regex`, as in [TextMatch](#textmatch-fields). `allOf` and `anyOf` are not allowed here (one level deep), except as `null`, which reads as absent.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `contains` | string or null | none | The text contains this. |
+| `equals` | string or null | none | The text is exactly this. |
+| `regex` | string or null | none | This Java regular expression matches somewhere in the text. |
+| `allOf` | null | none | Not allowed inside `allOf` or `anyOf`. |
+| `anyOf` | null | none | Not allowed inside `allOf` or `anyOf`. |
 
 ### MessageMatch fields
 
-Exactly one of `index` and `role`, and exactly one of `contains`, `equals` and `regex`.
+Exactly one of `index` and `role`, and exactly one of `contains`, `equals`, `regex`, `allOf` and `anyOf`.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -611,6 +634,8 @@ Exactly one of `index` and `role`, and exactly one of `contains`, `equals` and `
 | `contains` | string or null | none | The message's text contains this. |
 | `equals` | string or null | none | The message's text is exactly this. |
 | `regex` | string or null | none | This regular expression matches somewhere in the message's text. |
+| `allOf` | array of [PlainTextMatch](#plaintextmatch-fields), at least one, or null | none | Every rule holds for the message's text. |
+| `anyOf` | array of [PlainTextMatch](#plaintextmatch-fields), at least one, or null | none | At least one rule holds for the message's text. |
 
 ### ToolResultMatch fields
 
@@ -642,7 +667,7 @@ At least one must be set.
 
 ### HeaderMatch fields
 
-`name`, and exactly one of `contains`, `equals` and `regex`.
+`name`, and exactly one of `contains`, `equals`, `regex`, `allOf` and `anyOf`.
 
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -650,3 +675,5 @@ At least one must be set.
 | `contains` | string or null | none | A value of the header contains this. |
 | `equals` | string or null | none | A value of the header is exactly this. |
 | `regex` | string or null | none | This regular expression matches somewhere in a value of the header. |
+| `allOf` | array of [PlainTextMatch](#plaintextmatch-fields), at least one, or null | none | Every rule holds for one value of the header. |
+| `anyOf` | array of [PlainTextMatch](#plaintextmatch-fields), at least one, or null | none | At least one rule holds for one value of the header. |

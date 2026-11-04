@@ -81,21 +81,31 @@ public data class Match(
 }
 
 /**
- * A rule on a text: exactly one of [contains], [equalTo] (`equals` in JSON) and [regex]. Matching is
- * case-sensitive. [regex] is a Java regular expression that may match anywhere in the text; `^` and
- * `$` anchor it.
+ * A rule on a text: exactly one of [contains], [equalTo] (`equals` in JSON), [regex], [allOf] and
+ * [anyOf]. Matching is case-sensitive. [regex] is a Java regular expression that may match anywhere
+ * in the text; `^` and `$` anchor it. [allOf] holds when every rule in it holds, and [anyOf] when at
+ * least one does; each is a non-empty list of plain rules (`contains`, `equals` or `regex`), one
+ * level deep.
  *
- * @throws IllegalArgumentException when not exactly one is set, or [regex] does not compile. The
- *   message text is diagnostic, not part of the API.
+ * @throws IllegalArgumentException when not exactly one is set, [regex] does not compile, or [allOf]
+ *   or [anyOf] is empty or holds an `allOf` or `anyOf`. The message text is diagnostic, not part of the API.
  */
 @Serializable
 public data class TextMatch(
     val contains: String? = null,
     @SerialName("equals") val equalTo: String? = null,
     val regex: String? = null,
+    /** Every rule must hold: plain rules only. */
+    val allOf: List<TextMatch>? = null,
+    /** At least one rule must hold: plain rules only. */
+    val anyOf: List<TextMatch>? = null,
 ) {
     init {
-        require(listOfNotNull(contains, equalTo, regex).size == 1) { "a text match sets exactly one of contains, equals and regex" }
+        require(listOfNotNull(contains, equalTo, regex, allOf, anyOf).size == 1) {
+            "a text match sets exactly one of contains, equals, regex, allOf and anyOf"
+        }
+        requirePlainRules(allOf, "allOf")
+        requirePlainRules(anyOf, "anyOf")
     }
 
     @Transient
@@ -105,22 +115,39 @@ public data class TextMatch(
         when {
             contains != null -> contains in text
             equalTo != null -> text == equalTo
+            allOf != null -> allOf.all { it.matches(text) }
+            anyOf != null -> anyOf.any { it.matches(text) }
             else -> compiled!!.containsMatchIn(text)
         }
 
-    /** The rule as the no-match message shows it, such as `contains "doc-b"`. */
+    /** The rule as the no-match message shows it, such as `contains "doc-b"` or `allOf(contains "a", regex "b")`. */
     internal fun describe(): String =
         when {
             contains != null -> "contains ${jsonQuote(contains)}"
             equalTo != null -> "equals ${jsonQuote(equalTo)}"
+            allOf != null -> allOf.joinToString(", ", "allOf(", ")") { it.describe() }
+            anyOf != null -> anyOf.joinToString(", ", "anyOf(", ")") { it.describe() }
             else -> "regex ${jsonQuote(regex!!)}"
         }
+}
+
+/** [rules], a text rule's `allOf` or `anyOf` named [key], is not empty and holds only plain rules. */
+private fun requirePlainRules(
+    rules: List<TextMatch>?,
+    key: String,
+) {
+    if (rules == null) return
+    require(rules.isNotEmpty()) { "$key must not be empty" }
+    require(rules.none { it.allOf != null || it.anyOf != null }) {
+        "allOf and anyOf take plain text rules (contains, equals or regex), not another allOf or anyOf"
+    }
 }
 
 /**
  * A rule on one message: chosen by exactly one of [index] (0-based; a negative index counts from the
  * end, so -1 is the last) and [role] (the last message with that role, as the request spells it),
- * with exactly one of [contains], [equalTo] (`equals` in JSON) and [regex] on its text.
+ * with exactly one of [contains], [equalTo] (`equals` in JSON), [regex], [allOf] and [anyOf] on its
+ * text, as in a [TextMatch].
  *
  * @throws IllegalArgumentException when not exactly one of each is set, or [regex] does not compile.
  *   The message text is diagnostic, not part of the API.
@@ -132,13 +159,17 @@ public data class MessageMatch(
     val contains: String? = null,
     @SerialName("equals") val equalTo: String? = null,
     val regex: String? = null,
+    /** Every rule must hold for the message's text: plain rules only. */
+    val allOf: List<TextMatch>? = null,
+    /** At least one rule must hold for the message's text: plain rules only. */
+    val anyOf: List<TextMatch>? = null,
 ) {
     init {
         require((index == null) != (role == null)) { "a message match sets exactly one of index and role" }
     }
 
     @Transient
-    internal val text: TextMatch = TextMatch(contains, equalTo, regex)
+    internal val text: TextMatch = TextMatch(contains, equalTo, regex, allOf, anyOf)
 }
 
 /**
@@ -201,7 +232,7 @@ public data class BodyMatch(
 
 /**
  * A rule on a request header: some value of the header [name] (any case) satisfies exactly one of
- * [contains], [equalTo] (`equals` in JSON) and [regex].
+ * [contains], [equalTo] (`equals` in JSON), [regex], [allOf] and [anyOf], as in a [TextMatch].
  *
  * @throws IllegalArgumentException when [name] is not a header name, not exactly one rule is set, or
  *   [regex] does not compile. The message text is diagnostic, not part of the API.
@@ -212,13 +243,17 @@ public data class HeaderMatch(
     val contains: String? = null,
     @SerialName("equals") val equalTo: String? = null,
     val regex: String? = null,
+    /** Every rule must hold for one value of the header: plain rules only. */
+    val allOf: List<TextMatch>? = null,
+    /** At least one rule must hold for one value of the header: plain rules only. */
+    val anyOf: List<TextMatch>? = null,
 ) {
     init {
         require(name.matches(HEADER_TOKEN)) { "header name '$name' is not a header name" }
     }
 
     @Transient
-    internal val text: TextMatch = TextMatch(contains, equalTo, regex)
+    internal val text: TextMatch = TextMatch(contains, equalTo, regex, allOf, anyOf)
 }
 
 /** One step of a [BodyMatch] path: an object key or an array index. */

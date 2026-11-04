@@ -280,15 +280,19 @@ public final class com/davidjonesgriz/fakellm/FakeLlmServer : java/lang/AutoClos
 
 public final class com/davidjonesgriz/fakellm/HeaderMatch {
 	public static final field Companion Lcom/davidjonesgriz/fakellm/HeaderMatch$Companion;
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/HeaderMatch;
-	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/HeaderMatch;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/HeaderMatch;
+	public final fun component5 ()Ljava/util/List;
+	public final fun component6 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Lcom/davidjonesgriz/fakellm/HeaderMatch;
+	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/HeaderMatch;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/HeaderMatch;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllOf ()Ljava/util/List;
+	public final fun getAnyOf ()Ljava/util/List;
 	public final fun getContains ()Ljava/lang/String;
 	public final fun getEqualTo ()Ljava/lang/String;
 	public final fun getName ()Ljava/lang/String;
@@ -368,16 +372,20 @@ public final class com/davidjonesgriz/fakellm/Match$Companion {
 public final class com/davidjonesgriz/fakellm/MessageMatch {
 	public static final field Companion Lcom/davidjonesgriz/fakellm/MessageMatch$Companion;
 	public fun <init> ()V
-	public fun <init> (Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/Integer;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Ljava/lang/String;
 	public final fun component5 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/MessageMatch;
-	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/MessageMatch;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/MessageMatch;
+	public final fun component6 ()Ljava/util/List;
+	public final fun component7 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Lcom/davidjonesgriz/fakellm/MessageMatch;
+	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/MessageMatch;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/MessageMatch;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllOf ()Ljava/util/List;
+	public final fun getAnyOf ()Ljava/util/List;
 	public final fun getContains ()Ljava/lang/String;
 	public final fun getEqualTo ()Ljava/lang/String;
 	public final fun getIndex ()Ljava/lang/Integer;
@@ -575,14 +583,18 @@ public final class com/davidjonesgriz/fakellm/Step$Companion {
 public final class com/davidjonesgriz/fakellm/TextMatch {
 	public static final field Companion Lcom/davidjonesgriz/fakellm/TextMatch$Companion;
 	public fun <init> ()V
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/davidjonesgriz/fakellm/TextMatch;
-	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/TextMatch;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/TextMatch;
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Lcom/davidjonesgriz/fakellm/TextMatch;
+	public static synthetic fun copy$default (Lcom/davidjonesgriz/fakellm/TextMatch;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lcom/davidjonesgriz/fakellm/TextMatch;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllOf ()Ljava/util/List;
+	public final fun getAnyOf ()Ljava/util/List;
 	public final fun getContains ()Ljava/lang/String;
 	public final fun getEqualTo ()Ljava/lang/String;
 	public final fun getRegex ()Ljava/lang/String;

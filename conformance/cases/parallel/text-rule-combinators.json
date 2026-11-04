@@ -1,0 +1,278 @@
+{
+  "$schema": "../../schema/case.schema.json",
+  "name": "text-rule-combinators",
+  "description": "allOf holds when every rule in it holds, anyOf when at least one does, on lastUser, message and a header's value.",
+  "scenario": {
+    "metadata": {
+      "name": "text-rule-combinators"
+    },
+    "steps": [
+      {
+        "parallel": {
+          "steps": [
+            {
+              "match": {
+                "lastUser": {
+                  "allOf": [
+                    {
+                      "contains": "doc-a"
+                    },
+                    {
+                      "regex": "urgent|asap"
+                    }
+                  ]
+                }
+              },
+              "text": "Urgent A."
+            },
+            {
+              "match": {
+                "message": {
+                  "role": "user",
+                  "anyOf": [
+                    {
+                      "contains": "doc-b"
+                    },
+                    {
+                      "equals": "plan b"
+                    }
+                  ]
+                }
+              },
+              "text": "B."
+            },
+            {
+              "match": {
+                "header": {
+                  "name": "x-tenant",
+                  "allOf": [
+                    {
+                      "contains": "acme"
+                    },
+                    {
+                      "regex": "-prod$"
+                    }
+                  ]
+                }
+              },
+              "text": "Tenant."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "doc-a, when you can"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no-match",
+          "message": {
+            "$type": "string"
+          },
+          "seq": 1,
+          "vendor": "anthropic",
+          "model": "example-model",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "doc-a, when you can\n"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json",
+          "x-tenant": "acme-dev"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "fake_llm_error": "no-match",
+          "message": {
+            "$type": "string"
+          },
+          "seq": 2,
+          "vendor": "anthropic",
+          "model": "example-model",
+          "system_shape": "absent",
+          "message_count": 1,
+          "prompt_preview": "hello\n"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "plan b"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-3",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "B."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "doc-a asap"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-4",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "Urgent A."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/anthropic/v1/messages",
+        "headers": {
+          "content-type": "application/json",
+          "x-tenant": "acme-prod"
+        },
+        "body": {
+          "model": "example-model",
+          "max_tokens": 64,
+          "messages": [
+            {
+              "role": "user",
+              "content": "hello"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "id": "fake-msg-5",
+          "type": "message",
+          "role": "assistant",
+          "model": "example-model",
+          "content": [
+            {
+              "type": "text",
+              "text": "Tenant."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}
