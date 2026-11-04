@@ -74,6 +74,11 @@ change the public API.
   no steps fails with `a scenario must have at least one step`.
   `ScenarioEngine.currentScenarioName()` is renamed `currentScenarioKey()`. `FakeLlmHealth` gains
   `scenarioName`, `scenarioSource` and `unusedStepNames`, and `CallRecord` gains `stepName`.
+- The `TextMatch`, `MessageMatch` and `HeaderMatch` constructors gained `allOf` and `anyOf`, and
+  `Step`'s gained `metadata`, each as new last parameters with defaults. Kotlin source is
+  unaffected, since it gets the defaults. Java callers, which pass every constructor argument, must
+  update their calls, and code compiled against 0.7.0 must be recompiled, because the constructor
+  signatures changed.
 
 ## [0.7.0] - 2026-11-02
 
