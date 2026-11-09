@@ -20,7 +20,7 @@ kotlin {
 // The runner talks to the server only over HTTP: no dependency on fake-llm's code.
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
-    implementation("com.networknt:json-schema-validator:3.0.8")
+    implementation("com.networknt:json-schema-validator:3.0.9")
 
     testImplementation(platform("org.junit:junit-bom:5.14.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
