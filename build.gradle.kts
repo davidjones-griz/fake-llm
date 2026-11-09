@@ -47,7 +47,7 @@ dependencies {
     api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     testImplementation(kotlin("test"))
     // OpenApiConformanceTest: validates real responses against openapi/fake-llm.yaml (OAS 3.1).
-    testImplementation("com.networknt:json-schema-validator:3.0.8")
+    testImplementation("com.networknt:json-schema-validator:3.0.9")
     testImplementation("tools.jackson.dataformat:jackson-dataformat-yaml:3.2.4")
 }
 
